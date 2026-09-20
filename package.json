@@ -1,0 +1,29 @@
+{
+  "name": "agent-evidence-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Evidence infrastructure for AI agents: MCP-native, x402-paid web evidence and claim verification.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node scripts/run-tests.mjs",
+    "test:unit": "node scripts/run-tests.mjs unit",
+    "test:security": "node scripts/run-tests.mjs security",
+    "test:integration": "node scripts/run-tests.mjs integration",
+    "test:e2e": "node scripts/run-tests.mjs e2e",
+    "fixtures": "node --import tsx tests/fixtures/server.ts",
+    "dev:backend": "pnpm --filter @aee/backend dev",
+    "dev:worker": "pnpm --filter @aee/worker dev",
+    "validate": "pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

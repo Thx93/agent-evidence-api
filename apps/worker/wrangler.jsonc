@@ -1,0 +1,66 @@
+{
+  // Cloudflare Worker — the public edge.
+  // Responsibilities (SPEC section 13): x402 payment gating, basic request
+  // validation, forwarding authorised requests to the backend, MCP endpoint,
+  // health/capabilities. No heavy extraction or reasoning happens here.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "agent-evidence-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  // ---------------------------------------------------------------------------
+  // PRODUCTION (a bare `wrangler deploy` ships this block).
+  //
+  // BACKEND_AUTH_SECRET is deliberately ABSENT: it is a secret and must come
+  // from `wrangler secret put BACKEND_AUTH_SECRET`. Putting it here would commit
+  // it to the repository.
+  //
+  // NOTE: wrangler does NOT inherit top-level `vars` into a named environment.
+  // Every var the Worker reads is repeated in each env block below; omitting one
+  // yields `undefined` with only a warning, not an error.
+  // ---------------------------------------------------------------------------
+  "vars": {
+    // Base mainnet. eip155:84532 = Base Sepolia (test).
+    "X402_NETWORK": "eip155:8453",
+
+    // PUBLIC receiving address only — no private key is ever needed to receive.
+    // Placeholder: set the real production wallet before deploying.
+    "X402_RECIPIENT": "0x0000000000000000000000000000000000000000",
+
+    "X402_FACILITATOR_URL": "https://x402.org/facilitator",
+    "X402_PRICE_USD": "0.03",
+
+    // Placeholder origin — RFC 2606 reserves .invalid so a missed replacement
+    // fails loudly instead of pointing at a real third-party host.
+    "BACKEND_ORIGIN_URL": "https://origin.example.invalid"
+  },
+
+  "env": {
+    // Local development: payment bypassed so the pipeline can be exercised
+    // without testnet funds. Activated with `wrangler dev --env dev`.
+    "dev": {
+      "vars": {
+        "X402_NETWORK": "eip155:84532",
+        "X402_RECIPIENT": "0x9c0e2B44180439294Fa30Ae2B2a94f8655455FD0",
+        "X402_FACILITATOR_URL": "https://x402.org/facilitator",
+        "X402_PRICE_USD": "0.03",
+        "BACKEND_ORIGIN_URL": "http://127.0.0.1:8080",
+        "DEV_BYPASS_PAYMENT": "true"
+      }
+    },
+
+    // Testnet integration: payment IS required, backend is local. This is the
+    // environment the automated x402 tests target.
+    "test": {
+      "vars": {
+        "X402_NETWORK": "eip155:84532",
+        "X402_RECIPIENT": "0x9c0e2B44180439294Fa30Ae2B2a94f8655455FD0",
+        "X402_FACILITATOR_URL": "https://x402.org/facilitator",
+        "X402_PRICE_USD": "0.03",
+        "BACKEND_ORIGIN_URL": "http://127.0.0.1:8080"
+      }
+    }
+  }
+}

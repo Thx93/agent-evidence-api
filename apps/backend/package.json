@@ -1,0 +1,21 @@
+{
+  "name": "@aee/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Fastify backend: URL validation, secure fetching, extraction, evidence, cache.",
+  "main": "./dist/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@aee/cache": "workspace:*",
+    "@aee/core": "workspace:*",
+    "@aee/mcp": "workspace:*",
+    "@aee/schemas": "workspace:*",
+    "fastify": "^5.12.5"
+  }
+}

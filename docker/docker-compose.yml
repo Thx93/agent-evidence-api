@@ -1,0 +1,135 @@
+# =============================================================================
+# Agent Evidence API — single-service backend deployment (SPEC section 31)
+#
+#   Internet -> Cloudflare Worker (x402 + MCP edge) -> protected origin
+#            -> this container (Fastify backend + SQLite cache)
+#
+# Deliberately ONE service: no Redis, no PostgreSQL, no observability stack
+# (SPEC section 36). The cache is SQLite via Node's built-in `node:sqlite`.
+#
+# Usage (from the repository root):
+#   cp docker/env.production.example docker/.env   # then edit: secrets + wallet
+#   docker compose -f docker/docker-compose.yml up -d --build
+#   docker compose -f docker/docker-compose.yml logs -f
+#
+# Compose reads `docker/.env` both as this service's env_file AND for the
+# ${...} interpolation below, so every required value lives in one file.
+# =============================================================================
+
+services:
+  backend:
+    build:
+      # The build context is the repository root; the Dockerfile lives in docker/.
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: agent-evidence-api-backend:0.1.0
+    restart: unless-stopped
+
+    # Runtime credentials and settings. Copy docker/env.production.example to
+    # docker/.env — never commit that file (.env is gitignored).
+    env_file:
+      - .env
+
+    # The variables below are the ones an operator MUST think about. Setting
+    # them here makes the contract explicit and lets Compose fail fast when a
+    # required value is missing, instead of starting a container that will crash
+    # or, worse, run insecurely.
+    environment:
+      NODE_ENV: production
+      SERVICE_NAME: agent-evidence-api
+      SERVICE_VERSION: 0.1.0
+      # Listen on all container interfaces. The port is published to host
+      # loopback only (see `ports`), so this does not make the origin public.
+      BACKEND_HOST: 0.0.0.0
+      BACKEND_PORT: "8080"
+      # SQLite cache on the named volume so evidence survives container rebuilds.
+      CACHE_DB_PATH: /app/data/cache.sqlite
+      CACHE_ENABLED: "true"
+      # Server-to-server secret shared with the Cloudflare Worker. Required: the
+      # backend fails closed on a short/empty secret, so refuse to start without
+      # one. Generate with: openssl rand -hex 32
+      BACKEND_AUTH_SECRET: ${BACKEND_AUTH_SECRET:?set BACKEND_AUTH_SECRET in docker/.env (openssl rand -hex 32)}
+      # Placeholder origin, used only for allow-listing/self-reference. Replace
+      # with the real protected origin (BACKEND_ORIGIN_URL) before going live.
+      BACKEND_ORIGIN_URL: ${BACKEND_ORIGIN_URL:-https://origin.example.invalid}
+      # x402 payment configuration. MAINNET by default — this file is the
+      # production template. Development/testnet values belong in
+      # docker/env.development.example, never here.
+      X402_NETWORK: ${X402_NETWORK:-eip155:8453}
+      # PUBLIC receiving address only. No private key is ever required to
+      # receive. Required: payments cannot settle without it.
+      X402_RECIPIENT: ${X402_RECIPIENT:?set X402_RECIPIENT to the PUBLIC receiving address in docker/.env}
+      X402_FACILITATOR_URL: ${X402_FACILITATOR_URL:-https://x402.org/facilitator}
+      X402_PRICE_USD: ${X402_PRICE_USD:-0.03}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+
+    ports:
+      # BOUND TO LOOPBACK ON PURPOSE.
+      #
+      # The origin must NEVER be reachable directly from the internet: a client
+      # that can call the backend directly could skip the Worker's x402 payment
+      # gate entirely (SPEC section 15). Only the local Cloudflare Tunnel /
+      # reverse proxy — or an on-host client — may reach 127.0.0.1:8080.
+      #
+      # Do NOT change this to "8080:8080": that publishes the origin on every
+      # interface. If the Worker reaches the origin over the public internet
+      # instead of a tunnel, terminate TLS in a proxy on this host and firewall
+      # the port to Cloudflare's ranges.
+      - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
+
+    volumes:
+      # Named volume for the SQLite cache (CACHE_DB_PATH=/app/data/cache.sqlite).
+      # A named volume is used rather than a bind mount so Docker initialises it
+      # with the image's /app/data ownership (the unprivileged `aee` user, UID
+      # 10001) and the container can write. If the volume already exists from
+      # another source, fix ownership first:
+      #     docker run --rm -v aee-cache:/data alpine chown 10001:10001 /data
+      # (Without write access the backend degrades gracefully to an uncached
+      # mode rather than refusing to serve.)
+      - aee-cache:/app/data
+
+    # The container filesystem is immutable at runtime. This works because the
+    # only writable state is /app/data (the cache volume) and /tmp (below):
+    # node:sqlite opens the database in WAL mode, which writes cache.sqlite,
+    # cache.sqlite-wal and cache.sqlite-shm — all inside /app/data.
+    read_only: true
+    tmpfs:
+      # Small, no-exec temp space for Node/OS scratch files. Kept off the image
+      # layer and not persisted.
+      - /tmp:size=64m,mode=1777,noexec,nosuid,nodev
+
+    healthcheck:
+      # Identical to the image HEALTHCHECK so `docker run` and Compose agree.
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:'+(process.env.BACKEND_PORT||'8080')+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+    # Give tini (PID 1 in the image) time to forward SIGTERM and let Fastify and
+    # SQLite close cleanly before SIGKILL.
+    stop_grace_period: 15s
+
+    # Drop every Linux capability and forbid privilege escalation. The process
+    # binds an unprivileged port and needs no capability at all.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    # Bounded logs: this runs on a small VPS with limited disk (SPEC section 2).
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  aee-cache:
+    name: aee-cache

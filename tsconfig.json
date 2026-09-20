@@ -1,0 +1,22 @@
+{
+  // Root typecheck config: checks every workspace from TypeScript source with
+  // no build step. `paths` is why this config exists separately from
+  // tsconfig.base.json -- it must NOT be used for package builds.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@aee/schemas": ["packages/schemas/src/index.ts"],
+      "@aee/core": ["packages/core/src/index.ts"],
+      "@aee/fetcher": ["packages/fetcher/src/index.ts"],
+      "@aee/extraction": ["packages/extraction/src/index.ts"],
+      "@aee/cache": ["packages/cache/src/index.ts"],
+      "@aee/mcp": ["packages/mcp/src/index.ts"]
+    }
+  },
+  "include": [
+    "packages/*/src/**/*.ts",
+    "apps/*/src/**/*.ts",
+    "tests/**/*.ts"
+  ]
+}

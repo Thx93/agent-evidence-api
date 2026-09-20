@@ -1,0 +1,26 @@
+# =============================================================================
+# Cloudflare Worker — local secrets template (SPEC section 32)
+#
+# Copy to `.dev.vars` for local development:
+#     cp apps/worker/.dev.vars.example apps/worker/.dev.vars
+#
+# `.dev.vars` is GITIGNORED: .gitignore ignores `.dev.vars` and `.dev.vars.*`
+# and re-includes only this `.example` file. Never commit real secrets.
+#
+# ONLY SECRETS BELONG HERE. Non-secret Worker configuration lives in
+# `wrangler.jsonc` under `vars` / `env.<env>.vars` and is committed on purpose:
+#   X402_NETWORK, X402_RECIPIENT, X402_FACILITATOR_URL, X402_PRICE_USD,
+#   BACKEND_ORIGIN_URL, and the dev-only DEV_BYPASS_PAYMENT flag.
+#
+# This file is read by `wrangler dev`. It has NO effect on a deployed Worker:
+# remotely, secrets are set once with
+#     npx wrangler secret put BACKEND_AUTH_SECRET
+#
+# PLACEHOLDERS ONLY. Do not put a real secret in this file.
+# =============================================================================
+
+# Shared server-to-server secret, identical to the backend's BACKEND_AUTH_SECRET
+# in your local `.env`. The Worker sends it as the `x-backend-auth` header and
+# the backend rejects any mismatch (SPEC section 14).
+# Generate one with:   openssl rand -hex 32
+BACKEND_AUTH_SECRET=

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.thx93/agent-evidence-api",
+  "title": "Agent Evidence API",
+  "description": "MCP-native web evidence and claim verification: cited, source-grounded evidence for AI agents.",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/thx93/agent-evidence-api",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.example.invalid/mcp"
+    }
+  ]
+}

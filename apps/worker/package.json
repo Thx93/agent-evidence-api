@@ -1,0 +1,25 @@
+{
+  "name": "@aee/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker edge: x402 payment gating, MCP endpoint, backend forwarding.",
+  "scripts": {
+    "build": "wrangler deploy --dry-run --outdir=dist --env=\"\"",
+    "dev": "wrangler dev --env dev",
+    "dev:test": "wrangler dev --env test",
+    "deploy": "wrangler deploy --env=\"\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@aee/schemas": "workspace:*",
+    "@x402/core": "^2.26.0",
+    "@x402/evm": "^2.26.0",
+    "@x402/hono": "^2.26.0",
+    "hono": "^4.6.14"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250901.0",
+    "wrangler": "^4.135.0"
+  }
+}

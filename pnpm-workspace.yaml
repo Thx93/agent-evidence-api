@@ -1,0 +1,11 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# pnpm blocks lifecycle scripts by default. These two genuinely need theirs:
+#   esbuild -> installs its platform binary (tsx and wrangler depend on it)
+#   workerd -> installs the Workers runtime binary (used by `wrangler dev`)
+# Nothing else in the tree is permitted to run install scripts.
+allowBuilds:
+  esbuild: true
+  workerd: true

@@ -1,0 +1,42 @@
+# Build context exclusions.
+#
+# The Docker build context is the repository root. Without this file Docker
+# transfers the entire tree (including node_modules, which is hundreds of MB of
+# symlinks that are useless in the image and can break inside the build).
+#
+# Every COPY in docker/Dockerfile names an exact path, so nothing here is needed
+# by the build. These patterns are defence in depth plus a large speed-up.
+
+# Dependencies and build output are produced inside the image.
+node_modules
+**/node_modules
+dist
+**/dist
+*.tsbuildinfo
+
+# Local state and caches
+data
+.pnpm-store
+.wrangler
+**/.wrangler
+
+# Secrets — must never enter a build context
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+
+# Databases
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# VCS, docs and test artefacts that the image does not need
+.git
+.gitignore
+docs
+tests
+*.log
+.DS_Store
