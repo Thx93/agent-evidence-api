@@ -40,6 +40,14 @@
   "env": {
     // Local development: payment bypassed so the pipeline can be exercised
     // without testnet funds. Activated with `wrangler dev --env dev`.
+    //
+    // The X402_RECIPIENT below is a THROWAWAY Base Sepolia testnet address used
+    // only for local/testnet development. It is not a production wallet and no
+    // private key for it exists in this repository (receiving needs only a
+    // public address). It is deliberately NOT the production value: the
+    // top-level configuration keeps a zero-address placeholder so a production
+    // deploy cannot silently reuse a testnet recipient. Replace it with your
+    // own testnet address if you prefer; production must set its own.
     "dev": {
       "vars": {
         "X402_NETWORK": "eip155:84532",
@@ -53,6 +61,9 @@
 
     // Testnet integration: payment IS required, backend is local. This is the
     // environment the automated x402 tests target.
+    //
+    // Same throwaway Base Sepolia testnet recipient as `dev` (see the note
+    // there). Never point this at a wallet holding real value.
     "test": {
       "vars": {
         "X402_NETWORK": "eip155:84532",

@@ -41,7 +41,7 @@ What is required (SPEC §28) and where it stands:
   information, package metadata where applicable, and installation information —
   **created**, though `remotes[].url` is still a placeholder;
 - validation of that file — see
-  [`registry-publication.md`](./registry-publication.md);
+  [`registry-publication.md`](./registry-publication.md), not yet run;
 - documented exact publish steps — **documented**;
 - a checklist for namespace ownership and authentication — **documented**;
 - **no automatic publication** — nothing publishes.
@@ -119,7 +119,7 @@ Metadata an agent or a client can consume without a human in the loop:
 |---|---|---|
 | `GET /` | Service description, endpoints, MCP transport, tool payment classes, payment config. | Implemented in the Worker — this is the most useful machine-readable surface today. |
 | `GET /health` | Minimal liveness object. | Implemented. |
-| MCP `tools/list` | Tool names, descriptions, and input JSON Schemas, served over the MCP transport. | Specified; **not implemented** (`packages/mcp` has no source). |
+| MCP `tools/list` | Tool names, descriptions, and input JSON Schemas, served over the MCP transport. | **Implemented** (`packages/mcp`), stateless streamable HTTP. |
 | `server.json` | Registry metadata: name, description, version, repository, remote transport. | **Created**; remote URL is still a placeholder. |
 | Repository manifest files | `package.json` `description`/`keywords`, GitHub topics. | Partially present. |
 
@@ -197,8 +197,14 @@ metadata.
 | **cited evidence** | Each evidence item carries its source URL, final URL, context, and content hash. |
 | **fresh web evidence** | Sources are fetched on demand, with per-source retrieval timestamps; cache hits are explicitly flagged rather than presented as fresh. |
 
-Each phrase maps to a mechanism that exists (or is specified to exist), not to a
-marketing aspiration. That is the test for whether a phrase belongs.
+Each phrase maps to a mechanism that exists, not to a marketing aspiration. That
+is the test for whether a phrase belongs.
+
+**These eight phrases are all present in the shipped `research_evidence` tool
+description**, woven into real sentences rather than listed. See
+[`mcp.md` §2](./mcp.md#research_evidence) for the exact string, and a note on why
+that density is close to the keyword-stuffing boundary even though every clause is
+true.
 
 ### Phrases to avoid
 
@@ -267,14 +273,18 @@ exists:
   actual retrieval time and cache hits are flagged.
 - "source verification" — does it verify what a source says? **Yes**, lexically,
   with the limitation stated.
-- "fresh web evidence" — is freshness real? **Yes**,
-  `retrieved_at` is always the actual retrieval time and cache hits are flagged.
-- does it fetch public web pages? **Yes** — `@aee/fetcher` implements
-  SSRF-hardened retrieval and `@aee/extraction` parses the result.
-- can an agent actually call it? **Not yet.** The tools are not served:
-  `packages/mcp` has no source, so `apps/backend` cannot build.
+- "web evidence" — does it fetch public web pages? **Yes** — `@aee/fetcher`
+  implements SSRF-hardened retrieval and `@aee/extraction` parses the result.
+- "cited evidence" — does every excerpt carry a citation? **Yes** — source URL,
+  final URL, context, retrieval timestamp, and content hash.
+- "compare sources" — is there real comparison? **Yes** — `assess()` classifies
+  each source's lexical stance and reports agreement or disagreement.
+- can an agent actually call it? **Yes**, once deployed. The tools are
+  implemented and `pnpm typecheck` passes, but the endpoint is not deployed and
+  the suites have not been run.
 
-That last line is the reason for §7.
+Every clause of the shipped description is therefore backed by code. The remaining
+reason for caution is deployment and verification, not accuracy — see §7.
 
 ---
 
@@ -286,8 +296,12 @@ That last line is the reason for §7.
 > Evidence infrastructure for AI agents: structured, cited evidence from public
 > web pages, so an agent can verify claims and ground its answers in sources.
 
-**Tool description for `research_evidence`** — use the SPEC §10 text verbatim; it
-is already precise.
+**Tool description for `research_evidence`** — the shipped string is in
+[`mcp.md` §2](./mcp.md#research_evidence). It is **not** the SPEC §10 text
+verbatim: SPEC §10 supplies an *example intent*, and the implementation expands it
+so that all eight SPEC §29 phrases appear truthfully. If you revise it, cut
+phrases rather than adding them, and update
+`packages/mcp/src/mcp.test.ts`, which asserts their presence.
 
 **Short-form tags** (GitHub topics, npm keywords — few and accurate):
 
@@ -359,10 +373,9 @@ Registry readiness (SPEC §28):
 - [x] `mcp-publisher` workflow documented.
 - [x] **Not** published automatically.
 
-Preparation items still open: the README's thirteen points are covered, but the
-tool description cannot be "in the tool definition" until `packages/mcp` exists,
-and the GitHub description and topics can only be set once the repository is
-public.
+Preparation items still open: the GitHub description and topics can only be set
+once the repository is public, and `server.json` must be validated against the
+registry schema.
 
 Publication (only when the above are true, and only by hand):
 
@@ -384,27 +397,25 @@ not claim success before the complete local end-to-end flow works, and if
 credentials are missing, implement everything possible and document precisely
 what remains — do not fake it and do not claim the integration works.
 
-Publishing this service *today* would be misleading in specific, checkable ways:
+The implementation is now complete and typechecks, so the remaining blockers are
+configuration and verification rather than missing code. Publishing *today* would
+still be premature in specific, checkable ways:
 
-- `packages/mcp` has no source, so `tools/list` would not answer and the
-  `research_evidence` tool does not exist to be called.
-- Because of that import, `apps/backend` cannot build, so there is no process to
-  serve the request even for the tools that are declared.
-- `server.json` still points at a placeholder `*.example.invalid` URL, and its
-  `name` and `repository.url` have not been confirmed against a real, owned
-  account.
-- No on-chain payment has been demonstrated, and no x402 or MCP test suite exists.
-- The SSRF, limit, extraction, and cache suites have not been run here, so their
-  results are unknown.
+- No deployment exists, so the `remotes[].url` in `server.json` is still
+  `https://mcp.example.invalid/mcp` and would be a dead endpoint.
+- The `name` and `repository.url` assert a GitHub namespace that has not been
+  confirmed as genuinely owned.
+- The test suites and `scripts/smoke.sh` have not been run here, so there is no
+  recorded evidence that the end-to-end flow passes.
+- No on-chain x402 payment has been demonstrated, and there is no automated
+  payment test.
+- `apps/worker/wrangler.jsonc` still contains literal test-recipient addresses,
+  which must not ship.
 
-What *is* ready: the metadata file exists and is schema-shaped, the publish
-procedure and namespace checklist are documented, the tool description is written
-honestly, and the fetching and extraction machinery behind it is implemented.
+A registry entry published now would list a `research_evidence` tool reachable
+only at a placeholder host. That is exactly the outcome the honesty rules exist to
+prevent: an agent that discovers the tool, pays for it, and receives a transport
+error will not retry.
 
-A registry entry published now would list a `research_evidence` tool that cannot
-be called. That is exactly the outcome the honesty rules exist to prevent: an
-agent that discovers the tool, pays for it, and receives a transport error will
-not retry.
-
-Prepare the metadata, validate it, write the publish steps, and wait until the
-acceptance criteria in SPEC §42 are genuinely true.
+Validate the metadata, deploy the endpoint, run the suites, and only then publish
+by hand — once the acceptance criteria in SPEC §42 are genuinely true.

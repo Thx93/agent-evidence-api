@@ -23,9 +23,10 @@ SPEC §18 defines the first; SPEC §15 defines the second.
 > comparison. Section [§8](#8-what-is-enforced-where) is the summary matrix and
 > [§10](#10-known-gaps-summarised) lists what is still missing.
 >
-> What has **not** been done is an independent security review, and the suite has
-> not been run end to end in this environment. Treat the controls as implemented
-> and currently un-audited.
+> `pnpm typecheck` passes across the workspace, and the SSRF and limit suites
+> (`tests/security/`, 46 cases) exist. They have **not been run here**, and no
+> independent security review has been performed. Treat the controls as
+> implemented, un-audited, and unexercised in this session.
 
 ---
 
@@ -923,25 +924,31 @@ Required test classes:
 | x402 | request without payment → 402; valid testnet payment → success |
 | MCP | startup, tool listing, tool schema, invocation, paid invocation, payment-required response, successful payment flow, malformed arguments, server error handling |
 
-**Current coverage.** Four test files exist:
+**Current coverage.** Six test files exist, about 147 cases in total:
 
-| File | Area |
-|---|---|
-| `tests/security/ssrf.test.ts` | URL validation and the SSRF classes (§2.1–§2.12, §2.19) |
-| `tests/security/limits.test.ts` | Timeouts, redirect limits, response-size limits (§2.13–§2.15) |
-| `packages/extraction/src/extraction.test.ts` | Metadata, main content, normalisation, hashing, lexical ranking |
-| `packages/cache/src/cache.test.ts` | Cache miss/hit/expiry/invalidation/bounded retention |
+| File | Cases | Area |
+|---|---|---|
+| `tests/security/ssrf.test.ts` | 30 | URL validation and the SSRF classes (§2.1–§2.12, §2.19) |
+| `tests/security/limits.test.ts` | 16 | Timeouts, redirect limits, response-size limits (§2.13–§2.15) |
+| `tests/e2e/evidence-flow.test.ts` | 18 | Origin protection (401 without/with a wrong secret, `/health` leaks nothing), request validation, and the full evidence pipeline |
+| `packages/mcp/src/mcp.test.ts` | 15 | Tool listing, schemas, invocation, malformed arguments, error mapping, log hygiene |
+| `packages/extraction/src/extraction.test.ts` | 46 | Metadata, main content, normalisation, hashing, lexical ranking |
+| `packages/cache/src/cache.test.ts` | 22 | Cache miss/hit/expiry/invalidation/bounded retention |
 
-Not yet covered: the **x402** and **MCP** suites, and a cross-package
-end-to-end acceptance test. Per SPEC §42, the acceptance criteria that depend on
-those — the x402 `402` flow, the MCP tool being discoverable and invoking the same
-`EvidenceService`, and the full end-to-end scenario — are **not met**.
+That covers the SPEC §26 classes for URL validation, HTTP behaviour, evidence,
+cache, and MCP. Still **not** covered:
 
-These test files have not been executed in this environment, so their results are
-unknown. Run `pnpm test:security` and report the actual output rather than
-assuming a pass. `scripts/run-tests.mjs` deliberately exits non-zero when no test
-file matches a filter, so a missing suite fails loudly instead of passing
-silently.
+- **x402** — neither the "request without payment → 402" case nor a valid
+  testnet-payment case exists.
+- **DNS rebinding** — the connect-time revalidation path has no dedicated test
+  that simulates a record changing between validation and connection.
+- **Decompression-bomb behaviour** — no test drives a highly compressed payload.
+
+**These files have not been executed in this environment**, so their results are
+unknown. Run `pnpm test:security` and `pnpm test` and report the actual output
+rather than assuming a pass. `scripts/run-tests.mjs` deliberately exits non-zero
+when no test file matches a filter, so a missing suite fails loudly instead of
+passing silently.
 
 ---
 
@@ -950,32 +957,36 @@ silently.
 Ordered by risk:
 
 1. **`ROBOTS_POLICY` is inert.** The variable is parsed and validated but never
-   read, so `ignore`, `warn`, and `enforce` all behave identically — as `ignore`.
-   This is a direct gap against SPEC §19.
-2. **`packages/mcp` has no source**, so the MCP endpoint that the backend routes
-   to cannot answer. `apps/backend/src/app.ts` imports `@aee/mcp`; until that
-   package exists the backend cannot build. This is now the only missing source
-   package.
-3. **Literal test wallet addresses are committed** in `apps/worker/wrangler.jsonc`
+   consumed, so `ignore`, `warn`, and `enforce` all behave identically — as
+   `ignore`. This is a direct gap against SPEC §19.
+2. **Literal test wallet addresses are committed** in `apps/worker/wrangler.jsonc`
    (both `env.dev` and `env.test`, the same value).
-4. **No x402 or MCP test suite exists**, and no end-to-end test exists.
-5. **The test suites have not been run here**, so no pass/fail result is known.
+3. **No x402 test suite exists**, so the payment boundary — the control that
+   makes the origin protection meaningful — is unverified by automation, and no
+   on-chain settlement has been demonstrated.
+4. **No DNS-rebinding-specific test**, despite the defence being implemented.
+5. **The SSRF and limit suites have not been run here**, so no pass/fail result
+   is known.
 6. **No explicit decompression-ratio cap and no content-encoding nesting cap.**
    The absolute byte cap bounds the exposure; the ratio itself is unbounded.
-7. **`metadata.goog` is not blocked by name**, unlike `metadata.google.internal`
-   (which the `.internal` suffix covers).
-8. **`UNSUPPORTED_CONTENT` is never emitted.** An unsupported content type
+7. **`UNSUPPORTED_CONTENT` is never emitted.** An unsupported content type
    produces a source warning (`UNSUPPORTED_CONTENT_TYPE`) and a body-less source
-   instead of an HTTP 415. If SPEC §4 requires a hard rejection, this differs.
+   instead of an HTTP 415.
+8. **`metadata.goog` is not blocked by name**, unlike `metadata.google.internal`
+   (which the `.internal` suffix covers).
 9. **The port allowlist includes `8080` and `8443`**, which are also common
    internal-interface ports. Narrow it if your deployment does not need them.
 10. **No rate limiting implementation exists.** `RATE_LIMIT` (HTTP 429) is defined
     as an error code but nothing produces it; the concurrency semaphore bounds
     resource use but does not rate-limit a caller.
-11. **The development bypass is a live code path.** It is guarded by the mainnet
-    check, but any change to that guard weakens the payment boundary. Review it in
-    every diff that touches the Worker.
-12. **No on-chain payment has been verified.**
+11. **The test-only loopback escape is a live code path.** It requires both
+    `NODE_ENV === "test"` and an explicit `allowLoopbackForTests` flag that only
+    configuration can set, but any change that threads a caller-influenced value
+    into it would defeat two gates at once. Review it in every diff touching the
+    fetcher or the config.
+12. **The development payment bypass is a live code path.** It is guarded by the
+    mainnet check, but any change to that guard weakens the payment boundary.
+    Review it in every diff that touches the Worker.
 13. **No independent security review has been performed.** The controls are
     implemented and unit-tested in source; nobody has audited them adversarially.
 

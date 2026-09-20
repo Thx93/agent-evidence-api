@@ -295,12 +295,12 @@ docker compose -f docker/docker-compose.yml down      # keeps the volume
 docker compose -f docker/docker-compose.yml down -v   # DESTROYS the cache volume
 ```
 
-The `Dockerfile` also documents a plain `docker run` equivalent, and notes that
-the build context is the repository root with no `.dockerignore` present. That is
-safe — every `COPY` names an exact path, so nothing from the host leaks in — but
-slow, because Docker still transfers the whole tree. Adding a root `.dockerignore`
-containing `node_modules`, `dist`, `data`, `.env`, `.dev.vars`, `.pnpm-store` is a
-worthwhile improvement.
+The `Dockerfile` notes that the build context is the repository root. A root
+`.dockerignore` now excludes `node_modules`, `**/dist`, `data`, `.env`,
+`.dev.vars`, `.pnpm-store`, `.wrangler`, `docs`, and `tests`, which avoids
+transferring hundreds of megabytes of host build artefacts into the context. Every
+`COPY` names an exact path regardless, so the ignore file is defence in depth plus
+a large speed-up.
 
 ### Persistent volume for SQLite
 

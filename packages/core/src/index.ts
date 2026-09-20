@@ -10,4 +10,5 @@
 export * from "./config.js";
 export * from "./logger.js";
 export * from "./assessment.js";
+export * from "./robots.js";
 export * from "./service.js";

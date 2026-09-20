@@ -19,6 +19,7 @@ import {
 } from "@aee/extraction";
 import { cacheKey, type CacheProvider, type CacheRecord } from "@aee/cache";
 import { assess, type SourceEvidence } from "./assessment.js";
+import { checkRobots, robotsWarning } from "./robots.js";
 import type { AppConfig } from "./config.js";
 import type { Logger } from "./logger.js";
 
@@ -259,6 +260,42 @@ export class EvidenceService {
       }
     }
 
+    // ---- robots policy (SPEC section 19) ----------------------------------
+    // `ignore` skips this entirely; `warn` records a warning and proceeds;
+    // `enforce` refuses the source. The setting was previously parsed but never
+    // consulted, which made it silently inert.
+    let robotsWarningForSource: SourceWarning | null = null;
+    if (this.config.fetch.robotsPolicy !== "ignore") {
+      try {
+        const parsed = new URL(requestedUrl);
+        const verdict = await checkRobots(
+          { origin: parsed.origin, path: parsed.pathname },
+          this.config.fetch.userAgent,
+          this.doFetch,
+          this.config.limits,
+          this.config.fetch.allowLoopbackForTests,
+        );
+        if (!verdict.allowed) {
+          if (this.config.fetch.robotsPolicy === "enforce") {
+            return {
+              source: this.failedSource(
+                requestedUrl,
+                new ServiceError(
+                  "BLOCKED_URL",
+                  `robots.txt disallows this path for our user agent (rule: "${verdict.rule}").`,
+                ),
+              ),
+              candidates: [],
+            };
+          }
+          robotsWarningForSource = robotsWarning(verdict.rule);
+        }
+      } catch {
+        // An unparseable URL will be rejected with a precise error by the
+        // fetcher; do not pre-empt that here.
+      }
+    }
+
     // ---- live fetch -------------------------------------------------------
     const release = await this.semaphore.acquire();
     let fetched: FetchResult;
@@ -292,7 +329,9 @@ export class EvidenceService {
         status: fetched.status,
         contentType: fetched.contentType,
         redirectChain: fetched.redirectChain,
-        warnings: fetched.warnings,
+        warnings: robotsWarningForSource
+          ? [...fetched.warnings, robotsWarningForSource]
+          : fetched.warnings,
       };
     } catch (err) {
       log.warn("extraction failed", {
@@ -347,7 +386,13 @@ export class EvidenceService {
     err: unknown,
     fetched?: FetchResult,
   ): Source {
-    const code: ErrorCode = err instanceof FetchError ? err.code : "INTERNAL_ERROR";
+    // Both error types carry a stable public code; anything else is internal.
+    const code: ErrorCode =
+      err instanceof FetchError
+        ? err.code
+        : err instanceof ServiceError
+          ? err.code
+          : "INTERNAL_ERROR";
     const message =
       err instanceof Error && err.message
         ? err.message

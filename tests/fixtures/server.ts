@@ -90,6 +90,8 @@ function bodyFor(pathname: string): { status: number; type: string; body: string
       return { status: 200, type: "application/json", body: '{"fixture":true}' };
     case "/binary":
       return { status: 200, type: "application/octet-stream", body: "BINARYDATA" };
+    case "/blocked-by-robots":
+      return { status: 200, type: "text/html; charset=utf-8", body: COMPANY_HTML };
     case "/empty":
       return { status: 200, type: "text/html", body: "" };
     default:
@@ -166,6 +168,12 @@ export async function startFixtureServer(port = 0): Promise<FixtureServer> {
       };
       pump();
       return;
+    }
+
+    // --- robots.txt fixtures (SPEC section 19) -----------------------------
+    if (pathname === "/robots.txt") {
+      res.writeHead(200, { "content-type": "text/plain" });
+      return res.end("User-agent: *\nDisallow: /blocked-by-robots\n");
     }
 
     // --- status fixtures ---------------------------------------------------
