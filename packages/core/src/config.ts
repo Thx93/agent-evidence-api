@@ -105,7 +105,7 @@ export function loadConfig(): AppConfig {
 
   return {
     serviceName: str("SERVICE_NAME", "agent-evidence-api"),
-    serviceVersion: str("SERVICE_VERSION", "0.1.0"),
+    serviceVersion: str("SERVICE_VERSION", "0.1.1"),
     nodeEnv: str("NODE_ENV", "development"),
     logLevel: str("LOG_LEVEL", "info") as LogLevel,
 
