@@ -8,7 +8,7 @@ payment. Nothing here is blocked on engineering.
 Run this at any time to see the current truth:
 
 ```bash
-docker exec aee-live sh -c "grep -c settled:true /app/data/usage.jsonl"   # payments received
+docker exec aee-live sh -c "grep -c '"payment_provided":true' /app/data/usage.jsonl"   # buyer requests
 curl -s https://agent-evidence-api.taher-h-alhaddad.workers.dev/health?deep=1
 ```
 
@@ -52,7 +52,7 @@ Full detail, including what each error means: [`FIRST-SALE.md`](./FIRST-SALE.md)
 **Verify it worked:**
 
 ```bash
-docker exec aee-live sh -c "grep -c settled:true /app/data/usage.jsonl"   # → 1
+docker exec aee-live sh -c "grep -c '"payment_provided":true' /app/data/usage.jsonl"   # → 1
 ```
 
 ---

@@ -25,8 +25,9 @@ const SECRET = "test-secret-value-that-is-long-enough";
 process.env.BACKEND_AUTH_SECRET = SECRET;
 process.env.ALLOW_LOOPBACK_FOR_TESTS = "true";
 process.env.CACHE_ENABLED = "false"; // cache behaviour is covered in packages/cache
-// Every request served on the internal route corresponds to a settled payment,
-// so the usage log is the revenue record. Point it at a scratch file.
+// The usage log records served requests. A line means the request carried an x402
+// payment proof, NOT that a settlement completed - the facilitator settles after
+// the backend responds. Point it at a scratch file.
 const USAGE_LOG = `/tmp/aee-usage-${process.pid}.jsonl`;
 process.env.USAGE_LOG_PATH = USAGE_LOG;
 process.env.LOG_LEVEL = "error";
@@ -143,12 +144,12 @@ describe("origin protection", () => {
     // Privacy: the question text must never be written.
     assert.ok(!raw.includes(secret), "the usage log must not contain the question text");
 
-    // A direct internal call carries no payment proof, so it must NOT be
-    // counted as revenue. Reading total lines as money would over-report.
-    assert.equal(last.settled, false, "an operator/test call is not a sale");
+    // A direct internal call carries no payment proof, so it must not look like
+    // buyer traffic.
+    assert.equal(last.payment_provided, false, "an operator/test call has no payment proof");
   });
 
-  test("a request carrying a payment proof is recorded as settled", async () => {
+  test("a request carrying a payment proof is recorded as such", async () => {
     // The Worker forwards `payment-signature` on paid requests; its presence is
     // what makes a line count as revenue.
     const res = await app.inject({
@@ -161,7 +162,7 @@ describe("origin protection", () => {
 
     const lines = (await readFile(USAGE_LOG, "utf8")).trim().split("\n").filter(Boolean);
     const last = JSON.parse(lines[lines.length - 1] as string);
-    assert.equal(last.settled, true, "a request with a payment proof counts as revenue");
+    assert.equal(last.payment_provided, true, "a request with a payment proof is buyer traffic");
   });
 
   test("the reported version follows configuration, not a compiled constant", async () => {

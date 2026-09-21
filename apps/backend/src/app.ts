@@ -71,7 +71,9 @@ export function clientKey(req: FastifyRequest): string {
 export function buildApp(deps: BuildAppDeps): FastifyInstance {
   const { config, logger, service, mcp } = deps;
 
-  // One line per served request == one settled payment.
+  // One line per served request. NOTE: a request carries a payment proof, but
+  // settlement happens after this process responds, so these lines are not proof
+  // of payment. See usage-log.ts.
   const usage = createUsageLog({ path: config.usageLogPath });
 
   const app = Fastify({
@@ -187,9 +189,10 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
     const started = Date.now();
     const body = (req.body ?? {}) as { question?: unknown; urls?: unknown };
     const question = typeof body.question === "string" ? body.question : "";
-    // The Worker forwards the x402 proof, so this distinguishes a real paid
-    // request from an operator or test call. See usage-log.ts.
-    const settled = Boolean(req.headers["payment-signature"]);
+    // The Worker forwards the x402 proof, so this distinguishes a buyer's request
+    // from an operator or test call. It does NOT indicate settlement: the
+    // facilitator settles after this response. See usage-log.ts.
+    const paymentProvided = Boolean(req.headers["payment-signature"]);
     const urlsRequested = Array.isArray(body.urls) ? body.urls.length : 0;
 
     try {
@@ -208,7 +211,7 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
         assessment: result.assessment.status,
         processing_ms: result.processing_ms,
         outcome: "ok",
-        settled,
+        payment_provided: paymentProvided,
       });
 
       return reply.code(200).send(result);
@@ -225,7 +228,7 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
         processing_ms: Date.now() - started,
         outcome: "error",
         error_code: err instanceof ServiceError ? err.code : "INTERNAL_ERROR",
-        settled,
+        payment_provided: paymentProvided,
       });
       return sendServiceError(reply, err, requestId, logger);
     }

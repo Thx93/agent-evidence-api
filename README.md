@@ -89,18 +89,27 @@ wallet to a settled payment and a catalogue entry, in one page.
 ## How to see revenue
 
 Every request the backend serves on its internal route has already passed the
-Worker's x402 gate, so **one line in the usage log equals one settled payment**.
-It is append-only on the data volume, so it survives container recreation and
-redeploys — unlike Docker logs.
+Worker's x402 payment gate. The log is append-only on the data volume, so it
+survives container recreation and redeploys — unlike Docker logs.
+
+**A line means a payment proof was presented. It is not proof of settlement.**
+The x402 order is verify → handler → settle, so the backend writes its line
+*before* the facilitator settles, and a settlement that later fails still appears
+here. The field is named `payment_provided` for that reason; it was previously
+called `settled`, which was wrong.
 
 ```bash
 docker exec aee-live cat /app/data/usage.jsonl            # the raw record
 
-# Payments received. Filter on settled: it is true only when the request carried
-# an x402 payment proof, so operator and test calls are excluded. Total lines
-# would over-count.
-docker exec aee-live sh -c "grep -c '\"settled\":true' /app/data/usage.jsonl"
+# Buyer traffic: requests that carried an x402 payment proof, so operator and
+# test calls are excluded. This is NOT a revenue figure - see below.
+docker exec aee-live sh -c "grep -c '"payment_provided":true' /app/data/usage.jsonl"
 ```
+
+For **money**, use the on-chain record. The buyer's client prints the settlement
+transaction, and the authoritative ledger is the recipient address:
+
+<https://basescan.org/address/0x9c0e2B44180439294Fa30Ae2B2a94f8655455FD0>
 
 Each line carries the timestamp, request id, a salted hash of the question
 (never the text), how many sources were retrieved, how many evidence items came

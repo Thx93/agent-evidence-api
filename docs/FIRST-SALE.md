@@ -86,11 +86,15 @@ curl -s "https://facilitator.payai.network/discovery/resources?limit=1000" \
 And confirm the money moved, from the service side:
 
 ```bash
-docker exec aee-live sh -c "grep -c settled:true /app/data/usage.jsonl"   # → 1
+docker exec aee-live sh -c "grep -c '"payment_provided":true' /app/data/usage.jsonl"   # → 1
 ```
 
-Both numbers are honest: the usage log records `settled:true` only when a request
-carried an x402 payment proof, so operator and test traffic does not inflate it.
+The catalogue check is the one that matters for discovery. The usage-log number
+confirms a request carried a payment proof, which excludes operator and test
+traffic — but it is **not** proof the money moved: the facilitator settles *after*
+the backend responds. For the money itself, read the settlement transaction the
+client printed, or the recipient address on
+[basescan](https://basescan.org/address/0x9c0e2B44180439294Fa30Ae2B2a94f8655455FD0).
 
 ---
 
