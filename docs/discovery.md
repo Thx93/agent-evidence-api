@@ -538,3 +538,71 @@ all.
 
 Price calibration: MCP-shelf prices run $0.001–$0.46, mostly $0.002–$0.05. Ours
 is $0.03, mid-range.
+
+## Searching the catalogue, and why the wording matters
+
+There is a second endpoint, and it is the one buyers actually use:
+
+```bash
+curl -s "https://facilitator.payai.network/discovery/search?query=claim+verification"
+```
+
+**`/discovery/resources?query=…` silently ignores the query and returns the default
+page.** The real endpoint is `/discovery/search`, reached from the SDK as
+`client.extensions.bazaar.search({ query })`. Anyone testing discoverability against
+the wrong one would conclude, incorrectly, that search does not exist.
+
+### The search is keyword based, not semantic
+
+Two observations establish this. `"web evidence"` returns `delx.ai` endpoints that
+parse Vary headers and Content-Type strings — unrelated to evidence, matched on
+shared words. And `"fact check sources"` returns **zero** results, which a semantic
+index would not do.
+
+So a natural-language query is really a bag of words, and an entry surfaces only if
+its description contains them.
+
+### Where this service sits, by query
+
+Measured 2026-09-21:
+
+| Query | Results | Notes |
+|---|---:|---|
+| `claim verification` | 4 | two `aiapi.ch` routes ("financial evidence"), one ngrok demo |
+| `web evidence` | 20 | mostly noise; one real competitor |
+| `verify a company claim` | **0** | nobody matches this |
+| `fact check sources` | **0** | nobody matches this |
+
+**One direct competitor exists**: `phion.systems/v1/paid/fetch-evidence` —
+*"Independent, prompt-injection-screened, hashed and signed web evidence"* — at
+**$0.004**, cheaper than this service's $0.03. That is worth knowing before
+competing on price.
+
+### The wording of the description is therefore a discovery lever
+
+Terms are rare across the catalogue (sampled 1,000 descriptions): `cited` 69,
+`citation` 22, `claim` 17, `verify` 16, `evidence` 16, `verification` 11,
+`provenance` 7, `fact check` 0.
+
+The original description was accurate but contained none of `verify`, `web`,
+`cited`, `citation` or `sources` — every word a buyer in this niche would type. It
+now reads:
+
+> Verify a claim against public web sources: send a question and up to 5 URLs, get
+> cited evidence - passages that support, contradict or fail to settle it. Every
+> excerpt carries a citation: source URL, retrieval time, content hash. Never
+> charges when nothing is retrieved.
+
+and the MCP tool description was aligned the same way. This is not keyword
+stuffing: every phrase states what the service does. It is choosing words a buyer
+would search with, rather than words that merely describe the product.
+
+Re-measure after cataloguing:
+
+```bash
+for q in "claim verification" "verify a company claim" "cited web evidence"; do
+  printf '%s -> ' "$q"
+  curl -s "https://facilitator.payai.network/discovery/search?query=$(printf '%s' "$q" | tr ' ' '+')" \
+  | python3 -c 'import json,sys; d=json.load(sys.stdin); print(len(d.get("resources",[])), "result(s)")'
+done
+```

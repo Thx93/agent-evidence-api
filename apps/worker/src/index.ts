@@ -179,8 +179,13 @@ const MCP_DISCOVERY = declareDiscoveryExtension({
   // registry listing says so too). Without it the catalogue entry describes the
   // tool but never says how to reach it.
   transport: "streamable-http",
+  // Same reasoning as the resource description: the Bazaar searches by keyword,
+  // so the tool text has to contain the words a buyer would use. The earlier
+  // wording lacked verify, citation, support and contradict.
   description:
-    "Fetch public web sources and return structured, cited web evidence for a question or claim.",
+    "Verify a claim or answer a question against public web sources. Returns cited " +
+    "evidence, each excerpt carrying a citation with its source URL, retrieval time " +
+    "and content hash.",
   inputSchema: {
     type: "object",
     properties: {
@@ -260,10 +265,20 @@ function paymentGate(env: Env, routeKey: string): MiddlewareHandler {
         // Shown to buyers browsing the x402 catalogue, where this one line is the
         // entire pitch. Lead with what the caller GETS, name the input, and state
         // the provenance guarantee. Modelled on the listings that rank well.
+        // Wording matters more than it looks. The Bazaar's search is keyword based,
+        // not semantic, so a buyer searching "verify a claim" or "cited evidence"
+        // only finds this if those words appear. The previous wording described the
+        // product accurately but omitted verify, web, cited, citation and sources -
+        // every term a buyer in this niche would actually type. They are rare across
+        // the catalogue (cited 69/1000 descriptions, citation 22, claim 17,
+        // verify 16), so their absence was not neutral.
+        //
+        // This is not keyword stuffing: each phrase states what the service does.
         description:
-          "Source-grounded evidence for one claim or question. Send up to 5 public URLs; " +
-          "get back the passages that support, contradict or fail to settle it, each with " +
-          "its URL, retrieval timestamp and content hash. Never charges when nothing is retrieved.",
+          "Verify a claim against public web sources: send a question and up to 5 URLs, " +
+          "get cited evidence - passages that support, contradict or fail to settle it. " +
+          "Every excerpt carries a citation: source URL, retrieval time, content hash. " +
+          "Never charges when nothing is retrieved.",
         serviceName: "Agent Evidence API",
         tags: ["web-evidence", "claim-verification", "source-verification"],
 
