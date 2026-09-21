@@ -115,7 +115,7 @@ bash scripts/supervise.sh      # detached watchdog, every 5 minutes
 ## 7. Test results
 
 ```
-260 tests · 52 suites · 260 pass · 0 fail
+261 tests · 52 suites · 261 pass · 0 fail
 ```
 
 | Suite | Covers |
@@ -125,7 +125,7 @@ bash scripts/supervise.sh      # detached watchdog, every 5 minutes
 | `tests/security/limits.test.ts` | response size, timeouts, redirects, concurrency |
 | `tests/security/encoding.test.ts` | decompression bombs, chained encodings |
 | `tests/security/robots.test.ts` | `ignore` / `warn` / `enforce` policy |
-| `tests/e2e/evidence-flow.test.ts` | the full pipeline, error envelope, zero-retrieval refusal, usage record, version consistency |
+| `tests/e2e/evidence-flow.test.ts` | the full pipeline, error envelope, zero-retrieval refusal, usage record, version consistency, and the SPEC §24 request-log fields |
 | `tests/e2e/buyer-cli.test.ts` | the shipped buyer bundle against a local x402 mock: success and failure output, first-run onboarding |
 | `tests/e2e/rate-limit.test.ts` | token bucket, `Retry-After` |
 | `tests/e2e/semantic-ranking.test.ts` | reordering, budget reservation, per-request reset, every fallback path |

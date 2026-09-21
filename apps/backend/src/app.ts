@@ -141,8 +141,32 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
       path: req.url.split("?")[0],
       status: reply.statusCode,
       duration_ms: Math.round(reply.elapsedTime),
+      // SPEC section 24: enough to diagnose a failure without logging secrets.
+      // Absent on routes that do no fetching, which keeps the probe quiet.
+      ...(summaryFor(req) ?? {}),
     });
   });
+
+  /**
+   * SPEC section 24 requires the request log to record the source counts, cache
+   * hits, payment outcome and error code. The route knows them; the onResponse
+   * hook emits them. A WeakMap keyed by the request carries them between the two
+   * without mutating the request object or risking a leak.
+   */
+  interface RequestSummary {
+    sources_total: number;
+    sources_ok: number;
+    sources_failed: number;
+    cache_hits: number;
+    /** A payment proof was present. Only the Worker can verify one. */
+    payment_provided: boolean;
+    error_code: string | null;
+  }
+  const summaries = new WeakMap<object, RequestSummary>();
+  const summaryFor = (req: FastifyRequest): RequestSummary | undefined => summaries.get(req);
+  const recordSummary = (req: FastifyRequest, summary: RequestSummary): void => {
+    summaries.set(req, summary);
+  };
 
   // ------------------------------------------------------------- routes ----
   /** Free liveness probe. Never reports secrets or infrastructure detail. */
@@ -214,6 +238,17 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
         payment_provided: paymentProvided,
       });
 
+      recordSummary(req, {
+        sources_total: result.sources.length,
+        // "ok" means usable content. A source that answered 404 has a status but
+        // is still a failed fetch, so failed is the complement of ok rather than
+        // a count of null-status sources.
+        sources_ok: result.sources.filter((s) => s.status === 200).length,
+        sources_failed: result.sources.filter((s) => s.status !== 200).length,
+        cache_hits: result.sources.filter((s) => s.from_cache).length,
+        payment_provided: paymentProvided,
+        error_code: null,
+      });
       return reply.code(200).send(result);
     } catch (err) {
       await usage.record({
@@ -229,6 +264,14 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
         outcome: "error",
         error_code: err instanceof ServiceError ? err.code : "INTERNAL_ERROR",
         payment_provided: paymentProvided,
+      });
+      recordSummary(req, {
+        sources_total: urlsRequested,
+        sources_ok: 0,
+        sources_failed: urlsRequested,
+        cache_hits: 0,
+        payment_provided: paymentProvided,
+        error_code: err instanceof ServiceError ? err.code : "INTERNAL_ERROR",
       });
       return sendServiceError(reply, err, requestId, logger);
     }

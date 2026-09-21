@@ -182,10 +182,18 @@ const MCP_DISCOVERY = declareDiscoveryExtension({
   // Same reasoning as the resource description: the Bazaar searches by keyword,
   // so the tool text has to contain the words a buyer would use. The earlier
   // wording lacked verify, citation, support and contradict.
+  // SPEC section 29 asks tool descriptions to contain useful phrases such as
+  // "web evidence", "claim verification", "cited evidence" and "compare sources",
+  // while warning against keyword stuffing. Six of its eight examples describe
+  // this service accurately and appear here reading as prose. Two are omitted
+  // deliberately: "source verification" would imply we vouch for a source's
+  // trustworthiness, which we do not - we verify a claim against sources - and
+  // "fresh web evidence" is marketing rather than description.
   description:
-    "Verify a claim or answer a question against public web sources. Returns cited " +
-    "evidence for claim verification, with a citation for every excerpt: source URL, " +
-    "retrieval time and content hash.",
+    "Claim verification and evidence extraction from public web sources. Fetches " +
+    "the URLs you name, compares your sources, and returns source-grounded web " +
+    "evidence: cited passages that support or contradict your question, each with " +
+    "a citation - source URL, retrieval time, content hash.",
   inputSchema: {
     type: "object",
     properties: {

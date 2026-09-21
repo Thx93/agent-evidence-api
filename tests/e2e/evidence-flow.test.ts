@@ -13,7 +13,7 @@ process.env.NODE_ENV = "test";
 import { test, describe, before, after } from "node:test";
 import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
-import { EvidenceService, createLogger, loadConfig } from "@aee/core";
+import { EvidenceService, createLogger, loadConfig, type Logger } from "@aee/core";
 import type { EvidenceMcpServer } from "@aee/mcp";
 import { buildApp } from "../../apps/backend/src/app.js";
 import { startFixtureServer, type FixtureServer } from "../fixtures/server.js";
@@ -275,6 +275,53 @@ describe("request validation", () => {
       body.limitations.some((l: string) => /could not be retrieved/.test(l)),
       "the failure must still be disclosed",
     );
+  });
+
+  test("the request log carries SPEC section 24's required fields", async () => {
+    // Section 24 requires the request log to record the source counts, cache
+    // hits, payment outcome and error code. The route knows them and the
+    // onResponse hook emits them, so a refactor of either could silently drop
+    // them - this pins the contract.
+    const captured: Array<{ message: string; fields?: Record<string, unknown> }> = [];
+    const capturing: Logger = {
+      debug: (message, fields) => captured.push({ message, fields }),
+      info: (message, fields) => captured.push({ message, fields }),
+      warn: () => undefined,
+      error: () => undefined,
+      child() {
+        return this;
+      },
+    };
+
+    const config = loadConfig();
+    const probe = buildApp({
+      config,
+      logger: capturing,
+      service: new EvidenceService({ config, logger: capturing }),
+      mcp: stubMcp(),
+    });
+    await probe.ready();
+
+    await probe.inject({
+      method: "POST",
+      url: "/internal/v1/evidence",
+      headers: { "x-backend-auth": SECRET, "payment-signature": "proof-for-log-test" },
+      payload: { question: "manufacturer of centrifugal pumps?", urls: [`${fx.url}/company`, `${fx.url}/404`], max_sources: 2 },
+    });
+    await probe.close();
+
+    const requestLine = captured.filter((c) => c.message === "request").pop();
+    assert.ok(requestLine, "a request line must be emitted");
+    const f = requestLine.fields ?? {};
+
+    assert.equal(typeof f.request_id, "string", "request ID");
+    assert.equal(f.sources_total, 2, "number of sources");
+    assert.equal(f.sources_ok, 1, "successful fetch count");
+    assert.equal(f.sources_failed, 1, "failed fetch count");
+    assert.equal(typeof f.cache_hits, "number", "cache hit/miss");
+    assert.equal(f.payment_provided, true, "payment verification outcome");
+    assert.equal(f.error_code, null, "high-level error code (null on success)");
+    assert.equal(typeof f.duration_ms, "number", "duration");
   });
 
   test("a malformed JSON body produces a canonical error, not a stack trace", async () => {
