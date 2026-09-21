@@ -32,6 +32,27 @@ export interface UrlValidationErr {
 }
 export type UrlValidation = UrlValidationOk | UrlValidationErr;
 
+/**
+ * The subset of `dns.lookup` this package depends on.
+ *
+ * Injectable so the connect-time revalidation can be tested deterministically:
+ * a DNS-rebinding test needs the resolver to answer differently at validation
+ * time and at connect time, which is impossible to arrange against real DNS.
+ * A custom resolver is also a legitimate production use (split-horizon DNS,
+ * a caching resolver, a test double).
+ */
+export type DnsResolver = (
+  hostname: string,
+  options: { all: true; verbatim: true },
+  callback: (
+    err: NodeJS.ErrnoException | null,
+    addresses: Array<{ address: string; family: number }>,
+  ) => void,
+) => void;
+
+/** The default resolver: Node's own `dns.lookup`. */
+export const defaultDnsResolver: DnsResolver = dnsLookup as unknown as DnsResolver;
+
 export interface FetchOptions {
   url: string;
   limits: ResourceLimits;
@@ -48,6 +69,8 @@ export interface FetchOptions {
    * environment the flag is ignored entirely.
    */
   allowLoopbackForTests?: boolean;
+  /** Override DNS resolution. Defaults to `dns.lookup`. */
+  dnsResolver?: DnsResolver;
 }
 
 /** Whether the test-only loopback escape is currently permitted. */
@@ -159,7 +182,11 @@ function safeUrlForMessage(url: string): string {
  */
 export async function validateUrl(
   rawUrl: string,
-  opts?: { limits?: Partial<ResourceLimits>; allowLoopbackForTests?: boolean },
+  opts?: {
+    limits?: Partial<ResourceLimits>;
+    allowLoopbackForTests?: boolean;
+    dnsResolver?: DnsResolver;
+  },
 ): Promise<UrlValidation> {
   const allowLoopback = opts?.allowLoopbackForTests === true && loopbackEscapeEnabled();
   let url: URL;
@@ -227,7 +254,7 @@ export async function validateUrl(
     return { ok: true, url, hostname: bareHost, addresses: [bareHost] };
   }
 
-  const addresses = await resolveAll(bareHost);
+  const addresses = await resolveAll(bareHost, opts?.dnsResolver);
   if (addresses.length === 0) {
     return { ok: false, code: "INVALID_URL", reason: "hostname did not resolve" };
   }
@@ -242,9 +269,12 @@ export async function validateUrl(
 }
 
 /** Resolve every A/AAAA record for a hostname. */
-function resolveAll(hostname: string): Promise<string[]> {
+function resolveAll(
+  hostname: string,
+  resolver: DnsResolver = defaultDnsResolver,
+): Promise<string[]> {
   return new Promise((resolve) => {
-    dnsLookup(hostname, { all: true, verbatim: true }, (err, addresses) => {
+    resolver(hostname, { all: true, verbatim: true }, (err, addresses) => {
       if (err || !addresses) return resolve([]);
       resolve(addresses.map((a) => a.address));
     });
@@ -258,13 +288,16 @@ function resolveAll(hostname: string): Promise<string[]> {
  * can change between validation and connection. Node calls this immediately
  * before opening the socket, so a rebound record is caught here.
  */
-function makeGuardedLookup(allowLoopback: boolean) {
+export function makeGuardedLookup(
+  allowLoopback: boolean,
+  resolver: DnsResolver = defaultDnsResolver,
+) {
   return function guardedLookup(
     hostname: string,
     options: { family?: number },
     callback: (err: Error | null, address: string, family: number) => void,
   ): void {
-    dnsLookup(
+    resolver(
       hostname,
       { all: true, verbatim: true },
       (err: NodeJS.ErrnoException | null, addresses: Array<{ address: string; family: number }>) => {
@@ -351,6 +384,7 @@ function requestOnce(
   opts: FetchOptions,
   signal: AbortSignal,
   allowLoopback: boolean,
+  resolver: DnsResolver,
 ): Promise<RawResponse> {
   return new Promise<RawResponse>((resolve, reject) => {
     const isHttps = url.protocol === "https:";
@@ -380,7 +414,7 @@ function requestOnce(
           connection: "close",
         },
         // Connect-time revalidation (DNS rebinding defence).
-        lookup: makeGuardedLookup(allowLoopback) as never,
+        lookup: makeGuardedLookup(allowLoopback, resolver) as never,
         timeout: opts.limits.connectTimeoutMs,
       },
       (res: IncomingMessage) => {
@@ -564,18 +598,29 @@ export async function fetchSource(opts: FetchOptions): Promise<FetchResult> {
 
   const allowLoopback =
     opts.allowLoopbackForTests === true && loopbackEscapeEnabled();
+  // ONE resolver instance is used for validation AND for the connect-time
+  // re-check, so a rebinding resolver is caught on the second call rather than
+  // silently consulted twice with the same assumption.
+  const resolver = opts.dnsResolver ?? defaultDnsResolver;
 
   let current = opts.url;
 
   for (let hop = 0; hop <= limits.maxRedirects; hop++) {
     const validation = await validateUrl(current, {
       allowLoopbackForTests: opts.allowLoopbackForTests,
+      dnsResolver: opts.dnsResolver,
     });
     if (!validation.ok) {
       throw new FetchError(validation.code, `${validation.reason} (${safeUrlForMessage(current)})`);
     }
 
-    const raw = await requestOnce(validation.url, { ...opts, limits }, signal, allowLoopback);
+    const raw = await requestOnce(
+      validation.url,
+      { ...opts, limits },
+      signal,
+      allowLoopback,
+      resolver,
+    );
     const location = headerValue(raw.headers["location"]);
 
     if (raw.status >= 300 && raw.status < 400 && location) {
@@ -595,6 +640,7 @@ export async function fetchSource(opts: FetchOptions): Promise<FetchResult> {
       // rejected here rather than by the next loop iteration.
       const hopCheck = await validateUrl(next, {
         allowLoopbackForTests: opts.allowLoopbackForTests,
+        dnsResolver: opts.dnsResolver,
       });
       if (!hopCheck.ok) {
         throw new FetchError(

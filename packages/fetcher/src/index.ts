@@ -11,11 +11,14 @@
 export {
   FetchError,
   MAX_DECOMPRESSION_RATIO,
+  defaultDnsResolver,
   fetchSource,
   isSupportedContentType,
+  makeGuardedLookup,
   validateUrl,
 } from "./fetch.js";
 export type {
+  DnsResolver,
   FetchOptions,
   FetchResult,
   UrlValidation,

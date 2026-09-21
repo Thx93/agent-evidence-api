@@ -937,13 +937,18 @@ Required test classes:
 That covers the SPEC §26 classes for URL validation, HTTP behaviour, evidence,
 cache, and MCP. Still **not** covered:
 
-- **x402** — neither the "request without payment → 402" case nor a valid
-  testnet-payment case exists.
-- **DNS rebinding** — the connect-time revalidation path has no dedicated test
-  that simulates a record changing between validation and connection.
-- **Decompression-bomb behaviour** — no test drives a highly compressed payload.
+- **x402** — the "request without payment → 402" case and the free/paid MCP
+  split ARE covered, by `scripts/worker-smoke.sh` against a live Worker. A valid
+  testnet-payment case is not, because settlement needs a funded Base Sepolia
+  wallet.
+- **DNS rebinding** — covered by `tests/security/dns-rebinding.test.ts` (13
+  cases). The resolver is injectable, so a stub returns a public address at
+  validation time and a private one at connect time: the actual attack.
+- **Decompression-bomb behaviour** — covered by `tests/security/encoding.test.ts`,
+  which drives an 8 MiB payload from an ~8 KB gzip body with the absolute byte
+  cap raised so that ONLY the ratio guard can stop it.
 
-**These files have not been executed in this environment**, so their results are
+**These suites pass locally** (223+ tests); no independent party has reproduced
 unknown. Run `pnpm test:security` and `pnpm test` and report the actual output
 rather than assuming a pass. `scripts/run-tests.mjs` deliberately exits non-zero
 when no test file matches a filter, so a missing suite fails loudly instead of
@@ -958,10 +963,10 @@ Ordered by risk:
 1. **No on-chain x402 settlement test.** The 402 gate is covered by an automated
    smoke test, but settlement needs a funded Base Sepolia wallet, which is an
    external credential. Automation proves the gate, not the settlement path.
-2. **No DNS-rebinding-specific test.** Connect-time revalidation is implemented
-   and runs on every fetch, but a true rebinding test needs control of an
-   authoritative DNS server, which is not available in-process. Covered by
-   review rather than by a test.
+2. **DNS rebinding is tested against a stubbed resolver, not real DNS.** The
+   defence is exercised end-to-end (`tests/security/dns-rebinding.test.ts`
+   asserts the name is re-resolved at connect time and that a flipped answer is
+   refused), but the stub stands in for a hostile authoritative server.
 3. **`apps/worker/wrangler.jsonc` carries a throwaway Base Sepolia testnet
    recipient** in `env.dev`/`env.test`. Documented as testnet-only, and
    production keeps a zero placeholder — but a real deployment must set its own.
