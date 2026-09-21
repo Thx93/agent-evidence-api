@@ -135,6 +135,7 @@ const erc20 = [
   },
 ];
 let balance = 0n;
+let balanceKnown = true;
 try {
   balance = await publicClient.readContract({
     address: USDC,
@@ -143,13 +144,18 @@ try {
     args: [account.address],
   });
 } catch {
-  /* balance is advisory only */
+  // The balance is ADVISORY. An unreachable RPC must never block a purchase:
+  // defaulting to 0 and refusing would tell a funded buyer they have no money
+  // and send them to a funding page they do not need. On-chain verification is
+  // the authority - if the wallet really is empty, the facilitator says so
+  // precisely ("ERC20: transfer amount exceeds balance").
+  balanceKnown = false;
 }
 
 console.log(`  Wallet   : ${account.address}`);
-console.log(`  Balance  : ${formatUnits(balance, 6)} USDC`);
+console.log(`  Balance  : ${balanceKnown ? `${formatUnits(balance, 6)} USDC` : "unavailable (continuing anyway)"}`);
 
-if (balance < BigInt(quote.amount)) {
+if (balanceKnown && balance < BigInt(quote.amount)) {
   const short = priceUsd - Number(formatUnits(balance, 6));
   console.error(`
   ✖ Not enough USDC on Base yet.
@@ -201,7 +207,37 @@ try {
 }
 
 if (paid.status !== 200) {
-  fail(`paid request returned ${paid.status}: ${(await paid.text()).slice(0, 300)}`);
+  // A 4xx/5xx from the resource server CANCELS settlement in x402, so the buyer
+  // has not been charged. Say so plainly: a bare "paid request returned 502"
+  // reads to a buyer as though their money is gone, and on a first purchase
+  // that ambiguity is worse than the failure itself.
+  const raw = await paid.text();
+  let code = null;
+  let message = null;
+  try {
+    const parsed = JSON.parse(raw);
+    code = parsed?.error?.code ?? null;
+    message = parsed?.error?.message ?? null;
+  } catch {
+    /* not the canonical envelope; fall back to the raw body */
+  }
+  console.error(`
+  ✖ The service could not complete this request (HTTP ${paid.status}).` +
+    (code ? `
+
+    ${code}` : "") +
+    (message ? `
+    ${message}` : raw ? `
+    ${raw.slice(0, 200)}` : "") +
+    `
+
+    You have NOT been charged. x402 cancels settlement whenever the resource
+    server returns an error status, so no USDC moved for this request.
+
+    This is a failure of the service, not of your payment. Fixing the cause
+    (for example a source that cannot be reached) and re-running is safe.
+`);
+  process.exit(1);
 }
 
 const settleHeader = paid.headers.get("payment-response");
