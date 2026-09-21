@@ -15,7 +15,36 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
-const url = new URL(process.argv[2] ?? "https://agent-evidence-api.taher-h-alhaddad.workers.dev/mcp");
+// Resolve the endpoint from the public registry when no URL is given. This is
+// the path an aggregator or client actually takes - discovery, then connect - so
+// verifying it end to end is stronger than testing a hard-coded URL that might
+// differ from what the listing advertises.
+const SERVER_NAME = "io.github.Thx93/agent-evidence-api";
+
+async function resolveFromRegistry() {
+  const res = await fetch(
+    `https://registry.modelcontextprotocol.io/v0.1/servers?search=${encodeURIComponent(SERVER_NAME)}&version=latest`,
+  );
+  const body = await res.json();
+  const entry = (body.servers ?? []).find((e) => e.server?.name === SERVER_NAME);
+  const remote = entry?.server?.remotes?.[0];
+  if (!remote?.url) throw new Error(`registry has no remote URL for ${SERVER_NAME}`);
+  if (remote.type !== "streamable-http") throw new Error(`unexpected remote type: ${remote.type}`);
+  console.log(`  registry: ${SERVER_NAME} v${entry.server.version} -> ${remote.url}`);
+  return remote.url;
+}
+
+let target = process.argv[2];
+if (!target) {
+  try {
+    target = await resolveFromRegistry();
+  } catch (e) {
+    console.log("  ✖ registry lookup FAILED:", e.message);
+    console.log("    (pass a URL explicitly to skip discovery)");
+    process.exit(1);
+  }
+}
+const url = new URL(target);
 const transport = new StreamableHTTPClientTransport(url);
 const client = new Client({ name: "aee-verification-client", version: "1.0.0" }, { capabilities: {} });
 

@@ -408,9 +408,16 @@ explicit <code>supported</code> / <code>contradicted</code> / <code>mixed</code>
 
 <h2>Buy something (zero install)</h2>
 <pre><code>curl -fsSL ${"https://agent-evidence-api.taher-h-alhaddad.workers.dev"}/buy.mjs -o buy.mjs
-X402_PRIVATE_KEY=0x... node buy.mjs "Is Rotamech a manufacturer of centrifugal pumps?" https://example.com</code></pre>
-<p>That is the whole setup. The key is read from your environment, used to sign one
-payment, and never sent to us.</p>
+
+# no wallet yet? one command creates one, kept out of your shell history
+node -e "console.log('0x'+require('crypto').randomBytes(32).toString('hex'))" \
+  > ~/.x402-key && chmod 600 ~/.x402-key
+export X402_PRIVATE_KEY_FILE=~/.x402-key
+node buy.mjs --address          # send USDC on Base to the address it prints
+
+node buy.mjs "Is Rotamech a manufacturer of centrifugal pumps?" https://example.com</code></pre>
+<p>The key is read from a file or the environment, used to sign one payment, and
+never sent to us. No ETH is needed — the facilitator submits the transaction.</p>
 
 <h2>Or use it as an MCP tool</h2>
 <pre><code>{ "mcpServers": { "evidence": {
@@ -437,8 +444,9 @@ payment, and never sent to us.</p>
 never invents a fact and never emits a confidence score. You supply the URLs —
 there is no web search. Excerpts are short by design. Evidence, not truth.</p>
 
-<p><a href="/health?deep=1">status</a> · <a href="/buy.mjs">buyer CLI source</a> ·
-<a href="https://github.com/Thx93/agent-evidence-api">source</a></p>
+<p><a href="/health?deep=1">status</a> ·
+<a href="https://facilitator.payai.network/discovery/resources?limit=1000">listed in the x402 catalogue</a> ·
+<a href="/buy.mjs">buyer client</a></p>
 </body></html>`;
 }
 
