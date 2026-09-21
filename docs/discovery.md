@@ -886,3 +886,10 @@ wallets** paid the 75 sellers that take ~80% of x402's call volume in a week, th
 retrieval pool is a strict subset of them, and the evidence-shaped pool is 228. There
 is no larger pool of this kind of buyer to find, which is why more listing work is not
 the lever it looks like.
+
+[`market-outside-x402.md`](./market-outside-x402.md) goes further: it audits the whole
+x402 market (median seller revenue **$0.08/month**), checks every alternative
+agent-payment rail, and explains why the largest payer base in the catalogue is an
+operator paying its own wallets. It also records a surface missing from the inventory
+above — **OpenSea's x402 Bazaar browser**, which already carries this service and
+publishes independent usage counters.

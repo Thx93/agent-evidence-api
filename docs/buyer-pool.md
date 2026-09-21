@@ -152,3 +152,11 @@ node scripts/count-x402-payers.mjs <payTo[,payTo]> 7      # chain-verified walle
 ```
 
 Both are committed. The first caches its snapshot under `data/` (gitignored).
+
+## Where this continues
+
+[`market-outside-x402.md`](./market-outside-x402.md) takes the next two questions:
+what the widest pool in the catalogue actually is (answer: an operator paying its
+own agent wallets to farm a reward pool, whose audience is **disjoint** from every
+other pool measured here), and whether any rail outside x402 has a bigger paying
+population (answer: no — and the median x402 seller earns **$0.08 a month**).
