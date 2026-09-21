@@ -41,6 +41,13 @@ Channel: `#showcase` or `#general` (http://slack.x402.org/)
 > ```
 > It signs one USDC payment, retries, and prints the cited evidence.
 >
+> I verified the payment path without spending anything: a throwaway unfunded
+> wallet signs a real EIP-3009 authorization, and the facilitator simulates it
+> against the live USDC contract. The only rejection reason is
+> `invalid_exact_evm_insufficient_balance`, which means the plumbing is correct
+> end to end. Useful trick if you're building on x402 — you can prove your
+> settlement path works before you fund anything.
+>
 > Two things I learned the hard way, in case they save anyone else time:
 > 1. The public x402.org facilitator is **testnet-only** — it advertises no
 >    `eip155:8453` route and a mainnet deploy fails at runtime with a
@@ -123,7 +130,15 @@ Body:
 > Security was the bulk of the work: SSRF defence with per-hop redirect
 > validation, connect-time IP re-validation (DNS rebinding), decompression-bomb
 > limits, bounded concurrency, and a backend that refuses to start without a
-> shared secret. 236 tests, and the repo's docs are honest about the gaps.
+> shared secret. 240 tests, and the repo's docs are honest about the gaps.
+>
+> The most useful bug I found was one my own tests could not have caught: every
+> network test used 127.0.0.1 literals, which skip DNS entirely. Node's
+> happy-eyeballs path asks the resolver for an array and my custom resolver
+> returned a string, so every real hostname failed while the whole suite stayed
+> green. It only surfaced when I ran the live pipeline against Wikipedia. If you
+> build anything that does its own DNS validation, test it against a real
+> hostname.
 >
 > Live: https://agent-evidence-api.taher-h-alhaddad.workers.dev
 > Registry: io.github.Thx93/agent-evidence-api
