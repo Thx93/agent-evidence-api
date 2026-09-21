@@ -511,3 +511,42 @@ Amazon Bedrock AgentCore. All of them open together.
 **No third party has paid.** Every settlement on this service, including this one, is
 the operator's own. Being listed is not being bought, and the market data in this
 document remains the honest read on whether anyone is buying this category at all.
+
+## Where the CDP listing's value actually is
+
+The CDP Bazaar entry is complete — correct description, price, `bazaar` extension, and
+our settlement recorded as its `lastCalledAt`. But listing is not the same as being
+findable, and the two surfaces behave differently.
+
+**agentic.market finds us only by exact name.** Searching for the service name returns
+it; searching "evidence", "claim verification", "verify a claim", "web evidence" or
+"fact check" does not. That matches Agent402 and the MCP Registry, where a listing
+exists and keyword discovery does not follow. Their search appears to rank on usage,
+and this service has none to rank on.
+
+**The Bazaar MCP server is the more promising half.** It does not require a buyer to
+guess a keyword: an agent using it can *enumerate* available tools. Being present in
+the catalogue is enough for that path, which is not true of a ranked search.
+
+That is the argument for finishing the MCP side of this work. The HTTP route is
+catalogued; the MCP route still gates at the edge on the generic facilitator, so
+`research_evidence` is absent from the catalogue that the Bazaar MCP server serves
+from. Moving that gate is the remaining step, and it is now mechanically unblocked:
+`x402HTTPResourceServer.onProtectedRequest` can `grantAccess` for the free MCP
+handshake while still charging for the paid tool.
+
+### The honest summary of the distribution work
+
+| surface | listed | findable by keyword |
+|---|---|---|
+| PayAI Bazaar (HTTP + MCP) | yes | **yes — #1 for 5 of 6 buyer queries** |
+| CDP Bazaar | yes | search API ignores query params |
+| agentic.market | yes | no — exact name only |
+| Bazaar MCP server | via CDP listing | enumeration, not search |
+| MCP Registry | yes | no — name-only search |
+| Agent402 index | yes | no — never in their top 5 |
+| 402 Index | yes | partly — 4 of 8 |
+| glama.ai | yes, owned | browsable listing |
+
+Eight listings, one of which is genuinely good at keyword discovery. That is worth
+stating plainly rather than counting the eight.
