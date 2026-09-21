@@ -11,7 +11,7 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://mcp.example.invalid/mcp"
+      "url": "https://agent-evidence-api.taher-h-alhaddad.workers.dev/mcp"
     }
   ]
 }

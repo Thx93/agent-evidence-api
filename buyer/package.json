@@ -1,0 +1,33 @@
+{
+  "name": "@thx93/x402-evidence",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "Buy structured, cited web evidence for a question. Pay-per-call with USDC on Base via x402 - no account, no API key, no signup.",
+  "license": "MIT",
+  "bin": {
+    "x402-evidence": "./cli.mjs"
+  },
+  "files": [
+    "cli.mjs",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "x402",
+    "mcp",
+    "ai-agents",
+    "web-evidence",
+    "claim-verification",
+    "usdc",
+    "base"
+  ],
+  "dependencies": {
+    "@x402/core": "^2.26.0",
+    "@x402/evm": "^2.26.0",
+    "@x402/fetch": "^2.26.0",
+    "viem": "^2.56.8"
+  }
+}
