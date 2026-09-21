@@ -333,7 +333,7 @@ warning and continues **without** a cache rather than refusing to serve.
 | `X402_NETWORK` | `vars` | `eip155:8453` for production, `eip155:84532` for test. |
 | `X402_RECIPIENT` | `vars` | Your **public** receiving address. |
 | `X402_FACILITATOR_URL` | `vars` | Confirm against current official x402 documentation. |
-| `X402_PRICE_USD` | `vars` | Verify after changing; an unparseable value silently falls back to `$0.03`. |
+| `X402_PRICE_USD` | `vars` | Verify after changing. Decimals are preserved (sub-cent prices are normal in x402); an unusable value makes the paid route refuse to serve rather than substituting a price. |
 | `BACKEND_ORIGIN_URL` | `vars` | Your protected origin. |
 | `BACKEND_AUTH_SECRET` | **secret** | Never in `wrangler.jsonc`. See below. |
 | `DEV_BYPASS_PAYMENT` | `vars` (dev only) | Never set in production. |
@@ -457,7 +457,7 @@ variable list. Copy it to `.env` (gitignored) for local use.
 | `X402_NETWORK` | `eip155:84532` | Safe testnet default in `packages/core`; production sets `eip155:8453`. |
 | `X402_RECIPIENT` | *(empty)* | Public address only. |
 | `X402_FACILITATOR_URL` | `https://x402.org/facilitator` | |
-| `X402_PRICE_USD` | `0.03` | `$` prefix optional; rendered to 2 decimals. |
+| `X402_PRICE_USD` | `0.003` | `$` prefix optional; decimals preserved to USDC's 6. |
 | `X402_TEST_PRIVATE_KEY` | *(empty)* | Base Sepolia only. Disposable. Never funded with mainnet assets. Never committed. |
 
 ### Resource limits

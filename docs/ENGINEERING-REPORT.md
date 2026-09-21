@@ -139,7 +139,7 @@ bash scripts/supervise.sh      # detached watchdog, every 5 minutes
 |---|---|
 | Network | `eip155:8453` (Base) |
 | Asset | USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
-| Price | `30000` = $0.03 |
+| Price | `3000` = $0.003 |
 | Recipient | `0x9c0e2B44180439294Fa30Ae2B2a94f8655455FD0` |
 | Facilitator | `https://facilitator.payai.network` |
 
@@ -182,7 +182,7 @@ registry: io.github.Thx93/agent-evidence-api v0.1.1 -> …/mcp
 
 | Tool | Payment |
 |---|---|
-| `research_evidence` | $0.03 |
+| `research_evidence` | $0.003 |
 | `health` | free |
 | `initialize` / `tools/list` | free, so an agent can look before it pays |
 

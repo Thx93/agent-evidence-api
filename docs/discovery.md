@@ -537,7 +537,8 @@ deliverable — where only 5 of the 11 complete entries show a buyer any output 
 all.
 
 Price calibration: MCP-shelf prices run $0.001–$0.46, mostly $0.002–$0.05. Ours
-is $0.03, mid-range.
+was $0.03 (mid-range) when this was measured; it was later repriced to $0.003 — see
+docs/market-analysis.md, which measured the market at a larger sample.
 
 ## Searching the catalogue, and why the wording matters
 
@@ -575,8 +576,8 @@ Measured 2026-09-21:
 
 **One direct competitor exists**: `phion.systems/v1/paid/fetch-evidence` —
 *"Independent, prompt-injection-screened, hashed and signed web evidence"* — at
-**$0.004**, cheaper than this service's $0.03. That is worth knowing before
-competing on price.
+**$0.004** when this was measured. This service was $0.03 then and has since moved to
+$0.003; see docs/market-analysis.md.
 
 ### The wording of the description is therefore a discovery lever
 

@@ -171,7 +171,7 @@ export function loadConfig(): AppConfig {
       network: str("X402_NETWORK", "eip155:84532"),
       recipient: str("X402_RECIPIENT", ""),
       facilitatorUrl: str("X402_FACILITATOR_URL", "https://x402.org/facilitator"),
-      priceUsd: str("X402_PRICE_USD", "0.03"),
+      priceUsd: str("X402_PRICE_USD", "0.003"),
     },
 
     limits: loadLimits(),

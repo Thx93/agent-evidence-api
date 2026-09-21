@@ -11,6 +11,8 @@ import {
   SERVICE_VERSION,
   errorResponse,
   ERROR_HTTP_STATUS,
+  priceString,
+  priceAtomicUnits,
   type ErrorCode,
 } from "@aee/schemas";
 
@@ -78,14 +80,8 @@ function fail(c: Ctx, code: ErrorCode, requestId: string, message?: string) {
   return c.json(errorResponse(code, requestId, message), ERROR_HTTP_STATUS[code] as never);
 }
 
-/** Convert "0.03" into the x402 price string "$0.03". */
-function priceString(usd: string): string {
-  const raw = (usd ?? "").trim().replace(/^\$/, "");
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n < 0) return "$0.03";
-  // x402 accepts a "$" prefixed dollar amount; keep 2 decimals for readability.
-  return `$${n.toFixed(2)}`;
-}
+// priceString now lives in @aee/schemas so it can be unit-tested; a Worker
+// module cannot be imported by the Node test runner.
 
 /**
  * Cached origin health.
@@ -822,8 +818,8 @@ app.delete("/mcp", (c) => proxyToBackend(c, "/mcp", { method: "DELETE" }));
  * challenge cannot disagree.
  */
 function acceptsEntry(env: Env, base: string): Record<string, unknown> {
-  const priceUsd = Number(env.X402_PRICE_USD ?? "0.03");
-  const amount = String(Math.round(priceUsd * 1_000_000)); // USDC has 6 decimals
+  // Same source as the 402 challenge, so the two cannot disagree.
+  const amount = priceAtomicUnits(env.X402_PRICE_USD);
   return {
     scheme: "exact",
     network: env.X402_NETWORK,

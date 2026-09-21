@@ -621,7 +621,7 @@ Pricing is environment-driven, never hard-coded.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `X402_PRICE_USD` | `0.03` | Price per evidence request, in USD. |
+| `X402_PRICE_USD` | `0.003` | Price per evidence request, in USD. |
 | `X402_NETWORK` | `eip155:84532` | Settlement network. |
 | `X402_RECIPIENT` | *(empty)* | **Public** receiving address. |
 | `X402_FACILITATOR_URL` | `https://x402.org/facilitator` | Facilitator used for verification. |

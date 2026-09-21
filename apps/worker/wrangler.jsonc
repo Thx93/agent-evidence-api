@@ -43,7 +43,7 @@
     "X402_RECIPIENT": "0x9c0e2B44180439294Fa30Ae2B2a94f8655455FD0",
 
     "X402_FACILITATOR_URL": "https://facilitator.payai.network",
-    "X402_PRICE_USD": "0.03",
+    "X402_PRICE_USD": "0.003",
 
     // Placeholder origin — RFC 2606 reserves .invalid so a missed replacement
     // fails loudly instead of pointing at a real third-party host.
@@ -66,7 +66,7 @@
         "X402_NETWORK": "eip155:84532",
         "X402_RECIPIENT": "0x9c0e2B44180439294Fa30Ae2B2a94f8655455FD0",
         "X402_FACILITATOR_URL": "https://facilitator.payai.network",
-        "X402_PRICE_USD": "0.03",
+        "X402_PRICE_USD": "0.003",
         "BACKEND_ORIGIN_URL": "http://127.0.0.1:8080",
         "DEV_BYPASS_PAYMENT": "true"
       }
@@ -82,7 +82,7 @@
         "X402_NETWORK": "eip155:84532",
         "X402_RECIPIENT": "0x9c0e2B44180439294Fa30Ae2B2a94f8655455FD0",
         "X402_FACILITATOR_URL": "https://facilitator.payai.network",
-        "X402_PRICE_USD": "0.03",
+        "X402_PRICE_USD": "0.003",
         "BACKEND_ORIGIN_URL": "http://127.0.0.1:8080"
       }
     }

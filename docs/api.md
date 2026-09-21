@@ -88,7 +88,7 @@ what to call before spending anything.
     "scheme": "exact",
     "network": "eip155:84532",
     "asset": "USDC",
-    "price_usd": "0.03",
+    "price_usd": "0.003",
     "recipient": "0x…",
     "facilitator": "https://x402.org/facilitator"
   }

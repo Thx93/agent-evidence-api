@@ -169,7 +169,7 @@ Title:
 >
 > ```
 > POST /mcp  {"method":"tools/list"}                        → 200, free
-> POST /mcp  {"method":"tools/call","params":{"name":"research_evidence",…}}  → 402, 0.03 USDC
+> POST /mcp  {"method":"tools/call","params":{"name":"research_evidence",…}}  → 402, 0.003 USDC
 > POST /mcp  {"method":"tools/call","params":{"name":"health"}}               → 200, free
 > ```
 >

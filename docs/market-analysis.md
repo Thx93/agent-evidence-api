@@ -103,9 +103,9 @@ The price is one variable, set per Worker environment:
 
 ```bash
 grep -n X402_PRICE_USD apps/worker/wrangler.jsonc
-#   33:  "X402_PRICE_USD": "0.03",     <- production (the deploy uses this one)
-#   56:  "X402_PRICE_USD": "0.03",     <- env.dev
-#   72:  "X402_PRICE_USD": "0.03",     <- env.test
+#   33:  "X402_PRICE_USD": "0.003",    <- production (the deploy uses this one)
+#   56:  "X402_PRICE_USD": "0.003",    <- env.dev
+#   72:  "X402_PRICE_USD": "0.003",    <- env.test
 
 # Change all three (a named environment does NOT inherit from the top level, which
 # is why each carries its own copy), then redeploy:
@@ -304,3 +304,37 @@ describe, so the readiness has been confirmed from two independent directions.
 
 This is the clearest statement of the remaining problem: **the work is done on every
 surface we can reach, and the next five surfaces are one credential away.**
+
+## Outcome: repriced to $0.003 on 2026-09-21
+
+Option 1 above was taken, with the operator's explicit authorisation.
+
+`X402_PRICE_USD` moved from `0.03` to `0.003` in all three Wrangler environments,
+and the 402 Index listing was updated to match. Verified live rather than assumed:
+the 402 challenge, the `/.well-known/x402` manifest and the CDP validator all
+report `3000` atomic units = $0.0030, and CDP's validator still returns
+`valid: true` with zero required failures.
+
+### The reprice exposed a latent bug that had been giving the service away
+
+Changing the price to a sub-cent value made the live paywall request **ZERO USDC**.
+`priceString` ended in `n.toFixed(2)`, so `0.003` rendered as `"$0.00"`. CDP's
+validator rejected the endpoint for falling under its $0.001 minimum, which is how
+it was caught.
+
+It had been latent for the entire life of the service. `$0.03` is the one sub-dollar
+price that two-decimal rounding renders correctly, and `$0.03` was the only price
+ever configured. The bug was not "introduced" by repricing — repricing was the first
+thing that could reveal it.
+
+Fixed by preserving decimals up to USDC's 6, and by removing a hard-coded `"$0.03"`
+fallback that would have silently charged a price nobody configured: an unusable
+price now makes the paid route refuse to serve. `priceString` moved into
+`@aee/schemas` so it could carry a test — a Worker module cannot be imported by the
+Node test runner, which is why it had none. 13 regression tests now cover it,
+including that no positive input ever renders as zero.
+
+The lesson worth keeping: **the first thing a configuration change should do is
+prove the old value is gone.** I checked the manifest and the CDP validator after
+deploying; the manifest was correct and the challenge was not, and only looking at
+both found it.

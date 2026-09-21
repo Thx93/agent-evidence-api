@@ -4,7 +4,7 @@ Everything else is built. This file is the shortest path from here to a settled
 payment, and it is the only thing standing between this service and every buyer
 who browses the x402 catalogue.
 
-If you read nothing else: **run step 2.** It costs about $0.03 and it is the only
+If you read nothing else: **run step 2.** It costs about $0.003 and it is the only
 mechanism that makes this service discoverable to x402 buyers.
 
 ---
@@ -14,7 +14,7 @@ mechanism that makes this service discoverable to x402 buyers.
 | | |
 |---|---|
 | Public endpoint | `https://agent-evidence-api.thx93.workers.dev` |
-| Price | **$0.0300 USDC** per request |
+| Price | **$0.0030 USDC** per request |
 | Network / asset | Base mainnet (`eip155:8453`), USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 | Payment goes to | `0x9c0e2B44180439294Fa30Ae2B2a94f8655455FD0` |
 | MCP endpoint | `…/mcp` (tool `research_evidence`) |

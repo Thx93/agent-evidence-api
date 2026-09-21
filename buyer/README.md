@@ -37,7 +37,7 @@ Your agent can fetch a page. What it usually can't do reliably:
 - **Fetch safely.** Every URL is treated as hostile: private/loopback/link-local/cloud-metadata addresses, decimal-and-octal-encoded IP tricks, dangerous ports, and redirects into any of those are all refused. DNS is re-validated *at connect time*, which is what defeats DNS rebinding.
 - **Get a citation, not an opinion.** Every excerpt carries the URL it came from, when it was retrieved, and a content hash. "The model said so" is not evidence.
 - **Compare sources.** Two sources that disagree produce `mixed`. That is the interesting answer, and it is the one a single-page read cannot give you.
-- **Stay cheap.** Pulling five pages into context costs far more in tokens than $0.03, and burns context window you need elsewhere.
+- **Stay cheap.** Pulling five pages into context costs far more in tokens than $0.003, and burns context window you need elsewhere.
 - **Skip the plumbing.** Bounded concurrency, response-size caps, decompression-bomb defence, timeouts, a TTL'd cache, and structured errors are already handled.
 
 ## Payment flow
@@ -54,7 +54,7 @@ client works against the same endpoint.
 
 - **Network**: Base mainnet (`eip155:8453`)
 - **Asset**: USDC
-- **Price**: $0.03 per request
+- **Price**: $0.003 per request
 - **Recipient**: published in the 402 response — the endpoint never sees your key
 
 ## MCP (for agents)
@@ -70,7 +70,7 @@ Tools:
 
 | Tool | Cost | What it does |
 |---|---|---|
-| `research_evidence` | $0.03 | Fetch public sources, return cited evidence and an assessment |
+| `research_evidence` | $0.003 | Fetch public sources, return cited evidence and an assessment |
 | `health` | free | Liveness and version |
 
 `initialize` and `tools/list` are **free** — an agent can discover the tools
