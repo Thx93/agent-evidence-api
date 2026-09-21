@@ -91,6 +91,14 @@ subset of the same 2,764 wallets — **zero new wallets**. The evidence-shaped b
 (228) are almost all in that set too; only **11 wallets** buy evidence-shaped output
 without also buying from the top 75 sellers.
 
+The one useful cut is the intersection, not the union: **204 wallets paid both a
+retrieval/search seller and an evidence-shaped seller** in the same week. Those are
+the only wallets in the ecosystem demonstrably willing to pay for content *and* for
+an assessment of it — the most qualified prospects that exist. Of those 204, only
+**14** made 100+ payments across the two; the median is 4. That is the entire
+addressable segment, measured, and there is no channel to them other than the
+catalogue itself.
+
 That is the finding, and it is more useful than a list of directories:
 
 > Repositioning from "adjudication" to "verified retrieval" does not reach a new
