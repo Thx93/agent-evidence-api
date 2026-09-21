@@ -733,6 +733,113 @@ app.get("/mcp", (c) => proxyToBackend(c, "/mcp", { method: "GET" }));
 app.delete("/mcp", (c) => proxyToBackend(c, "/mcp", { method: "DELETE" }));
 
 // ---------------------------------------------------------------------------
+// x402 well-known manifest
+// ---------------------------------------------------------------------------
+
+/**
+ * The host's x402 capability manifest.
+ *
+ * Draft-hawkins-x402-dns-discovery defines this as the authoritative,
+ * machine-readable record of a host's x402 capability - the piece x402 does not
+ * itself provide, because a 402 only describes payment terms at the moment a
+ * client already knows to ask. Crawlers and indexes fetch it directly.
+ *
+ * This was missing, and it cost us. Agent402's index - which routes matching
+ * buyer tasks to sellers and pays them from its own wallet - fetches
+ * `/.well-known/x402` plus the origin's openapi.json, and its self-serve
+ * registration answered "Source URL returned HTTP 404" for our origin. A Bazaar
+ * listing alone does not make an origin legible to a crawler that looks here.
+ *
+ * `kind` is "resource-server": we consume a facilitator, we do not provide one,
+ * so the `facilitator` block the draft requires of facilitators does not apply.
+ */
+/**
+ * One `accepts` entry describing how to pay for a resource.
+ *
+ * Built from the live bindings, not hard-coded, so the manifest and the 402
+ * challenge cannot disagree.
+ */
+function acceptsEntry(env: Env, base: string): Record<string, unknown> {
+  const priceUsd = Number(env.X402_PRICE_USD ?? "0.03");
+  const amount = String(Math.round(priceUsd * 1_000_000)); // USDC has 6 decimals
+  return {
+    scheme: "exact",
+    network: env.X402_NETWORK,
+    asset: USDC_BASE,
+    payTo: env.X402_RECIPIENT,
+    amount,
+    maxTimeoutSeconds: 300,
+    resource: `${base}/v1/evidence`,
+    extra: { name: "USD Coin", version: "2" },
+  };
+}
+
+/** USDC on Base mainnet - the settlement asset (SPEC section 11). */
+const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+
+app.get("/.well-known/x402", (c) => {
+  const base = new URL(c.req.url).origin;
+  return c.json(
+    {
+      x402Version: 2,
+      kind: "resource-server",
+      name: "Agent Evidence API",
+      description:
+        "Cited, source-grounded web evidence for AI agents. Send a question and up to " +
+        "5 public URLs; get back the passages that support, contradict or fail to settle " +
+        "it, each with its source URL, retrieval time and content hash. Never charges when " +
+        "nothing is retrieved.",
+      // Payment terms MUST ride on each resource. A manifest that lists only a
+      // URL and a description leaves crawlers unable to learn the chain, and
+      // Agent402 names that outcome exactly: "listed and unroutable", row
+      // "chainless", reason `network_unknown`. Their reader derives the terms
+      // from `resources[].accepts` (the same shape the live 402 returns) or from
+      // flat network/asset/payTo/amount fields.
+      //
+      // Taken from the same bindings the paywall uses, so the manifest cannot
+      // drift from the live challenge - the draft calls divergence between the
+      // two a misconfiguration.
+      resources: [
+        {
+          url: `${base}/v1/evidence`,
+          method: "POST",
+          // The indexed description IS the search surface. Agent402 reads this
+          // into its own index, and its search ranks on match score first - so a
+          // terse "HTTPS evidence endpoint" loses to sellers who say what the
+          // caller gets using the words a caller would type. Same lesson as the
+          // Bazaar listing, applied to the manifest.
+          description:
+            "Verify a claim against public web sources: send a question and up to 5 URLs, " +
+            "get cited evidence - the passages that support, contradict or fail to settle it, " +
+            "each with its source URL, retrieval time and content hash. Claim verification " +
+            "and evidence extraction for AI agents. Never charges when nothing is retrieved.",
+          accepts: [acceptsEntry(c.env, base)],
+        },
+        {
+          url: `${base}/mcp`,
+          method: "POST",
+          description:
+            "MCP tool research_evidence: verify a claim or answer a question against public " +
+            "web sources, returning cited evidence with a citation for every excerpt. " +
+            "Claim verification, evidence extraction and source-grounded research over MCP " +
+            "streamable HTTP. Free tools: health and tools/list.",
+          accepts: [acceptsEntry(c.env, base)],
+        },
+      ],
+      attestation: { type: "none" },
+      docs: `${base}/`,
+      updated: new Date().toISOString(),
+    },
+    200,
+    {
+      // Public data, explicitly so: a crawler must be able to read it cross-origin.
+      "cache-control": "public, max-age=300",
+      "access-control-allow-origin": "*",
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
 // fallthrough
 // ---------------------------------------------------------------------------
 
