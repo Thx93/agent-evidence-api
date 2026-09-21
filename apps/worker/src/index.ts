@@ -643,33 +643,64 @@ interface JsonRpcLike {
   params?: unknown;
 }
 
+/** MCP methods an agent may call without paying, so it can look before it buys. */
+const FREE_MCP_METHODS: ReadonlySet<string> = new Set([
+  "initialize",
+  "notifications/initialized",
+  "notifications/cancelled",
+  "tools/list",
+  "resources/list",
+  "resources/templates/list",
+  "prompts/list",
+  "ping",
+]);
+
 /**
  * Decide whether a JSON-RPC payload must be paid for.
  *
- * `initialize`, `tools/list` and notifications must be FREE — an agent has to
- * discover the tools before it can decide to pay for one. Only an actual
- * invocation of the paid tool requires payment. A batch is charged if any
- * element in it is a paid call (conservative).
+ * FREE means the discovery surface: an agent has to be able to `initialize`,
+ * `tools/list` and call the free `health` tool before it can decide to buy
+ * anything. Everything else requires payment.
+ *
+ * That "everything else" is deliberate, and it previously read the other way
+ * round: the gate used to charge only for `tools/call research_evidence` and let
+ * anything else through, so a request it did not recognise fell to the MCP
+ * transport, which answered 406 when the caller had not sent the MCP Accept
+ * header. Coinbase's Bazaar validator probes exactly like that - a bare POST with
+ * no MCP headers - so the MCP route failed its preflight ("Endpoint returned HTTP
+ * 406 instead of 402") while the HTTP route passed 25/25.
+ *
+ * Inverting the rule fixes that and matches how the HTTP route already behaves:
+ * the paywall comes before validation. A malformed request now receives a 402
+ * challenge rather than a protocol error, and if the caller pays and retries it
+ * still fails validation - at which point the middleware cancels settlement, so
+ * it is never charged for a request that was never serviceable.
+ *
+ * A batch is charged if ANY element is not a recognised free operation.
  */
 function needsPayment(body: string): boolean {
   let parsed: unknown;
   try {
     parsed = JSON.parse(body);
   } catch {
-    return false; // malformed JSON: let the backend answer with a proper error
+    // Unparseable is not a free operation: gate it, as the HTTP route does.
+    return true;
   }
 
-  const isPaidCall = (msg: unknown): boolean => {
+  const isFree = (msg: unknown): boolean => {
     if (msg === null || typeof msg !== "object" || Array.isArray(msg)) return false;
     const m = msg as JsonRpcLike;
+    if (typeof m.method !== "string") return false;
+    if (FREE_MCP_METHODS.has(m.method)) return true;
     if (m.method !== "tools/call") return false;
     const params = m.params;
     if (params === null || typeof params !== "object") return false;
-    return (params as { name?: unknown }).name === PAID_MCP_TOOL;
+    // The paid tool is the only one that is not free.
+    return (params as { name?: unknown }).name !== PAID_MCP_TOOL;
   };
 
-  if (Array.isArray(parsed)) return parsed.some(isPaidCall);
-  return isPaidCall(parsed);
+  if (Array.isArray(parsed)) return !parsed.every(isFree);
+  return !isFree(parsed);
 }
 
 /**

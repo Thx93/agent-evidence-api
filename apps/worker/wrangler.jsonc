@@ -1,4 +1,17 @@
 {
+  // `@coinbase/cdp-sdk/x402` statically imports the OPTIONAL @x402/svm schemes.
+  // We use only its EVM facilitator client, and the SVM schemes are instantiated
+  // inside getCdpDefaultSchemes(), which this service never calls. Without these
+  // aliases the bundle fails to build and NO deployment is possible. See
+  // stubs/x402-svm.js for the full reasoning and the caveat.
+  "alias": {
+    "@x402/svm/exact/client": "./stubs/x402-svm.js",
+    "@x402/svm/exact/v1/client": "./stubs/x402-svm.js",
+    "@x402/svm/upto/client": "./stubs/x402-svm.js",
+    "@x402/svm/exact/server": "./stubs/x402-svm.js",
+    "@x402/svm/upto/server": "./stubs/x402-svm.js"
+  },
+
   // Cloudflare Worker — the public edge.
   // Responsibilities (SPEC section 13): x402 payment gating, basic request
   // validation, forwarding authorised requests to the backend, MCP endpoint,

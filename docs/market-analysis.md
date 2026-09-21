@@ -210,3 +210,59 @@ gated only on two credentials that take a few minutes to create.
 I would do this before repricing, before more directory submissions, and before
 any further positioning work — because none of it is visible to the agents that
 matter until this is done.
+
+## CDP readiness, measured rather than assumed
+
+Coinbase publishes a validation endpoint, and **no API key is required**:
+
+```bash
+curl -X POST https://api.cdp.coinbase.com/platform/v2/x402/validate \
+  -H 'content-type: application/json' \
+  -d '{"resource":"https://agent-evidence-api.thx93.workers.dev/v1/evidence","method":"POST"}'
+```
+
+**The HTTP endpoint passes 25 of 25 checks, 0 required failures, 0 advisories**,
+with `valid: true` and `simulation.outcome: "accepted"` — including the whole
+bazaar block: input metadata, POST method matching the probe, output example and
+schema. Whatever else is wrong, the declaration itself is exactly what CDP wants.
+
+The MCP route reports `valid: false`, but the reason is not a defect:
+
+> `"transport type mcp cannot be validated via live probe — check index status to
+> confirm it is indexed"`
+
+Their validator cannot probe an MCP transport, and the one check that "fails" is
+`bazaar.info.input.method: Skipped: input type is not http` — expected for an MCP
+entry, whose input type is `mcp`. Its indexing has to be confirmed from index
+status, not from a probe.
+
+### One deployment-breaking mistake, found and fixed
+
+Importing `createCdpFacilitatorClient` pulls `@coinbase/cdp-sdk/x402` into the
+Worker bundle, and that module statically imports `@x402/svm/*` — an **optional**
+peer dependency that is not installed. Six unresolved imports followed, and
+**every deployment failed**, CDP-related or not. A deploy that fails to build still
+prints nothing that looks like an error if you are grepping for the success line,
+which is how it went unnoticed for a round.
+
+Fixed with an alias in `wrangler.jsonc` to `stubs/x402-svm.js`. That is safe and
+verified, not hopeful: `facilitator.js` — the only module imported — contains **zero**
+SVM references, and the SVM schemes are instantiated only inside
+`getCdpDefaultSchemes()`, which this service never calls. The stub documents the
+one condition under which it would break.
+
+### The MCP gate, inverted
+
+The MCP gate used to charge only for `tools/call research_evidence` and pass
+everything else through, so a request it did not recognise fell to the transport,
+which answered `406` when the caller had not sent MCP headers. It now treats the
+**discovery surface as free** (`initialize`, `notifications/*`, `tools/list`,
+`resources/list`, `prompts/list`, `ping`, and the free `health` tool) and requires
+payment for **everything else** — matching the HTTP route, where the paywall comes
+before validation.
+
+Stated plainly: I made this change to fix a CDP validation failure that turned out
+not to be fixable this way, because CDP cannot probe MCP at all. It stands on its
+own merits — a paid route should present its challenge before validating, and a
+generic prober now receives a 402 instead of a 406 — but it did not achieve what I
+first claimed for it.
