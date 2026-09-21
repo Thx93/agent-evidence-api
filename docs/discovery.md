@@ -680,3 +680,88 @@ This is why the phrase-coverage checks for SPEC §10 and §29 are done on tokens
 description containing `cited` and `evidence` separately satisfies a buyer searching
 "cited evidence", and rewriting prose to place them adjacently would buy nothing and
 risk reading as keyword stuffing.
+
+---
+
+# Channel audit: which catalogues can actually find us
+
+Measured 2026-09-21 by querying each catalogue's own search with the phrases a
+buyer would type. Earlier rounds added listings and assumed that was the win;
+this measures whether a listing is *findable*, which is a different thing.
+
+| catalogue | what its search covers | how we rank |
+|---|---|---|
+| **x402 Bazaar (PayAI)** | description | **#1 for 5 of 6 buyer queries** |
+| 402 Index | description (semantic + LIKE) | 4 of 8 queries, best #1 |
+| MCP Registry | **server name only** | description unsearchable |
+| Agent402 | description | not in their top 5 |
+| glama.ai | crawls the MCP Registry | listed, healthy, 4.3/5.0 |
+| CDP Bazaar | description | **absent** — needs CDP credentials |
+
+## The Bazaar is the strong one
+
+```
+web evidence       → 20 results, #1      cited evidence  → 3 results, #1
+claim verification →  6 results, #1      evidence        → 20 results, #1
+verify a claim     →  4 results, #1      fact check      →  3 results, absent
+```
+
+Five of six at position one. The description work in earlier rounds did its job,
+and "fact check" was the one gap — now added to the manifest (live) and to the
+Bazaar description (which only re-catalogues on a settled payment, so it lands on
+the next paid call rather than immediately).
+
+## The MCP Registry's search is name-only, which changes what it is for
+
+Proof: our description contains "source-grounded". Searching that returns **zero**
+servers; searching "grounded" returns nine and we are not among them; searching
+"MCP-native", the first words of our description, does not return us either.
+
+So the registry is a **namespace and provenance record, not a discovery channel**.
+Nothing written in its `description` field is searchable, and optimising it — as I
+had been treating it — is wasted effort. Discoverability there depends entirely on
+the name `io.github.Thx93/agent-evidence-api`, which matches only the word
+"evidence".
+
+## Agent402 is not a discovery channel yet either
+
+Its `/api/find` is a real search (different results per query), but it returns five
+results and ours is never among them for our own subject matter. Its `/index` does
+carry us — two tools, network read correctly — but routing requires 50 settlements
+from 3 distinct payers, which is a bar a first customer cannot have cleared. That
+gate is deliberate and sensible; it just means Agent402 is a channel we grow into,
+not one that finds us a first buyer.
+
+## glama.ai already carries us, and it is the one with human traffic
+
+It crawls the MCP Registry, so our listing propagated there without any action:
+
+```
+Agent Evidence API · Status Healthy · Transport Streamable HTTP · MCP 2025-11-25
+URL: https://agent-evidence-api.thx93.workers.dev/mcp   (correct)
+Score 4.3/5.0 across 2 tools
+  Disambiguation      5/5
+  Naming Consistency  4/5   "'health' is a bare noun; research_evidence is verb_noun"
+  Tool Count          3/5   "only two tools… the set feels thin"
+  Completeness        4/5   Behavior 4/5
+```
+
+Claiming the connector would unlock **usage reports**, which is the only way to
+learn whether anyone is finding us. It cannot be done from here: the GitHub method
+needs a public repository (ours is private) and the HTTP challenge needs a token
+from Glama's sign-in flow. Both are operator actions.
+
+The Tool Count score is left alone deliberately. The obvious way to raise it is to
+add a bare fetch or scrape tool, and SPEC section 1 says in as many words that this
+is not a web scraper. Trading a product boundary for 0.4 of a directory score is a
+bad trade.
+
+## What this means
+
+Discovery is no longer the constraint on the channels we can reach. We rank first
+on the catalogue with the most buyers, we are listed and healthy on the one with
+human traffic, and the two channels we are missing from — the CDP Bazaar and
+Agent402's router — are both gated on credentials or on having customers already.
+
+Four rounds of listing work have produced: four listings, one of them first place,
+and zero customers. The remaining levers are not listing quality.

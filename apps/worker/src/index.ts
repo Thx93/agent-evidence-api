@@ -310,10 +310,14 @@ function paymentGate(env: Env, routeKey: string): MiddlewareHandler {
         //
         // This is not keyword stuffing: each phrase states what the service does.
         description:
-          "Verify a claim against public web sources: send a question and up to 5 URLs, " +
-          "get cited evidence - passages that support, contradict or fail to settle it. " +
-          "Claim verification with a citation for every excerpt: source URL, retrieval " +
-          "time, content hash. Never charges when nothing is retrieved.",
+          // "fact check" added after measuring the Bazaar's own search: we ranked #1
+          // for five of six buyer queries and missed only that one. It is a true
+          // description of the capability, not a keyword bolted on.
+          "Verify a claim or fact check a statement against public web sources: send a " +
+          "question and up to 5 URLs, get cited evidence - passages that support, " +
+          "contradict or fail to settle it. Claim verification with a citation for every " +
+          "excerpt: source URL, retrieval time, content hash. Never charges when nothing " +
+          "is retrieved.",
         serviceName: "Agent Evidence API",
         tags: ["web-evidence", "claim-verification", "source-verification"],
 
@@ -885,10 +889,11 @@ app.get("/.well-known/x402", (c) => {
           // caller gets using the words a caller would type. Same lesson as the
           // Bazaar listing, applied to the manifest.
           description:
-            "Verify a claim against public web sources: send a question and up to 5 URLs, " +
-            "get cited evidence - the passages that support, contradict or fail to settle it, " +
-            "each with its source URL, retrieval time and content hash. Claim verification " +
-            "and evidence extraction for AI agents. Never charges when nothing is retrieved.",
+            "Verify a claim or fact check a statement against public web sources: send a " +
+            "question and up to 5 URLs, get cited evidence - the passages that support, " +
+            "contradict or fail to settle it, each with its source URL, retrieval time and " +
+            "content hash. Claim verification and evidence extraction for AI agents. Never " +
+            "charges when nothing is retrieved.",
           accepts: [acceptsEntry(c.env, base)],
         },
         {
