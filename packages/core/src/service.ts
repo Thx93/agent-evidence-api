@@ -252,6 +252,30 @@ export class EvidenceService {
       );
     }
 
+    // Refuse to charge for nothing.
+    //
+    // The x402 middleware settles only when the handler returns a status below
+    // 400, so a 200 here means the buyer is billed. When NO source could be
+    // retrieved there is no evidence to sell, and returning 200 took $0.03 for
+    // an empty result. Throwing maps to a 502, which cancels settlement.
+    //
+    // Partial success still settles: if one source was retrieved the buyer
+    // received real evidence and the per-source warnings explain the rest.
+    const retrieved = sources.filter((s) => s.status === 200);
+    if (retrieved.length === 0) {
+      const reasons = sources
+        .flatMap((s) => s.warnings.map((w) => w.code))
+        .filter((code, i, all) => all.indexOf(code) === i)
+        .slice(0, 5);
+      throw new ServiceError(
+        "NO_SOURCES_RETRIEVED",
+        `None of the ${sources.length} requested source(s) could be retrieved, so no evidence ` +
+          `was produced and no payment will be taken.` +
+          (reasons.length > 0 ? ` Reasons: ${reasons.join(", ")}.` : ""),
+        { attempted: sources.length, reasons },
+      );
+    }
+
     const response: EvidenceResponse = {
       request_id: requestId,
       version: SCHEMA_VERSION,

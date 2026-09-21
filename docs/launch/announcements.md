@@ -41,6 +41,12 @@ Channel: `#showcase` or `#general` (http://slack.x402.org/)
 > ```
 > It signs one USDC payment, retries, and prints the cited evidence.
 >
+> A design decision worth calling out if you build on x402: the middleware
+> settles any handler response below 400, so it is on you to make every failure a
+> 4xx/5xx. I found mine returning `200 inconclusive` when every source failed —
+> which would have charged a buyer for an empty result. It now fails with
+> `NO_SOURCES_RETRIEVED` and takes nothing. Partial success still bills.
+>
 > I verified the payment path without spending anything: a throwaway unfunded
 > wallet signs a real EIP-3009 authorization, and the facilitator simulates it
 > against the live USDC contract. The only rejection reason is

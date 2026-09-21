@@ -17,6 +17,7 @@ import { EvidenceService, createLogger, loadConfig } from "@aee/core";
 import type { EvidenceMcpServer } from "@aee/mcp";
 import { buildApp } from "../../apps/backend/src/app.js";
 import { startFixtureServer, type FixtureServer } from "../fixtures/server.js";
+import { ERROR_HTTP_STATUS } from "@aee/schemas";
 
 const SECRET = "test-secret-value-that-is-long-enough";
 
@@ -180,6 +181,49 @@ describe("request validation", () => {
     assert.equal(res.statusCode, 400);
   });
 
+  test("a request where NO source is retrieved fails instead of charging", async () => {
+    // The x402 middleware settles any handler response below 400. Returning 200
+    // here meant billing the buyer $0.03 for an empty result, so the whole point
+    // of this test is that the status is >= 400.
+    const res = await app.inject({
+      method: "POST",
+      url: "/internal/v1/evidence",
+      headers: { "x-backend-auth": SECRET },
+      payload: {
+        question: "anything",
+        urls: [`${fx.url}/404`, `http://10.0.0.1/blocked`],
+      },
+    });
+
+    assert.ok(res.statusCode >= 400, `must not settle: got ${res.statusCode}`);
+    const body = res.json();
+    assert.equal(body.error.code, "NO_SOURCES_RETRIEVED");
+    assert.equal(ERROR_HTTP_STATUS.NO_SOURCES_RETRIEVED, res.statusCode);
+    // The buyer must be told no payment was taken.
+    assert.match(body.error.message, /no payment/i);
+  });
+
+  test("partial success still settles, because real evidence was delivered", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/internal/v1/evidence",
+      headers: { "x-backend-auth": SECRET },
+      payload: {
+        question: "Is Rotamech Industries a manufacturer of centrifugal pumps?",
+        urls: [`${fx.url}/company`, `http://10.0.0.1/blocked`],
+        max_sources: 2,
+      },
+    });
+
+    assert.equal(res.statusCode, 200, "one good source must still be billable");
+    const body = res.json();
+    assert.equal(body.sources.filter((s: { status: number | null }) => s.status === 200).length, 1);
+    assert.ok(
+      body.limitations.some((l: string) => /could not be retrieved/.test(l)),
+      "the failure must still be disclosed",
+    );
+  });
+
   test("a malformed JSON body produces a canonical error, not a stack trace", async () => {
     const res = await app.inject({
       method: "POST",
@@ -293,7 +337,13 @@ describe("evidence pipeline", () => {
   });
 
   test("a 404 upstream is recorded as provenance rather than an error", async () => {
-    const res = await post({ question: "manufacturer of centrifugal pumps?", urls: [url("/404")] });
+    // Paired with a good source: when EVERY source fails the request is now a
+    // NO_SOURCES_RETRIEVED error, so the buyer is not charged for an empty result.
+    const res = await post({
+      question: "manufacturer of centrifugal pumps?",
+      urls: [url("/404"), url("/company")],
+      max_sources: 2,
+    });
     assert.equal(res.statusCode, 200);
     const s = res.json().sources[0];
     assert.equal(s.status, 404);

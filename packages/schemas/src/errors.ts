@@ -25,6 +25,7 @@ export const ERROR_CODES = [
   "RESPONSE_TOO_LARGE",
   /** Upstream returned a 4xx/5xx status. */
   "UPSTREAM_HTTP_FAILURE",
+  "NO_SOURCES_RETRIEVED",
   /** Fetch succeeded but extraction failed. */
   "EXTRACTION_FAILURE",
   /** Payment is required to access this resource (HTTP 402). */
@@ -61,6 +62,7 @@ export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
   UNSUPPORTED_CONTENT: 415,
   RESPONSE_TOO_LARGE: 502,
   UPSTREAM_HTTP_FAILURE: 502,
+  NO_SOURCES_RETRIEVED: 502,
   EXTRACTION_FAILURE: 500,
   PAYMENT_REQUIRED: 402,
   PAYMENT_INVALID: 402,
@@ -102,6 +104,8 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   UNSUPPORTED_CONTENT: "The source returned a content type that is not supported.",
   RESPONSE_TOO_LARGE: "The source response exceeded the maximum allowed size.",
   UPSTREAM_HTTP_FAILURE: "The source returned an error status.",
+  NO_SOURCES_RETRIEVED:
+    "None of the requested sources could be retrieved, so no evidence was produced and no payment was taken.",
   EXTRACTION_FAILURE: "The source could not be processed.",
   PAYMENT_REQUIRED: "Payment is required to access this resource.",
   PAYMENT_INVALID: "The supplied payment could not be verified.",

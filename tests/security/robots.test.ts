@@ -37,10 +37,22 @@ function firstSource(res: { sources: Array<Record<string, unknown>> }) {
   };
 }
 
-/** Ask about the path the fixture's robots.txt disallows. */
+/**
+ * Ask about the path the fixture's robots.txt disallows, alongside one that is
+ * allowed.
+ *
+ * The second source matters: a request where NOTHING is retrieved now fails with
+ * NO_SOURCES_RETRIEVED so the buyer is not charged, which is correct but would
+ * hide the per-source robots behaviour these tests exist to check. The blocked
+ * path stays first, so `firstSource()` still refers to it.
+ */
 function ask(svc: EvidenceService) {
   return svc.execute(
-    { question: "Is Rotamech a manufacturer of centrifugal pumps?", urls: [`${fx.url}/blocked-by-robots`] },
+    {
+      question: "Is Rotamech a manufacturer of centrifugal pumps?",
+      urls: [`${fx.url}/blocked-by-robots`, `${fx.url}/company`],
+      max_sources: 2,
+    },
     "req_robots_test",
   );
 }
@@ -90,7 +102,7 @@ describe("robots policy", () => {
 
   test("an allowed path is retrieved normally in enforce mode", async () => {
     const res = await ask(serviceWith("enforce"));
-    assert.ok(res.sources.length === 1);
+    assert.equal(res.sources.length, 2, "the blocked path plus the allowed control");
 
     const allowed = await serviceWith("enforce").execute(
       { question: "manufacturer of centrifugal pumps?", urls: [`${fx.url}/company`] },

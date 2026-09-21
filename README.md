@@ -54,6 +54,27 @@ Running the backend in Docker? The sidecar must be reachable from the container:
 `--add-host=host.docker.internal:host-gateway` and point `REASONING_URL` at
 `http://host.docker.internal:8077`, or put both on one Docker network.
 
+## You are only charged when the service delivers
+
+The x402 middleware settles a payment only when the handler returns a status
+below 400, so the service is built so that **every way it can fail is a 4xx or
+5xx**:
+
+- If no source could be retrieved — all 404s, all SSRF-blocked, all unsupported
+  content types — the request fails with `NO_SOURCES_RETRIEVED` (502) and **no
+  payment is taken**. An earlier version returned `200 inconclusive` here, which
+  would have billed a buyer $0.03 for an empty result.
+- Partial success still settles. If one of five sources was retrieved, real
+  evidence was delivered and the per-source warnings explain the rest.
+- On the MCP transport, a failed tool call is reported as `isError: true` inside
+  an HTTP 200 — correct MCP behaviour, but invisible to the payment middleware.
+  The Worker rewrites that to 502 so the payment is not taken; the JSON-RPC body
+  is passed through unchanged.
+
+Verified against the live deployment: a request whose sources all fail returns
+502 `NO_SOURCES_RETRIEVED`, and a request with one good source plus one dead one
+returns 200.
+
 ## How to see revenue
 
 Every request the backend serves on its internal route has already passed the

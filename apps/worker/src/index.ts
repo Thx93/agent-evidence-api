@@ -609,12 +609,44 @@ app.use("/mcp", async (c, next) => {
 
 app.post("/mcp", async (c) => {
   const raw = (c.get("mcpBody" as never) as string | undefined) ?? "";
-  return proxyToBackend(c, "/mcp", {
+  const res = await proxyToBackend(c, "/mcp", {
     method: "POST",
     body: raw,
     contentType: "application/json",
   });
+  // Only a call that was actually charged needs this correction.
+  return needsPayment(raw) ? await cancelSettlementOnToolError(res) : res;
 });
+
+/**
+ * Stop a failed MCP tool call from taking the buyer's money.
+ *
+ * The MCP transport reports a failed tool call as a JSON-RPC *result* carrying
+ * `isError: true` with HTTP 200 - which is correct MCP behaviour, and invisible
+ * to the x402 middleware, which cancels settlement only when the handler returns
+ * a status >= 400. So a paid tool call that failed would still settle.
+ *
+ * This rewrites the status while preserving the JSON-RPC body, so MCP clients
+ * still receive a well-formed response and the payment is not taken. Applied
+ * only to calls that were gated for payment; free calls are untouched.
+ */
+async function cancelSettlementOnToolError(res: Response): Promise<Response> {
+  if (res.status >= 400) return res; // already cancels settlement
+
+  const contentType = res.headers.get("content-type") ?? "";
+  // MCP responses are JSON, or SSE carrying JSON in `data:` lines.
+  if (!contentType.includes("json") && !contentType.includes("event-stream")) return res;
+
+  const body = await res.text();
+  const headers = new Headers(res.headers);
+
+  if (!/"isError"\s*:\s*true/.test(body)) {
+    return new Response(body, { status: res.status, headers });
+  }
+
+  headers.set("x-settlement-cancelled", "mcp-tool-error");
+  return new Response(body, { status: 502, headers });
+}
 
 /**
  * The zero-install buyer CLI. Free, public, and proxied from the origin so the
