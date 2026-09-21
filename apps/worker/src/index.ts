@@ -1,11 +1,5 @@
 import { Hono } from "hono";
-import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
-import { ExactEvmScheme } from "@x402/evm/exact/server";
-import { HTTPFacilitatorClient } from "@x402/core/server";
-import { createCdpFacilitatorClient } from "@coinbase/cdp-sdk/x402";
-import { declareDiscoveryExtension } from "@x402/extensions/bazaar";
-import type { Context, MiddlewareHandler } from "hono";
-import type { Network } from "@x402/core/types";
+import type { Context } from "hono";
 import {
   SERVICE_NAME,
   SERVICE_VERSION,
@@ -19,11 +13,19 @@ import {
 /**
  * Cloudflare Worker — the public edge (SPEC section 13).
  *
- *   client ──▶ Worker ──x402 gate──▶ backend origin (X-Backend-Auth)
+ *   client ──▶ Worker ──proxy──▶ backend origin (X-Backend-Auth, x402 gate)
  *
- * This process stays deliberately thin: it gates payment, validates request
- * shape, and forwards. All fetching, parsing and reasoning happens on the VPS
- * backend. Nothing heavy runs here (Free plan, minimal CPU).
+ * This process stays deliberately thin: it validates request shape, forwards
+ * authorised requests, and serves the free discovery surfaces. All fetching,
+ * parsing, reasoning AND payment enforcement happen on the VPS backend.
+ *
+ * The x402 gate used to run here. It cannot any more, and not for want of
+ * configuration: the CDP Facilitator — the only route into the CDP Bazaar, the
+ * Bazaar MCP server, Amazon Bedrock AgentCore and agentic.market — cannot run in
+ * a Worker at all. Its JWT signing reaches an undefined `getRandomValues`, and
+ * the x402 library compiles its bazaar schema with `new Function`, which Workers
+ * forbid by design. Both are documented in docs/market-analysis.md. The Worker
+ * now forwards the buyer's `payment-signature` and nothing else.
  *
  * The backend shared secret is read from `env`, attached only to the outgoing
  * request, and never returned to a client or written to a log.
@@ -33,30 +35,16 @@ export interface Env {
   X402_NETWORK: string;
   X402_RECIPIENT: string;
   X402_FACILITATOR_URL: string;
-  /**
-   * Coinbase CDP credentials. Setting both switches settlement to the CDP
-   * Facilitator, which is the only route into the CDP Bazaar - the largest x402
-   * catalogue, reaching the Bazaar MCP server, Amazon Bedrock AgentCore and
-   * agentic.market. Absent, the service settles through X402_FACILITATOR_URL as
-   * before, so this changes nothing until credentials exist.
-   */
-  CDP_API_KEY_ID?: string;
-  CDP_API_KEY_SECRET?: string;
   X402_PRICE_USD: string;
   BACKEND_ORIGIN_URL: string;
   /** Secret. Set via `wrangler secret put BACKEND_AUTH_SECRET`. */
   BACKEND_AUTH_SECRET: string;
-  /** Local-development only; never set in a deployed environment. */
-  DEV_BYPASS_PAYMENT?: string;
 }
 
 type Ctx = Context<{ Bindings: Env }>;
 
-/** Base mainnet. Payment can never be bypassed on this network. */
+/** Base mainnet. */
 const MAINNET = "eip155:8453";
-
-/** MCP tool that requires payment. Every other method is free. */
-const PAID_MCP_TOOL = "research_evidence";
 
 /** Hard cap on a JSON-RPC body the edge will buffer. Cheap rejection. */
 const MAX_MCP_BODY_BYTES = 64 * 1024;
@@ -67,21 +55,12 @@ const app = new Hono<{ Bindings: Env }>();
 // helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Dev bypass, doubly guarded (see the equivalent logic in the x402-worker):
- * it needs the explicit flag AND a non-mainnet network. Production cannot
- * bypass even if the variable leaks into its config.
- */
-function devBypassActive(env: Env): boolean {
-  return env.DEV_BYPASS_PAYMENT === "true" && env.X402_NETWORK !== MAINNET;
-}
-
 function fail(c: Ctx, code: ErrorCode, requestId: string, message?: string) {
   return c.json(errorResponse(code, requestId, message), ERROR_HTTP_STATUS[code] as never);
 }
 
-// priceString now lives in @aee/schemas so it can be unit-tested; a Worker
-// module cannot be imported by the Node test runner.
+// priceString lives in @aee/schemas so it can be unit-tested; a Worker module
+// cannot be imported by the Node test runner.
 
 /**
  * Cached origin health.
@@ -114,199 +93,6 @@ async function originHealthy(env: Env): Promise<boolean> {
 
 function newRequestId(): string {
   return `req_${crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`;
-}
-
-// ---------------------------------------------------------------------------
-// x402 gate
-// ---------------------------------------------------------------------------
-
-/**
- * Bazaar discovery declarations (x402's machine-readable catalog).
- *
- * A facilitator that implements the bazaar extension catalogs a route once a
- * payment settles against it, which makes the endpoint discoverable through
- * `/discovery/resources` to agents that have never heard of us. The declared
- * input/output is what a prospective buyer sees BEFORE paying.
- */
-// HTTP_DISCOVERY moved to apps/backend/src/app.ts with the HTTP paywall.
-
-
-const MCP_DISCOVERY = declareDiscoveryExtension({
-  toolName: "research_evidence",
-  // Optional in the SDK's type, but every MCP entry in the live x402 catalogue
-  // declares it, and it is accurate: this endpoint speaks streamable HTTP (the
-  // registry listing says so too). Without it the catalogue entry describes the
-  // tool but never says how to reach it.
-  transport: "streamable-http",
-  // Same reasoning as the resource description: the Bazaar searches by keyword,
-  // so the tool text has to contain the words a buyer would use. The earlier
-  // wording lacked verify, citation, support and contradict.
-  // SPEC section 29 asks tool descriptions to contain useful phrases such as
-  // "web evidence", "claim verification", "cited evidence" and "compare sources",
-  // while warning against keyword stuffing. Six of its eight examples describe
-  // this service accurately and appear here reading as prose. Two are omitted
-  // deliberately: "source verification" would imply we vouch for a source's
-  // trustworthiness, which we do not - we verify a claim against sources - and
-  // "fresh web evidence" is marketing rather than description.
-  description:
-    "Claim verification and evidence extraction from public web sources. Fetches " +
-    "the URLs you name, compares your sources, and returns source-grounded web " +
-    "evidence: cited passages that support or contradict your question, each with " +
-    "a citation - source URL, retrieval time, content hash.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      question: { type: "string", minLength: 1, maxLength: 2000 },
-      urls: { type: "array", items: { type: "string" }, maxItems: 25 },
-      max_sources: { type: "integer", minimum: 1, maximum: 25 },
-      language: { type: "string" },
-      mode: { type: "string", enum: ["evidence"] },
-    },
-    required: ["question"],
-    additionalProperties: false,
-  },
-  example: {
-    question: "Is Company X a manufacturer of centrifugal pumps?",
-    urls: ["https://company.example/about"],
-  },
-  // Only 5 of the 11 well-formed MCP entries in the live catalogue show a buyer
-  // what a call returns, and none declares an output schema. Reusing the HTTP
-  // route's example makes this listing show the actual deliverable - cited
-  // excerpts with a hash and an assessment - instead of a tool signature alone.
-  output: {
-    example: {
-      assessment: { status: "supported", basis: "1 source matched the question." },
-      sources: [
-        {
-          final_url: "https://company.example/about",
-          status: 200,
-          title: "Company X - About",
-          retrieved_at: "2026-01-01T00:00:00.000Z",
-          content_hash_sha256: "9f2c…",
-          evidence: [
-            {
-              relevance: "direct",
-              excerpt: "Company X manufactures centrifugal pumps at its facility.",
-            },
-          ],
-        },
-      ],
-      limitations: ["Assessment uses deterministic lexical matching, not semantic reasoning."],
-    },
-  },
-});
-
-let cachedKey: string | null = null;
-let cachedGate: MiddlewareHandler | null = null;
-
-/**
- * The x402 middleware is built once per distinct configuration and memoised:
- * rebuilding it per request would re-sync with the facilitator every time.
- */
-function paymentGate(env: Env, routeKey: string): MiddlewareHandler {
-  const key = [
-    routeKey,
-    env.X402_RECIPIENT,
-    env.X402_NETWORK,
-    env.X402_PRICE_USD,
-    env.X402_FACILITATOR_URL,
-    // Credentials present or not selects a different facilitator, so it belongs
-    // in the cache key or a config change would keep serving the old gate.
-    env.CDP_API_KEY_ID ? "cdp" : "http",
-  ].join("|");
-
-  if (cachedGate && cachedKey === key) return cachedGate;
-
-  // CDP when configured, the existing HTTP facilitator otherwise. Both are an
-  // HTTPFacilitatorClient, so the resource server below is unchanged either way.
-  //
-  // The CDP Facilitator is what gets an endpoint into the CDP Bazaar: "Your path
-  // to joining the most comprehensive marketplace for x402 endpoints", reaching
-  // tens of thousands of agents through the Bazaar MCP server and Amazon Bedrock
-  // AgentCore. It is free for the first 1,000 onchain transactions per month,
-  // then $0.001 each - more headroom than this service has ever used.
-  const useCdp = Boolean(env.CDP_API_KEY_ID && env.CDP_API_KEY_SECRET);
-  const facilitator = useCdp
-    ? createCdpFacilitatorClient({
-        apiKeyId: env.CDP_API_KEY_ID,
-        apiKeySecret: env.CDP_API_KEY_SECRET,
-      })
-    : new HTTPFacilitatorClient({ url: env.X402_FACILITATOR_URL });
-  const resourceServer = new x402ResourceServer(facilitator).register(
-    env.X402_NETWORK as Network,
-    new ExactEvmScheme(),
-  );
-
-  const gate = paymentMiddleware(
-    {
-      [routeKey]: {
-        accepts: {
-          scheme: "exact",
-          price: priceString(env.X402_PRICE_USD),
-          network: env.X402_NETWORK as Network,
-          payTo: env.X402_RECIPIENT,
-        },
-        // Shown to buyers browsing the x402 catalogue, where this one line is the
-        // entire pitch. Lead with what the caller GETS, name the input, and state
-        // the provenance guarantee. Modelled on the listings that rank well.
-        // Wording matters more than it looks. The Bazaar's search is keyword based,
-        // not semantic, so a buyer searching "verify a claim" or "cited evidence"
-        // only finds this if those words appear. The previous wording described the
-        // product accurately but omitted verify, web, cited, citation and sources -
-        // every term a buyer in this niche would actually type. They are rare across
-        // the catalogue (cited 69/1000 descriptions, citation 22, claim 17,
-        // verify 16), so their absence was not neutral.
-        //
-        // This is not keyword stuffing: each phrase states what the service does.
-        description:
-          // "fact check" added after measuring the Bazaar's own search: we ranked #1
-          // for five of six buyer queries and missed only that one. It is a true
-          // description of the capability, not a keyword bolted on.
-          "Verify a claim or fact check a statement against public web sources: send a " +
-          "question and up to 5 URLs, get cited evidence - passages that support, " +
-          "contradict or fail to settle it. Claim verification with a citation for every " +
-          "excerpt: source URL, retrieval time, content hash. Never charges when nothing " +
-          "is retrieved.",
-        serviceName: "Agent Evidence API",
-        tags: ["web-evidence", "claim-verification", "source-verification"],
-
-        // The default 402 body is literally {} — useless to a buyer debugging
-        // their payment. Distinguish "you sent nothing" from "what you sent was
-        // rejected", and point at the docs either way.
-        unpaidResponseBody: ({ paymentHeader }: { paymentHeader?: string }) => ({
-          contentType: "application/json",
-          body: errorResponse(
-            paymentHeader ? "PAYMENT_INVALID" : "PAYMENT_REQUIRED",
-            newRequestId(),
-            paymentHeader
-              ? "The supplied payment could not be verified. It may be malformed, expired, for the wrong network, or for an amount below the quoted price."
-              : undefined,
-          ),
-        }),
-
-        // If verification succeeded but settlement failed, do not leave the
-        // buyer guessing why they were not served.
-        settlementFailedResponseBody: () => ({
-          contentType: "application/json",
-          body: errorResponse(
-            "PAYMENT_INVALID",
-            newRequestId(),
-            "The payment was verified but could not be settled on-chain, so the request was not served and you were not charged for a result.",
-          ),
-        }),
-        // Only advertise the discovery payload that matches the route being
-        // priced: an HTTP body schema on the MCP route would be wrong.
-        // This gate now only ever guards POST /mcp - the HTTP paywall moved to the
-        // backend with its own discovery declaration.
-        extensions: { ...MCP_DISCOVERY },
-      },
-    },
-    resourceServer,
-  );
-
-  cachedKey = key;
-  cachedGate = gate;
-  return gate;
 }
 
 // ---------------------------------------------------------------------------
@@ -344,7 +130,8 @@ async function proxyToBackend(
     if (v) headers[h] = v;
   }
 
-  // Forward the payment proof so the backend can log settlement if needed.
+  // Forward the payment proof: the backend's x402 middleware is the only thing
+  // that reads it. The Worker no longer parses or verifies a payment at all.
   const sig = c.req.header("payment-signature");
   if (sig) headers["payment-signature"] = sig;
 
@@ -367,16 +154,12 @@ async function proxyToBackend(
   outHeaders.set("content-type", upstream.headers.get("content-type") ?? "application/json");
   outHeaders.set("cache-control", "no-store");
   outHeaders.set("x-request-id", requestId);
-  // `payment-required` is the 402 challenge itself. It only started arriving from
-  // upstream when enforcement moved to the backend; while the Worker gated, it
-  // generated this header itself and never needed to forward it. Dropping it made
-  // the endpoint return a bare 402 that CDP's validator could not read.
+  // `payment-required` is the 402 challenge itself; `payment-response` is the
+  // settlement receipt. Both are generated by the backend's x402 middleware and
+  // have to be forwarded, or a buyer (and CDP's validator) sees a bare 402.
   for (const h of ["payment-required", "payment-response", "mcp-session-id"]) {
     const v = upstream.headers.get(h);
     if (v) outHeaders.set(h, v);
-  }
-  if (devBypassActive(c.env) && path !== "/health") {
-    outHeaders.set("x-dev-payment-bypass", "active");
   }
 
   return new Response(upstream.body, { status: upstream.status, headers: outHeaders });
@@ -606,77 +389,30 @@ app.post("/v1/evidence", async (c) => {
 // ---------------------------------------------------------------------------
 // MCP endpoint (streamable HTTP)
 // ---------------------------------------------------------------------------
-
-interface JsonRpcLike {
-  method?: unknown;
-  params?: unknown;
-}
-
-/** MCP methods an agent may call without paying, so it can look before it buys. */
-const FREE_MCP_METHODS: ReadonlySet<string> = new Set([
-  "initialize",
-  "notifications/initialized",
-  "notifications/cancelled",
-  "tools/list",
-  "resources/list",
-  "resources/templates/list",
-  "prompts/list",
-  "ping",
-]);
+//
+// The MCP paywall lives in the backend, alongside the HTTP one, and for one
+// concrete reason beyond tidiness: the x402 catalogue is populated PER ROUTE, so
+// only a route that settles through the CDP Facilitator is catalogued. While this
+// route was gated at the edge it settled through the generic facilitator, so
+// `research_evidence` was absent from what the Bazaar MCP server enumerates — the
+// one discovery path that does not depend on a buyer guessing a keyword.
+//
+// It also has to be in the backend for a mechanical reason: the free/paid decision
+// needs the parsed JSON-RPC body. `@x402/fastify` hooks `onRequest`, which runs
+// before Fastify parses the body, so a body-aware decision cannot be made there.
+//
+// Nothing here parses a payment. This route buffers the body (to enforce a size
+// cap cheaply and to forward the exact bytes), checks the origin is alive, and
+// proxies.
 
 /**
- * Decide whether a JSON-RPC payload must be paid for.
+ * Buffer the JSON-RPC body, cap its size, and refuse the paid path when the
+ * origin is down.
  *
- * FREE means the discovery surface: an agent has to be able to `initialize`,
- * `tools/list` and call the free `health` tool before it can decide to buy
- * anything. Everything else requires payment.
- *
- * That "everything else" is deliberate, and it previously read the other way
- * round: the gate used to charge only for `tools/call research_evidence` and let
- * anything else through, so a request it did not recognise fell to the MCP
- * transport, which answered 406 when the caller had not sent the MCP Accept
- * header. Coinbase's Bazaar validator probes exactly like that - a bare POST with
- * no MCP headers - so the MCP route failed its preflight ("Endpoint returned HTTP
- * 406 instead of 402") while the HTTP route passed 25/25.
- *
- * Inverting the rule fixes that and matches how the HTTP route already behaves:
- * the paywall comes before validation. A malformed request now receives a 402
- * challenge rather than a protocol error, and if the caller pays and retries it
- * still fails validation - at which point the middleware cancels settlement, so
- * it is never charged for a request that was never serviceable.
- *
- * A batch is charged if ANY element is not a recognised free operation.
- */
-function needsPayment(body: string): boolean {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(body);
-  } catch {
-    // Unparseable is not a free operation: gate it, as the HTTP route does.
-    return true;
-  }
-
-  const isFree = (msg: unknown): boolean => {
-    if (msg === null || typeof msg !== "object" || Array.isArray(msg)) return false;
-    const m = msg as JsonRpcLike;
-    if (typeof m.method !== "string") return false;
-    if (FREE_MCP_METHODS.has(m.method)) return true;
-    if (m.method !== "tools/call") return false;
-    const params = m.params;
-    if (params === null || typeof params !== "object") return false;
-    // The paid tool is the only one that is not free.
-    return (params as { name?: unknown }).name !== PAID_MCP_TOOL;
-  };
-
-  if (Array.isArray(parsed)) return !parsed.every(isFree);
-  return !isFree(parsed);
-}
-
-/**
- * Buffer and inspect the JSON-RPC body, then gate only paid calls.
- *
- * The body is read once here and stashed on the context so the downstream
- * proxy can forward the original bytes without re-serialising.
+ * Origin health is checked before forwarding because the 402 challenge must come
+ * from the backend: if the origin cannot answer, answering 402 here would quote
+ * terms this service cannot honour. A free handshake is not blocked by it — the
+ * origin is the thing that would serve it either way.
  */
 app.use("/mcp", async (c, next) => {
   if (c.req.method !== "POST") return next();
@@ -687,64 +423,25 @@ app.use("/mcp", async (c, next) => {
   }
   c.set("mcpBody" as never, raw as never);
 
-  if (needsPayment(raw)) {
-    if (!(await originHealthy(c.env))) {
-      return fail(
-        c,
-        "BACKEND_UNREACHABLE",
-        newRequestId(),
-        "The evidence service is temporarily unavailable; no payment was taken.",
-      );
-    }
-    if (devBypassActive(c.env)) {
-      c.header("X-Dev-Payment-Bypass", "active");
-      return next();
-    }
-    return paymentGate(c.env, "POST /mcp")(c, next);
+  if (!(await originHealthy(c.env))) {
+    return fail(
+      c,
+      "BACKEND_UNREACHABLE",
+      newRequestId(),
+      "The evidence service is temporarily unavailable; no payment was taken.",
+    );
   }
   return next();
 });
 
 app.post("/mcp", async (c) => {
   const raw = (c.get("mcpBody" as never) as string | undefined) ?? "";
-  const res = await proxyToBackend(c, "/mcp", {
+  return proxyToBackend(c, "/mcp", {
     method: "POST",
     body: raw,
     contentType: "application/json",
   });
-  // Only a call that was actually charged needs this correction.
-  return needsPayment(raw) ? await cancelSettlementOnToolError(res) : res;
 });
-
-/**
- * Stop a failed MCP tool call from taking the buyer's money.
- *
- * The MCP transport reports a failed tool call as a JSON-RPC *result* carrying
- * `isError: true` with HTTP 200 - which is correct MCP behaviour, and invisible
- * to the x402 middleware, which cancels settlement only when the handler returns
- * a status >= 400. So a paid tool call that failed would still settle.
- *
- * This rewrites the status while preserving the JSON-RPC body, so MCP clients
- * still receive a well-formed response and the payment is not taken. Applied
- * only to calls that were gated for payment; free calls are untouched.
- */
-async function cancelSettlementOnToolError(res: Response): Promise<Response> {
-  if (res.status >= 400) return res; // already cancels settlement
-
-  const contentType = res.headers.get("content-type") ?? "";
-  // MCP responses are JSON, or SSE carrying JSON in `data:` lines.
-  if (!contentType.includes("json") && !contentType.includes("event-stream")) return res;
-
-  const body = await res.text();
-  const headers = new Headers(res.headers);
-
-  if (!/"isError"\s*:\s*true/.test(body)) {
-    return new Response(body, { status: res.status, headers });
-  }
-
-  headers.set("x-settlement-cancelled", "mcp-tool-error");
-  return new Response(body, { status: 502, headers });
-}
 
 /**
  * The zero-install buyer CLI. Free, public, and proxied from the origin so the

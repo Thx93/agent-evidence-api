@@ -5,17 +5,21 @@ exposes is also reachable by an agent as an MCP server. There is no separate
 implementation of the feature — SPEC §39 requires both adapters to call the same
 `EvidenceService`, and that is the design here.
 
-> **Status.** Implemented end to end in source. The edge routes `/mcp`, inspects
-> the JSON-RPC body to find paid calls, and gates accordingly
-> (`apps/worker/src/index.ts`). The backend registers `POST`, `GET`, and `DELETE`
-> on `/mcp`, hijacks the socket, and hands it to an `EvidenceMcpServer` created by
-> `@aee/mcp` (`apps/backend/src/app.ts`). `packages/mcp` implements the server,
-> the tool definitions, and `tools/call` delegation in stateless streamable-HTTP
-> mode, with a 15-case test file.
+> **Status.** Implemented and deployed at
+> `https://agent-evidence-api.thx93.workers.dev/mcp`. The backend registers `POST`,
+> `GET`, and `DELETE` on `/mcp`, hijacks the socket, and hands it to an
+> `EvidenceMcpServer` created by `@aee/mcp` (`apps/backend/src/app.ts`).
+> `packages/mcp` implements the server, the tool definitions, and `tools/call`
+> delegation in stateless streamable-HTTP mode, with a 15-case test file.
 >
-> The suites pass locally (15 MCP cases within a 199-test run) and the live
-> free/paid split is covered by `scripts/worker-smoke.sh`. On-chain settlement is
-> not demonstrated. See [§8 Status](#8-status).
+> **The MCP paywall now runs in the backend**, in a `preHandler`, so the free/paid
+> split is decided from the parsed JSON-RPC body and the settlement goes through the
+> CDP Facilitator — which is what puts the route in reach of the CDP Bazaar's MCP
+> server. `apps/worker` no longer parses a payment. Covered by
+> `tests/e2e/mcp-paywall.test.ts` (6 cases against a real socket and a stub
+> facilitator, including "verified payment settles" and "failed call does not
+> settle"). See [§8 Status](#8-status) and
+> [`market-analysis.md`](./market-analysis.md).
 
 ---
 
@@ -79,9 +83,16 @@ On the way through, the Worker:
 - buffers the JSON-RPC body **once** (hard cap 64 KiB) and stashes the original
   bytes on the request context, so the downstream proxy forwards the exact bytes
   without re-serialising them;
-- forwards `mcp-session-id` and `payment-response` back to the client when the
-  backend supplies them;
+- checks the origin is alive before forwarding, so a buyer is never challenged for
+  a route that cannot be served;
+- forwards `payment-signature` untouched, plus `mcp-session-id` and
+  `payment-response` when the backend supplies them;
 - sets `cache-control: no-store` on the proxied response.
+
+The Worker does **not** parse a payment or make a free/paid decision. That decision
+needs the parsed JSON-RPC body, which the backend has and the edge would have to
+duplicate; and, more decisively, the paywall has to sit where the CDP Facilitator can
+run. See §3.
 
 A body larger than 64 KiB is rejected at the edge with `INVALID_REQUEST`
 (HTTP 400, *"Request body is too large."*).
@@ -89,7 +100,8 @@ A body larger than 64 KiB is rejected at the edge with `INVALID_REQUEST`
 The backend's `/mcp` route requires the shared secret like every other internal
 route — `PUBLIC_PATHS` contains only `/health` — and calls `reply.hijack()` before
 handing the raw sockets to the MCP transport, so Fastify does not serialise the
-response itself.
+response itself. Because the socket is handed over, a **paid** call's response is
+buffered by `apps/backend/src/mcp-paywall.ts` until settlement has been decided.
 
 ---
 
@@ -221,39 +233,49 @@ schema:
 
 This is the most important property of the MCP surface, and it is deliberate:
 
-> **`initialize` and `tools/list` are free. Only `tools/call` on
-> `research_evidence` requires payment.**
+> **The discovery surface is free. Everything else requires payment.**
 
 An agent must be able to *discover* the tools before it can decide to pay for
 one. Charging for discovery would make the service unusable by an autonomous
 agent, which is the opposite of the commercial design in SPEC §38
 (discover → call → 402 → pay → retry → receive evidence).
 
-The Worker decides this by parsing the JSON-RPC body before forwarding it
-(`needsPayment()` in `apps/worker/src/index.ts`):
+The decision is made in the **backend**, in a Fastify `preHandler`, from the parsed
+JSON-RPC body (`needsMcpPayment()` in `apps/backend/src/mcp-paywall.ts`):
 
 | JSON-RPC method | Paid? |
 |---|---|
 | `initialize` | **free** |
 | `tools/list` | **free** |
-| `notifications/initialized` and all other notifications | **free** |
+| `notifications/initialized`, `notifications/cancelled` | **free** |
+| `ping`, `resources/list`, `resources/templates/list`, `prompts/list` | **free** |
 | `tools/call` with `params.name === "health"` | **free** |
 | `tools/call` with `params.name === "research_evidence"` | **paid** |
-| `ping`, `resources/list`, `prompts/list`, and anything else | **free** |
+| **any other method, or a body that is not a recognised free operation** | **paid (402)** |
 
-Additional behaviour, stated precisely because it is observable:
+Three precise consequences, all of them observable:
 
-- **Only `tools/call` is examined.** Any other JSON-RPC method is free, even if
-  it happens to carry a `params.name`. The check requires
-  `method === "tools/call"` *and* `params.name === "research_evidence"`.
-- **A batch is charged if any element is a paid call.** If the body is a JSON-RPC
-  array, `Array.prototype.some` is applied and the whole batch is gated. That is
-  conservative: it never lets a paid call through inside a batch.
-- **Malformed JSON is not gated at the edge.** If the body cannot be parsed, the
-  Worker forwards it so the backend can answer with a proper JSON-RPC parse
-  error. Malformed JSON is not a payment problem.
-- **`GET /mcp` and `DELETE /mcp` are never gated.** They carry no tool
-  invocation.
+- **The rule is "not recognised as free" ⇒ paid, not "is `research_evidence`" ⇒
+  paid.** A caller sending an unrecognised method, a missing `method`, or a
+  non-JSON-RPC object receives the 402 challenge rather than a transport-level
+  `406` or a `-32601`. This matches the HTTP route, where the paywall precedes
+  validation. If such a caller pays and retries, the request still fails
+  validation — and then settlement is cancelled, so it is never charged.
+- **A batch is charged if any element is not free.** If the body is a JSON-RPC
+  array, every element must be a recognised free operation; otherwise the whole
+  batch is gated. Conservative in the direction that cannot give the product away.
+- **Malformed JSON** never reaches this decision: Fastify's body parser rejects it
+  with `400 INVALID_REQUEST` before the hook runs. That is deliberate — malformed
+  JSON is not a payment problem, and a parse error is the more useful answer.
+
+This moved here from the Worker, and it could not have stayed there. The decision
+needs the parsed body, and `@x402/fastify`'s middleware hooks `onRequest`, which runs
+before Fastify parses anything — an earlier attempt that gated from that hook charged
+the free `tools/list` handshake, and the deploy guard caught it. The second reason is
+that the paywall must run where the CDP Facilitator can: see
+[`x402.md`](./x402.md).
+
+`GET /mcp` and `DELETE /mcp` are never gated: they carry no tool invocation.
 
 ---
 
@@ -362,17 +384,17 @@ cited excerpts intact. An agent must be able to cite what it received.
 }
 ```
 
-Not gated: `health` is not `research_evidence`, so `needsPayment()` returns
+Not gated: `health` is not `research_evidence`, so `needsMcpPayment()` returns
 false.
 
 ---
 
 ## 6. The payment-required response
 
-A paid invocation without valid payment is answered at the edge, before any
-backend work happens. Because the transport is HTTP, the client sees an **HTTP
-`402 Payment Required`** carrying the x402 payment requirements produced by the
-official x402 middleware — not a JSON-RPC `result`.
+A paid invocation without valid payment is answered **in the backend**, by the
+`preHandler`, before the MCP transport sees the request. Because the transport is
+HTTP, the client sees an **HTTP `402 Payment Required`** carrying the x402 payment
+requirements produced by the official x402 library — not a JSON-RPC `result`.
 
 ```http
 HTTP/1.1 402 Payment Required
@@ -403,8 +425,9 @@ What an MCP client should do with it:
    `payTo` address.
 3. Retry the **same** `tools/call` with the payment proof in the
    `payment-signature` header.
-4. On success, the Worker forwards the call to the backend and returns the
-   evidence result.
+4. On success, the backend's x402 middleware settles and returns the evidence
+   result; the Worker proxies it through. A successful response carries the
+   `payment-response` settlement receipt.
 
 For the full sequence and its configuration, see [`x402.md`](./x402.md).
 
@@ -454,16 +477,17 @@ that surrounds it is in [`discovery.md`](./discovery.md).
 
 | Piece | State |
 |---|---|
-| `/mcp` routing and forwarding in the Worker | Implemented |
-| Free `initialize` / `tools/list` gating logic | Implemented (`needsPayment`) |
+| `/mcp` routing and forwarding in the Worker | Implemented (proxy only) |
+| Free `initialize` / `tools/list` gating logic | Implemented (`needsMcpPayment`, backend) |
 | Paid-call detection for `tools/call` → `research_evidence` | Implemented |
 | Batch conservatism and 64 KiB body cap | Implemented |
 | Backend `/mcp` routes (POST/GET/DELETE, socket hijack) | Implemented |
 | Backend requires the shared secret on `/mcp` | Implemented (`PUBLIC_PATHS` is `/health` only) |
 | `packages/mcp` — server, tool definitions, `tools/call` delegation | Implemented, stateless streamable HTTP |
-| `packages/mcp/src/mcp.test.ts` | 15 cases (not run here) |
-| `server.json` | Created; remote URL still a placeholder |
-| Automated x402 payment test | **Not written** |
+| `packages/mcp/src/mcp.test.ts` | 15 cases |
+| `tests/e2e/mcp-paywall.test.ts` | 6 cases: free surface, 402 challenge shape, paid flow settles, failed call does not |
+| `server.json` | Created; remote URL set to the live MCP URL |
+| CDP Bazaar MCP entry | **Pending a settled MCP payment** — cataloguing is per route |
 
 Known behavioural notes:
 

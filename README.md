@@ -105,13 +105,13 @@ wallet to a settled payment and a catalogue entry, in one page.
 
 ## How to see revenue
 
-Every request the backend serves on its internal route has already passed the
-Worker's x402 payment gate. The log is append-only on the data volume, so it
-survives container recreation and redeploys — unlike Docker logs.
+Every request the backend serves on a paid route has already passed **the backend's
+own** x402 payment gate (the Worker only proxies). The log is append-only on the data
+volume, so it survives container recreation and redeploys — unlike Docker logs.
 
-**A line means a payment proof was presented. It is not proof of settlement.**
-The x402 order is verify → handler → settle, so the backend writes its line
-*before* the facilitator settles, and a settlement that later fails still appears
+**A line means a payment proof was verified in this process. It is not proof of
+settlement.** The x402 order is verify → handler → settle, so the backend writes its
+line *before* the facilitator settles, and a settlement that later fails still appears
 here. The field is named `payment_provided` for that reason; it was previously
 called `settled`, which was wrong.
 

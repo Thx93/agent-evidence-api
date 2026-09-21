@@ -3,7 +3,7 @@
 The system has two deployable pieces plus a datastore:
 
 ```text
-Cloudflare Worker   (public edge, Free plan)   — apps/worker
+Cloudflare Worker   (public edge, Free plan)   — apps/worker   (proxy only)
         │
         ▼
 protected origin    (Cloudflare Tunnel, or authenticated origin + firewall)
@@ -12,35 +12,43 @@ protected origin    (Cloudflare Tunnel, or authenticated origin + firewall)
 Docker container    (Dockerfile, docker-compose.yml)
         │
         ▼
-Node.js backend     (Fastify, apps/backend)
+Node.js backend     (Fastify, apps/backend)  — THE x402 GATE (HTTP + MCP)
         │
         ▼
 SQLite              (persistent volume: /app/data)
 ```
 
+**The payment gate is in the backend, not the edge.** That is not a preference: the
+CDP Facilitator cannot run in a Cloudflare Worker at all (its JWT signing reaches an
+undefined `getRandomValues`, and the x402 library compiles its bazaar schema with
+`new Function`, which Workers forbid). Since the CDP Bazaar is the largest x402
+catalogue and the only route into the Bazaar MCP server, Amazon Bedrock AgentCore and
+agentic.market, gating at the edge would mean gating on a facilitator that reaches
+none of them. Both the HTTP route and the MCP route are enforced in
+`apps/backend/src/app.ts`; the Worker proxies and forwards `payment-signature`
+untouched. See `docs/market-analysis.md` for the measurements behind that.
+
 No Kubernetes, no Terraform, no Redis, no PostgreSQL, no full observability
 stack. SPEC §31 and §36 forbid all of them.
 
-> **Status.** The deployment artifacts exist: `docker/Dockerfile`,
-> `docker/docker-compose.yml`, `docker/env.production.example`,
-> `docker/env.development.example`, `apps/worker/.dev.vars.example`, and a root
-> `.dockerignore`. All packages and both apps are implemented, and
-> `pnpm typecheck` passes across the workspace, so `docker build` is expected to
-> succeed.
+> **Status.** Deployed and live at `https://agent-evidence-api.thx93.workers.dev`
+> (service version `0.1.4`), mainnet USDC on Base. The backend runs as the Docker
+> container `aee-live`; the Worker is the public edge; a `cloudflared` quick tunnel
+> exposes the origin. `scripts/check-readiness.sh` verifies the buyer journey end to
+> end from outside, and `scripts/deploy-backend.sh` / `scripts/deploy-live.sh`
+> build, deploy and re-verify each half.
 >
-> **Nothing has been deployed from this repository**, and this document has not
-> been exercised end to end. Two configuration defects must be fixed before a real
-> deployment:
->
-> - `apps/worker/wrangler.jsonc` contains literal test-recipient addresses in
->   `env.dev` and `env.test`.
-> - `server.json` points at a placeholder remote URL; the GitHub namespace is
->   confirmed (`io.github.Thx93/`). The repository it references does not exist
->   namespace.
+> Two things are true about the Worker's own payment configuration and are worth
+> stating plainly: the Worker **no longer enforces payment**, and its
+> `X402_PRICE_USD` / `X402_RECIPIENT` / `X402_NETWORK` values are now *display-only*
+> (they feed the landing page and `/.well-known/x402`). The authority is the
+> backend's environment. Because those are two separate configurations they can
+> drift, so `scripts/check-readiness.sh` compares the manifest against the live 402
+> challenge and fails if they disagree.
 >
 > `scripts/smoke.sh` runs a live socket test against the built backend (health,
 > origin-auth refusal, a real evidence request, cache reuse, and SQLite file
-> creation). It has not been run in this session.
+> creation).
 
 ---
 
@@ -330,25 +338,22 @@ warning and continues **without** a cache rather than refusing to serve.
 
 | Variable | Source | Notes |
 |---|---|---|
-| `X402_NETWORK` | `vars` | `eip155:8453` for production, `eip155:84532` for test. |
-| `X402_RECIPIENT` | `vars` | Your **public** receiving address. |
-| `X402_FACILITATOR_URL` | `vars` | Confirm against current official x402 documentation. |
-| `X402_PRICE_USD` | `vars` | Verify after changing. Decimals are preserved (sub-cent prices are normal in x402); an unusable value makes the paid route refuse to serve rather than substituting a price. |
+| `X402_NETWORK` | `vars` | **Display-only.** `eip155:8453` for production, `eip155:84532` for test. Also selects mainnet/testnet in `GET /health?deep=1`. |
+| `X402_RECIPIENT` | `vars` | **Display-only.** The **public** receiving address. The backend holds the address that actually receives. |
+| `X402_FACILITATOR_URL` | `vars` | **Display-only.** Reported by `GET /`. The facilitator that settles is the backend's. |
+| `X402_PRICE_USD` | `vars` | **Display-only.** The backend's `X402_PRICE_USD` is what is charged. |
 | `BACKEND_ORIGIN_URL` | `vars` | Your protected origin. |
 | `BACKEND_AUTH_SECRET` | **secret** | Never in `wrangler.jsonc`. See below. |
-| `DEV_BYPASS_PAYMENT` | `vars` (dev only) | Never set in production. |
+
+The Worker no longer reads `DEV_BYPASS_PAYMENT`, `CDP_API_KEY_ID` or
+`CDP_API_KEY_SECRET`. The bypass belongs to the backend, and the CDP SDK cannot run
+in a Worker at all — `wrangler.jsonc` carries a comment recording why, and why the
+`@x402/svm` alias that used to be needed here is gone.
 
 `wrangler.jsonc` warns in a comment that **wrangler does not inherit top-level
 `vars` into a named environment** — every variable the Worker reads is repeated
 in each `env` block. A missing variable arrives as `undefined` with only a
 warning, which surfaces at runtime as `NOT_CONFIGURED` (HTTP 503).
-
-> **Fix before deploying.** The `env.dev` and `env.test` blocks currently contain
-> literal test-recipient addresses, and the same literal in both. SPEC §33 says
-> not to invent a wallet address and AGENTS.md §6 forbids committing wallet
-> configuration. Replace them before this file is published or deployed. The
-> production block uses a zero-address placeholder, which fails loudly but is
-> still not a real recipient.
 
 ### Set the secret
 
@@ -391,11 +396,43 @@ wrangler deploy --dry-run --outdir=dist
 wrangler deploy
 ```
 
-Or via the workspace script:
+Or via the workspace script — **this is the supported path**, because a bare
+`wrangler deploy` has hidden two broken builds in this project. It checks wrangler's
+own exit status, requires the version ID to have changed, and then verifies the live
+service from outside:
 
 ```bash
-pnpm --filter @aee/worker deploy
+bash scripts/deploy-live.sh
 ```
+
+### Deploy the backend
+
+The backend is where payment is enforced, so a Worker-only deploy is never enough
+after a change to the payment path:
+
+```bash
+bash scripts/deploy-backend.sh [version]
+```
+
+It builds the image, starts it as `aee-staging` on `:18080` with its own cache volume,
+proves `/health` and the free MCP handshake answer there, and only then replaces
+`aee-live`. Secrets come from `/root/dsh-workspace/.aee-live.env` (mode 0600, outside
+the repository) via `--env-file`, never from `-e` on a command line.
+
+The live secrets, and where they belong:
+
+| File | Contents | Mode |
+|---|---|---|
+| `/root/dsh-workspace/.aee-live.env` | The backend container's whole runtime environment. `docker run --env-file` reads it. | `0600` |
+| `/root/dsh-workspace/.cdp-credentials` | `CDP_API_KEY_ID` / `CDP_API_KEY_SECRET` alone, so they can be rotated and referenced without the rest. | `0600` |
+| `/root/dsh-workspace/.prod-secret` | `BACKEND_AUTH_SECRET`, shared with the Worker. | `0600` |
+| `/root/dsh-workspace/.x402-wallet.json`, `.x402-buyer-key` | Seller and operator-buyer wallets. | `0600` |
+
+None of these is inside the repository, and none may ever appear in a command line:
+the CDP keys were once recoverable only from shell history, which is an incident
+waiting to happen rather than a backup. The history has been cleared. **Rotate the CDP
+key pair** in the Coinbase console when convenient and update both files, because a
+secret that has been written to a history file should be treated as disclosed.
 
 ### Attach the public hostname
 
@@ -415,9 +452,14 @@ domain — do not invent one:
 
 | Environment | Activation | Network | Payment | Backend origin |
 |---|---|---|---|---|
-| production | `wrangler deploy` | `eip155:8453` (Base) | required | protected origin |
-| dev | `wrangler dev --env dev` | `eip155:84532` (Base Sepolia) | bypassed | `http://127.0.0.1:8080` |
-| test | `wrangler dev --env test` | `eip155:84532` (Base Sepolia) | required | `http://127.0.0.1:8080` |
+| production | `wrangler deploy` | `eip155:8453` (Base) | enforced in the backend | protected origin |
+| dev | `wrangler dev --env dev` | `eip155:84532` (Base Sepolia) | bypassed **in the backend** (`DEV_BYPASS_PAYMENT=true` in its env) | `http://127.0.0.1:8080` |
+| test | `wrangler dev --env test` | `eip155:84532` (Base Sepolia) | enforced in the backend | `http://127.0.0.1:8080` |
+
+The dev bypass is no longer a Worker variable. `wrangler dev --env dev` alone will
+NOT bypass payment any more: the backend must also run with `DEV_BYPASS_PAYMENT=true`
+and a non-mainnet `X402_NETWORK`, which is the doubly-guarded condition that keeps a
+leaked flag from making production free.
 
 ---
 
@@ -452,12 +494,19 @@ variable list. Copy it to `.env` (gitignored) for local use.
 
 ### Payment
 
+These are read by the **backend**, which enforces payment for both `POST
+/internal/v1/evidence` and `POST /mcp`.
+
 | Variable | Default | Notes |
 |---|---|---|
 | `X402_NETWORK` | `eip155:84532` | Safe testnet default in `packages/core`; production sets `eip155:8453`. |
 | `X402_RECIPIENT` | *(empty)* | Public address only. |
-| `X402_FACILITATOR_URL` | `https://x402.org/facilitator` | |
-| `X402_PRICE_USD` | `0.003` | `$` prefix optional; decimals preserved to USDC's 6. |
+| `X402_FACILITATOR_URL` | `https://x402.org/facilitator` | Used when no CDP credentials are present. |
+| `X402_PRICE_USD` | `0.003` | `$` prefix optional; decimals preserved to USDC's 6. An unusable value makes the paid routes refuse to serve rather than substituting a price. |
+| `X402_RESOURCE_URL` | *(empty)* | The **public** URL of the HTTP resource, advertised in the 402 challenge. Must be set in production; without it the challenge names the internal origin. |
+| `X402_MCP_RESOURCE_URL` | derived | The **public** URL of the MCP route. Derived from `X402_RESOURCE_URL` when that ends in `/v1/evidence` (replacing the tail with `/mcp`); set it explicitly if the shape is unusual. A wrong value sends catalogue browsers and buyers to an unreachable address. |
+| `CDP_API_KEY_ID` / `CDP_API_KEY_SECRET` | *(empty)* | Present, settlement goes through the **CDP Facilitator** — the only route into the CDP Bazaar, the Bazaar MCP server, Amazon Bedrock AgentCore and agentic.market. Absent, the `X402_FACILITATOR_URL` facilitator is used. Stored outside the repository at `/root/dsh-workspace/.cdp-credentials`. |
+| `DEV_BYPASS_PAYMENT` | *(unset)* | Requires the explicit flag **and** a non-mainnet `X402_NETWORK`; without both, payment is enforced. Tests set it; production never should. |
 | `X402_TEST_PRIVATE_KEY` | *(empty)* | Base Sepolia only. Disposable. Never funded with mainnet assets. Never committed. |
 
 ### Resource limits
@@ -494,13 +543,20 @@ variable list. Copy it to `.env` (gitignored) for local use.
 ### Seeing revenue
 
 `USAGE_LOG_PATH` (default `./data/usage.jsonl`, i.e. `/app/data/usage.jsonl` in
-the container) is an append-only record where **one line == one settled
-payment**, because only the Worker's paid route reaches the backend. It sits on
-the data volume so it survives redeploys, which Docker logs do not.
+the container) is an append-only record with one line per served paid request. It
+sits on the data volume so it survives redeploys, which Docker logs do not.
 
 ```bash
 docker exec aee-live wc -l < /app/data/usage.jsonl
 ```
+
+**A line is not revenue.** While the paywall ran at the edge, `payment_provided`
+meant only that a proof arrived from the Worker. Now that enforcement is in the
+backend, it means an x402 proof was *verified in this process* — still not that
+money moved, because settlement happens after the response. To count revenue, read
+the receiving wallet's balance on-chain, using the `asset` and `payTo` from the live
+402 challenge rather than retyping addresses. A typo in a retyped address once made a
+real settlement look unconfirmed.
 
 Set `USAGE_LOG_PATH=off` to disable it.
 
@@ -608,14 +664,22 @@ that obscurity is not security.
 Internet
    │
    ▼
-Cloudflare Worker          ← payment gate; the only public surface
+Cloudflare Worker          ← the only public surface; proxies
    │
    ▼
 protected origin           ← reachable only via the Worker
    │
    ▼
-VPS backend                ← validates X-Backend-Auth on every request
+VPS backend                ← validates X-Backend-Auth, THEN the x402 gate
 ```
+
+Two independent controls, and the order matters. The backend rejects any internal
+path without a valid `X-Backend-Auth` **before** it looks at payment, so an
+anonymous caller can never reach the evidence pipeline. The x402 gate then runs
+inside the backend, which is why the origin must stay unreachable directly: a
+customer who could reach it without the Worker would still be refused, but a
+customer who could reach it *with* a leaked origin secret would bypass payment — so
+the tunnel/firewall remains a real control, not defence in depth alone.
 
 ### Option A — Cloudflare Tunnel (preferred)
 
@@ -683,44 +747,64 @@ If the origin must be public, all of the following are required:
 
 ## 9. Deployment checklist
 
-Ordered. Nothing below has been executed in this repository's recorded history
-except where noted.
+The **supported path** is the two scripts, each of which verifies from the outside
+and refuses to call a successful build a successful deploy:
+
+```bash
+bash scripts/deploy-backend.sh     # build, stage, swap, verify (the paywall)
+bash scripts/deploy-live.sh        # deploy the Worker, verify (the edge)
+bash scripts/check-readiness.sh    # the whole buyer journey, 9 checks
+```
+
+Order matters after a payment-path change: deploy the backend **first**, then the
+Worker. Between the two there is a brief window where the old Worker still gates MCP
+at the edge while the new backend also gates it; with no customers this is harmless,
+but it is the reason not to leave the pair mismatched. The opposite order would leave
+the paid MCP route ungated until the backend caught up.
+
+The fuller checklist, for a deployment from scratch:
 
 **Configure and verify locally first**
 
 1. Create `docker/.env` from `docker/env.production.example` (or
    `docker/env.development.example` for testnet); set `BACKEND_AUTH_SECRET` from
    `openssl rand -hex 32`.
-2. Set `X402_RECIPIENT` to your own **public** address; keep `X402_NETWORK` on
+2. Set `X402_RECIPIENT` to your own **public** address; set `X402_RESOURCE_URL` to
+   the public HTTP resource (the MCP URL derives from it); keep `X402_NETWORK` on
    `eip155:84532` for test.
-3. Fix the literal test addresses in `apps/worker/wrangler.jsonc`.
-4. `pnpm validate` — typecheck (known to pass) plus the full test suite.
-5. `pnpm test:security` — the SSRF and limit suites.
-6. `bash scripts/smoke.sh` — live sockets: health, origin-auth refusal, a real
+3. `pnpm validate` — typecheck plus the full test suite.
+4. `pnpm test:security` — the SSRF and limit suites.
+5. `bash scripts/smoke.sh` — live sockets: health, origin-auth refusal, a real
    evidence request, cache reuse, SQLite creation.
-7. Build the container: `docker compose -f docker/docker-compose.yml build`.
-8. Start it and verify `GET /health` from the host.
-9. Verify `POST /internal/v1/evidence` rejects a request without
+6. Build the container: `docker compose -f docker/docker-compose.yml build`.
+7. Start it and verify `GET /health` from the host.
+8. Verify `POST /internal/v1/evidence` rejects a request without
    `X-Backend-Auth` (`UNAUTHORIZED`, HTTP 401), and that the port is not reachable
    from outside the host.
-10. Verify `initialize` / `tools/list` answer without payment, and that
-    `tools/call` on `research_evidence` returns `402`.
+9. Verify `initialize` / `tools/list` answer without payment, and that
+   `tools/call` on `research_evidence` returns `402` **without contacting the
+   facilitator** — a free handshake that needs the facilitator is invisible whenever
+   it is down.
 
 **Deploy**
 
-11. Validate the Worker bundle: `wrangler deploy --dry-run --outdir=dist`.
-12. `wrangler secret put BACKEND_AUTH_SECRET`.
-13. `wrangler deploy`.
-14. Attach the public hostname and confirm the tunnel or firewall path.
-15. Replace the placeholder `remotes[].url` in `server.json` with your real
-    `MCP_PUBLIC_URL` and confirm the namespace is yours; see
+10. `bash scripts/deploy-backend.sh` — stages the new image, then swaps and verifies.
+11. `bash scripts/deploy-live.sh` — validates the Worker bundle, checks the version
+    ID changed, and verifies the live service from outside.
+12. Confirm the tunnel or firewall path keeps the origin unreachable directly.
+13. `server.json`'s `remotes[].url` must be the real `MCP_PUBLIC_URL`; see
     [`registry-publication.md`](./registry-publication.md) for validation.
+14. To get the MCP route catalogued in the CDP Bazaar, a payment must **settle**
+    through the CDP Facilitator on that route: `buyer/mcp-paid-client.mjs` makes one.
+    Then confirm the entry with `scripts/check-cdp-bazaar.mjs` (it pages the whole
+    catalogue; the entry lands on the last page). Cataloguing is per route, so an
+    HTTP-route listing does not imply an MCP one.
 
 **Requires credentials and manual configuration you must supply**
 
 | Item | Where | Notes |
 |---|---|---|
-| `X402_RECIPIENT` | Worker var | Your public Base address. |
+| `X402_RECIPIENT` | backend env | Your public Base address. |
 | `BACKEND_AUTH_SECRET` | `wrangler secret put` + backend env | Same value on both sides. |
 | `BACKEND_ORIGIN_URL` | Worker var | Your protected origin. |
 | Cloudflare account and tunnel token | Environment | For the preferred origin-protection option. |

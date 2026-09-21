@@ -15,15 +15,34 @@ import {
   type Logger,
 } from "@aee/core";
 import type { EvidenceMcpServer } from "@aee/mcp";
-import { paymentMiddleware, x402ResourceServer } from "@x402/fastify";
-import { HTTPFacilitatorClient } from "@x402/core/server";
+import {
+  FastifyAdapter,
+  paymentMiddlewareFromHTTPServer,
+  x402HTTPResourceServer,
+  x402ResourceServer,
+} from "@x402/fastify";
+import {
+  HTTPFacilitatorClient,
+  attachBackgroundInitHandler,
+  type HTTPRequestContext,
+} from "@x402/core/server";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { createCdpFacilitatorClient } from "@coinbase/cdp-sdk/x402";
-import { declareDiscoveryExtension } from "@x402/extensions/bazaar";
+import {
+  bazaarResourceServerExtension,
+  declareDiscoveryExtension,
+  validateBazaarRouteExtensions,
+} from "@x402/extensions/bazaar";
 import type { Network } from "@x402/core/types";
 import { extractCredential, isPublicPath, secretMatches } from "./auth.js";
 import { createUsageLog } from "./usage-log.js";
 import { createRateLimiter } from "./rate-limit.js";
+import {
+  captureResponse,
+  mcpResponseFailed,
+  needsMcpPayment,
+  type CapturedResponse,
+} from "./mcp-paywall.js";
 
 /**
  * What the CDP Bazaar advertises to agents that have never heard of us: the declared
@@ -80,6 +99,101 @@ const HTTP_DISCOVERY = declareDiscoveryExtension({
     },
   },
 });
+
+/**
+ * The discovery declaration for the MCP route, moved here with its paywall.
+ *
+ * This is the part that matters for the Bazaar MCP server. The x402 catalogue is
+ * populated per route when a payment settles, so while the MCP gate lived at the
+ * edge on the generic facilitator, `research_evidence` was never catalogued and
+ * therefore never enumerable by the one discovery path that does not depend on a
+ * buyer guessing a keyword.
+ *
+ * `transport` is optional in the SDK's type but present in every MCP entry that is
+ * actually catalogued; without it the entry describes a tool but never says how to
+ * reach it. Only 5 of the 11 well-formed MCP entries in the live catalogue show a
+ * buyer what a call returns, so the `output.example` is deliberate: it shows the
+ * actual deliverable (a cited excerpt plus an assessment) instead of a signature.
+ */
+const MCP_DISCOVERY = declareDiscoveryExtension({
+  toolName: "research_evidence",
+  transport: "streamable-http",
+  // Wording is a discovery lever, not decoration. The Bazaar's search is keyword
+  // based and does not stem, so a buyer searching "claim verification" or "cited
+  // evidence" only finds this if those exact word forms appear. Every clause below
+  // states what the service does; the phrases are rare across the catalogue, so
+  // their presence is not neutral.
+  description:
+    "Claim verification and evidence extraction from public web sources. Fetches " +
+    "the URLs you name, compares your sources, and returns source-grounded web " +
+    "evidence: cited passages that support or contradict your question, each with " +
+    "a citation - source URL, retrieval time, content hash.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      question: { type: "string", minLength: 1, maxLength: 2000 },
+      urls: { type: "array", items: { type: "string" }, maxItems: 25 },
+      max_sources: { type: "integer", minimum: 1, maximum: 25 },
+      language: { type: "string" },
+      mode: { type: "string", enum: ["evidence"] },
+    },
+    required: ["question"],
+    additionalProperties: false,
+  },
+  example: {
+    question: "Is Company X a manufacturer of centrifugal pumps?",
+    urls: ["https://company.example/about"],
+  },
+  output: {
+    example: {
+      assessment: { status: "supported", basis: "1 source matched the question." },
+      sources: [
+        {
+          final_url: "https://company.example/about",
+          status: 200,
+          title: "Company X - About",
+          retrieved_at: "2026-01-01T00:00:00.000Z",
+          content_hash_sha256: "9f2c…",
+          evidence: [
+            {
+              relevance: "direct",
+              excerpt: "Company X manufactures centrifugal pumps at its facility.",
+            },
+          ],
+        },
+      ],
+      limitations: ["Assessment uses deterministic lexical matching, not semantic reasoning."],
+    },
+  },
+});
+
+/**
+ * One line shown to buyers browsing the x402 catalogue, where it is the whole
+ * pitch. Shared by the HTTP and MCP routes so the two listings cannot drift.
+ */
+const CATALOGUE_DESCRIPTION =
+  "Verify a claim or fact check a statement against public web sources: send a " +
+  "question and up to 5 URLs, get cited evidence - passages that support, " +
+  "contradict or fail to settle it. Claim verification with a citation for every " +
+  "excerpt: source URL, retrieval time, content hash. Never charges when nothing " +
+  "is retrieved.";
+
+const CATALOGUE_TAGS = ["web-evidence", "claim-verification", "source-verification"];
+
+/**
+ * The x402 context for one verified but not yet settled MCP call.
+ *
+ * `requestContext` is the HTTP context this backend built, not part of the
+ * library's result, but `processSettlement` needs it back for the settlement
+ * payload.
+ */
+interface VerifiedMcpCall {
+  result: Extract<
+    Awaited<ReturnType<x402HTTPResourceServer["processHTTPRequest"]>>,
+    { type: "payment-verified" }
+  >;
+  requestContext: HTTPRequestContext;
+}
 
 export interface BuildAppDeps {
   config: AppConfig;
@@ -270,63 +384,174 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
     new ExactEvmScheme(),
   );
 
-  if (paywallActive) paymentMiddleware(
-    app,
-    {
-      "POST /internal/v1/evidence": {
-        // Advertise the PUBLIC url. Without this the challenge names the internal
-        // origin the middleware can see (http://127.0.0.1:8080/internal/...), which
-        // would confuse a buyer and fail CDP's validator.
-        ...(config.x402.publicResourceUrl
-          ? { resource: config.x402.publicResourceUrl }
-          : {}),
-        accepts: {
-          scheme: "exact",
-          price: priceString(config.x402.priceUsd),
-          network: config.x402.network as Network,
-          payTo: config.x402.recipient,
-        },
-        // Shown to buyers browsing the x402 catalogue, where one line is the whole
-        // pitch. The Bazaar's search is keyword based, not semantic, so a buyer
-        // searching "verify a claim" or "cited evidence" only finds this if those
-        // words appear. Each phrase states what the service does.
-        description:
-          "Verify a claim or fact check a statement against public web sources: send a " +
-          "question and up to 5 URLs, get cited evidence - passages that support, " +
-          "contradict or fail to settle it. Claim verification with a citation for every " +
-          "excerpt: source URL, retrieval time, content hash. Never charges when nothing " +
-          "is retrieved.",
-        serviceName: SERVICE_NAME,
-        tags: ["web-evidence", "claim-verification", "source-verification"],
-        // Without this the validator reports "No bazaar extension in top-level
-        // extensions object" and the route is not catalogued.
-        extensions: { ...HTTP_DISCOVERY },
+  // Registered explicitly rather than left to the framework adapter, because two
+  // x402 HTTP resource servers (HTTP and MCP) now share this one resource server
+  // and the registration must not depend on which adapter ran first.
+  resourceServer.registerExtension(bazaarResourceServerExtension);
 
-        // The default 402 body is literally `{}` - useless to a buyer debugging their
-        // payment. Distinguish "you sent nothing" from "what you sent was rejected".
-        // This was written at the edge and lost in the move; the live body (`{}`)
-        // is what showed it.
-        unpaidResponseBody: ({ paymentHeader }: { paymentHeader?: string }) => ({
-          contentType: "application/json",
-          body: JSON.stringify(
-            errorResponse(
-              paymentHeader ? "PAYMENT_INVALID" : "PAYMENT_REQUIRED",
-              newRequestId(),
-              paymentHeader
-                ? "The supplied payment could not be verified. It may be malformed, expired, for the wrong network, or for an amount below the quoted price."
-                : "This endpoint requires payment. See https://agent-evidence-api.thx93.workers.dev/ for the terms.",
-            ),
-          ),
-        }),
-      },
+  /** The single payment option both paid routes quote. */
+  const paymentOption = {
+    scheme: "exact",
+    price: priceString(config.x402.priceUsd),
+    network: config.x402.network as Network,
+    payTo: config.x402.recipient,
+  };
+
+  /**
+   * The default 402 body is literally `{}` — useless to a buyer debugging their
+   * payment. Distinguish "you sent nothing" from "what you sent was rejected".
+   */
+  const unpaidResponseBody = ({ paymentHeader }: { paymentHeader?: string }) => ({
+    contentType: "application/json",
+    body: JSON.stringify(
+      errorResponse(
+        paymentHeader ? "PAYMENT_INVALID" : "PAYMENT_REQUIRED",
+        newRequestId(),
+        paymentHeader
+          ? "The supplied payment could not be verified. It may be malformed, expired, for the wrong network, or for an amount below the quoted price."
+          : "This endpoint requires payment. See https://agent-evidence-api.thx93.workers.dev/ for the terms.",
+      ),
+    ),
+  });
+
+  const HTTP_ROUTES = {
+    "POST /internal/v1/evidence": {
+      // Advertise the PUBLIC url. Without this the challenge names the internal
+      // origin the middleware can see (http://127.0.0.1:8080/internal/...), which
+      // would confuse a buyer and fail CDP's validator.
+      ...(config.x402.publicResourceUrl ? { resource: config.x402.publicResourceUrl } : {}),
+      accepts: paymentOption,
+      description: CATALOGUE_DESCRIPTION,
+      serviceName: SERVICE_NAME,
+      tags: CATALOGUE_TAGS,
+      // Without this the validator reports "No bazaar extension in top-level
+      // extensions object" and the route is not catalogued.
+      extensions: { ...HTTP_DISCOVERY },
+      unpaidResponseBody,
     },
-    resourceServer,
-  );
+  };
+
+  const MCP_ROUTE_KEY = "POST /mcp";
+  const MCP_ROUTES = {
+    [MCP_ROUTE_KEY]: {
+      // Same reasoning as the HTTP route: the request the backend sees is the
+      // internal origin, so a buyer or catalogue must be shown the public address.
+      // The value is derived from X402_RESOURCE_URL when it is not set explicitly
+      // (see deriveMcpResourceUrl).
+      ...(config.x402.publicMcpResourceUrl
+        ? { resource: config.x402.publicMcpResourceUrl }
+        : {}),
+      accepts: paymentOption,
+      description: CATALOGUE_DESCRIPTION,
+      serviceName: SERVICE_NAME,
+      tags: CATALOGUE_TAGS,
+      extensions: { ...MCP_DISCOVERY },
+      unpaidResponseBody,
+      // Verification can succeed while settlement fails (for example the buyer's
+      // balance moved between the two). Do not leave them guessing.
+      settlementFailedResponseBody: () => ({
+        contentType: "application/json",
+        body: JSON.stringify(
+          errorResponse(
+            "PAYMENT_INVALID",
+            newRequestId(),
+            "The payment was verified but could not be settled on-chain, so the request was not served and you were not charged for a result.",
+          ),
+        ),
+      }),
+    },
+  };
+
+  // Constructing a server validates its routes' scheme and payment flow locally
+  // (no facilitator needed). The two are separate so that MCP can be gated from a
+  // preHandler — where the body exists — without the HTTP route's global
+  // `onRequest` hook ever seeing an MCP request.
+  const httpServer = new x402HTTPResourceServer(resourceServer, HTTP_ROUTES);
+  const mcpHttpServer = new x402HTTPResourceServer(resourceServer, MCP_ROUTES);
+
+  // Warns (does not throw) on a malformed discovery declaration; it compiles the
+  // bazaar schema with Ajv, which is one of the two reasons this cannot run in a
+  // Worker. Only the HTTP route is checked: for an MCP route the library's
+  // `withSyntheticMethod` injects a `method` field into `info.input` before
+  // validating, which the MCP schema (correctly) forbids, so it always reports a
+  // false "invalid bazaar extension" for a pattern carrying an HTTP verb. The
+  // served declaration is not touched by that copy — the MCP challenge's shape is
+  // asserted in tests/e2e/mcp-paywall.test.ts instead.
+  validateBazaarRouteExtensions(HTTP_ROUTES);
+
+  /**
+   * One facilitator handshake for the process, deferred to the first paid request
+   * and retried after a transient failure.
+   *
+   * Both HTTP resource servers call `initialize()` on the same underlying resource
+   * server, so they are run in sequence rather than concurrently: a concurrent
+   * pair interleaves `clear()` and repopulate, and the loser's route validation can
+   * observe an empty facilitator map and abort startup. Sequentially the second
+   * call is a redundant but harmless refetch.
+   *
+   * Deliberately NOT awaited for the free MCP discovery surface: `tools/list` and
+   * `initialize` must answer even when the facilitator is unreachable, or an agent
+   * cannot see the tool it would have to pay for.
+   */
+  let initPromise: Promise<void> | null = null;
+  const ensurePaidRoutesReady = (): Promise<void> => {
+    if (!initPromise) {
+      const attempt = (async () => {
+        await httpServer.initialize();
+        await mcpHttpServer.initialize();
+      })().catch((err: unknown) => {
+        // Transient (facilitator timeout) — allow the next paid request to retry.
+        initPromise = null;
+        throw err;
+      });
+      initPromise = attempt;
+      // Fatal configuration errors (unsupported scheme/network) exit the process
+      // instead of leaving a listener that can never charge.
+      attachBackgroundInitHandler(attempt);
+    }
+    return initPromise;
+  };
+
+  if (paywallActive) {
+    // Must run BEFORE the middleware's own `onRequest` hook, which calls
+    // `processHTTPRequest` against the resource server. Scoped to the paid HTTP
+    // route so a free request never waits on the facilitator.
+    app.addHook("onRequest", async (req: FastifyRequest, reply: FastifyReply) => {
+      const path = req.url.split("?")[0] ?? req.url;
+      if (path !== "/internal/v1/evidence") return;
+      try {
+        await ensurePaidRoutesReady();
+      } catch (err) {
+        logger.error("payment facilitator unavailable", {
+          request_id: req.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return reply
+          .code(ERROR_HTTP_STATUS.BACKEND_UNREACHABLE)
+          .send(
+            errorResponse(
+              "BACKEND_UNREACHABLE",
+              String(req.id),
+              "The payment facilitator could not be reached, so no payment was taken. Please retry.",
+            ),
+          );
+      }
+    });
+
+    // `syncFacilitatorOnStart: false` — initialization is owned by
+    // `ensurePaidRoutesReady` above, so the library's own eager sync (and the
+    // concurrent double-init it would cause) is disabled.
+    paymentMiddlewareFromHTTPServer(app, httpServer, undefined, undefined, false);
+  }
 
   logger.info(paywallActive ? "x402 paywall active" : "x402 paywall BYPASSED", {
     facilitator: useCdp ? "cdp" : "http",
     network: config.x402.network,
     price_usd: config.x402.priceUsd,
+    // Whether each paid route advertises a public address, without printing the
+    // address itself. A false here is the defect that a catalogue would index.
+    http_resource_public: config.x402.publicResourceUrl.length > 0,
+    mcp_resource_public: config.x402.publicMcpResourceUrl.length > 0,
     bypassed: !paywallActive,
   });
 
@@ -440,8 +665,179 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
   });
 
   // ---------------------------------------------------------------- MCP ----
-  // All MCP verbs are handed to the same server instance the API uses. Payment
-  // for the paid tool is enforced at the Worker, before the request gets here.
+  //
+  // The MCP paywall, in the backend. See `mcp-paywall.ts` for why it is a
+  // `preHandler` rather than the framework adapter's `onRequest` hook (the body is
+  // not parsed yet at `onRequest`, so `tools/list` could not be told from
+  // `tools/call`), and why it moved off the edge at all (the CDP Bazaar's MCP
+  // server enumerates only routes that settle through the CDP Facilitator).
+
+  /**
+   * Verified-but-unsettled payments, keyed by request. A WeakMap rather than a
+   * property on the request, so the type augmentation stays local to this file.
+   */
+  const mcpPayments = new WeakMap<object, VerifiedMcpCall>();
+
+  if (paywallActive) {
+    app.addHook("preHandler", async (req: FastifyRequest, reply: FastifyReply) => {
+      if (req.method !== "POST") return;
+      const path = req.url.split("?")[0] ?? req.url;
+      if (path !== "/mcp") return;
+      // The free discovery surface — initialize, tools/list, ping, the free
+      // `health` tool — passes without touching the facilitator or the wallet.
+      if (!needsMcpPayment(req.body)) return;
+
+      try {
+        await ensurePaidRoutesReady();
+      } catch (err) {
+        logger.error("payment facilitator unavailable", {
+          request_id: req.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return reply
+          .code(ERROR_HTTP_STATUS.BACKEND_UNREACHABLE)
+          .send(
+            errorResponse(
+              "BACKEND_UNREACHABLE",
+              String(req.id),
+              "The payment facilitator could not be reached, so no payment was taken. Please retry.",
+            ),
+          );
+      }
+
+      const paymentHeader =
+        (req.headers["payment-signature"] as string | undefined) ??
+        (req.headers["x-payment"] as string | undefined);
+
+      const requestContext: HTTPRequestContext = {
+        adapter: new FastifyAdapter(req),
+        path,
+        method: req.method,
+        ...(paymentHeader ? { paymentHeader } : {}),
+      };
+
+      let result: Awaited<ReturnType<typeof mcpHttpServer.processHTTPRequest>>;
+      try {
+        result = await mcpHttpServer.processHTTPRequest(requestContext);
+      } catch (err) {
+        // Verification itself failed. The buyer is shown the challenge again by
+        // the facilitator's error path, but never charged: settlement only runs
+        // after a handler has produced a result.
+        logger.warn("mcp payment verification errored", {
+          request_id: req.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return reply
+          .code(ERROR_HTTP_STATUS.PAYMENT_INVALID)
+          .send(
+            errorResponse(
+              "PAYMENT_INVALID",
+              String(req.id),
+              "The supplied payment could not be verified. Nothing was charged.",
+            ),
+          );
+      }
+
+      if (result.type === "payment-error") {
+        for (const [key, value] of Object.entries(result.response.headers)) {
+          reply.header(key, value);
+        }
+        if (result.response.isHtml) {
+          return reply
+            .code(result.response.status)
+            .type("text/html")
+            .send(result.response.body);
+        }
+        return reply.code(result.response.status).send(result.response.body || {});
+      }
+
+      if (result.type === "payment-verified") {
+        mcpPayments.set(req, { result, requestContext });
+      }
+    });
+  }
+
+  /** Settle a verified MCP call, or cancel it when the call did not deliver. */
+  async function settleOrCancelMcpCall(
+    payment: VerifiedMcpCall,
+    captured: CapturedResponse,
+    handlerThrew: boolean,
+    requestId: string,
+  ): Promise<void> {
+    const { result, requestContext } = payment;
+    const failed =
+      handlerThrew ||
+      captured.statusCode >= 400 ||
+      mcpResponseFailed(captured.body(), captured.headers["content-type"] ?? "");
+
+    if (failed) {
+      // The MCP transport reports a failed tool call as HTTP 200 with
+      // `isError: true`, which settlement cannot see. Cancelling here is what
+      // keeps the published guarantee: a buyer is never charged when nothing was
+      // retrieved.
+      try {
+        const cancel = await result.cancellationDispatcher.cancel({
+          reason: "handler_failed",
+          responseStatus: captured.statusCode,
+        });
+        const failureHeaders = mcpHttpServer.createFailurePathSettlementHeaders(
+          cancel,
+          result.beforeHandlerSettlement,
+          result.paymentPayload,
+          captured.headers["cache-control"] ?? null,
+        );
+        if (failureHeaders) captured.mergeHeaders(failureHeaders);
+      } catch (err) {
+        logger.warn("mcp settlement cancellation failed", {
+          request_id: requestId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+      return;
+    }
+
+    try {
+      const settleResult = await mcpHttpServer.processSettlement(
+        result.paymentPayload,
+        result.paymentRequirements,
+        result.declaredExtensions,
+        {
+          request: requestContext,
+          responseBody: captured.body(),
+          responseHeaders: { ...captured.headers },
+        },
+        undefined,
+        result.beforeHandlerSettlement,
+      );
+      if (settleResult.success) {
+        captured.mergeHeaders(settleResult.headers);
+        return;
+      }
+      captured.replace(
+        settleResult.response.status,
+        JSON.stringify(settleResult.response.body ?? {}),
+        settleResult.response.headers,
+      );
+    } catch (err) {
+      logger.error("mcp settlement failed", {
+        request_id: requestId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      // The tool result is not delivered: settlement is what the payment bought.
+      captured.replace(
+        ERROR_HTTP_STATUS.PAYMENT_INVALID,
+        JSON.stringify(
+          errorResponse(
+            "PAYMENT_INVALID",
+            requestId,
+            "The payment was verified but could not be settled, so the request was not served.",
+          ),
+        ),
+        { "content-type": "application/json" },
+      );
+    }
+  }
+
   const mcpVerbs = ["POST", "GET", "DELETE"] as const;
   for (const verb of mcpVerbs) {
     app.route({
@@ -451,20 +847,31 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
         // Hand the raw sockets to the MCP transport; Fastify must not try to
         // serialise the response itself.
         reply.hijack();
+
+        // A paid call's response is buffered so settlement can see both the status
+        // and the body. Free calls are written straight through.
+        const payment = mcpPayments.get(req);
+        const captured = payment ? captureResponse(reply.raw) : null;
+        let handlerThrew = false;
+
         try {
           await mcp.handleNodeRequest(req.raw, reply.raw, req.body);
         } catch (err) {
+          handlerThrew = true;
           logger.error("mcp handler failed", {
             request_id: req.id,
             error: err instanceof Error ? err.message : String(err),
           });
-          if (!reply.raw.headersSent) {
+          if (!captured && !reply.raw.headersSent) {
             reply.raw.writeHead(500, { "content-type": "application/json" });
+            reply.raw.end(JSON.stringify(errorResponse("INTERNAL_ERROR", String(req.id))));
           }
-          reply.raw.end(
-            JSON.stringify(errorResponse("INTERNAL_ERROR", String(req.id))),
-          );
         }
+
+        if (payment && captured) {
+          await settleOrCancelMcpCall(payment, captured, handlerThrew, String(req.id));
+        }
+        captured?.flush();
       },
     });
   }

@@ -42,6 +42,47 @@ CDP=$(curl -s -m 60 -X POST "https://api.cdp.coinbase.com/platform/v2/x402/valid
   | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const j=JSON.parse(d);let f=0;for(const c of (j.preflight||[]))if(!c.passed&&c.severity==="required")f++;process.stdout.write(j.valid&&f===0?"accepted":("rejected/"+f))}catch{process.stdout.write("error")}})')
 if [ "$CDP" = "accepted" ]; then pass "CDP validator (gate to the Bazaar)" "accepted"; else fail "CDP validator" "$CDP"; fi
 
+echo "=== the MCP challenge is cataloguable ==="
+# The MCP paywall moved to the backend so that a settled MCP call is catalogued by
+# the CDP Bazaar. That only works if the 402 challenge declares the MCP tool shape
+# and names the PUBLIC /mcp address, so both are checked on the live challenge.
+MCP_HDR=$(curl -s -m 30 -D - -o /dev/null -X POST "$W/mcp" -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"research_evidence","arguments":{"question":"q"}}}' 2>/dev/null \
+  | grep -i '^payment-required:' | cut -d' ' -f2 | tr -d '\r' | base64 -d 2>/dev/null)
+MCP_SUMMARY=$(printf '%s' "$MCP_HDR" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const j=JSON.parse(d);const r=j.resource&&j.resource.url;const i=j.extensions&&j.extensions.bazaar&&j.extensions.bazaar.info&&j.extensions.bazaar.info.input;process.stdout.write([r||"",i&&i.type,i&&i.toolName,i&&i.transport].join("|"))}catch{process.stdout.write("error")}})')
+case "$MCP_SUMMARY" in
+  "$W/mcp|mcp|research_evidence|streamable-http")
+    pass "MCP challenge declares the tool" "$MCP_SUMMARY" ;;
+  *)
+    fail "MCP challenge declares the tool" "$MCP_SUMMARY" ;;
+esac
+
+echo "=== the advertised terms match what is charged ==="
+# The Worker still serves /.well-known/x402 and the landing page, but the paywall
+# that charges runs in the backend. The two are separate configurations now, so
+# they can drift: a manifest that quotes a price or address the service does not
+# charge is worse than no manifest. The live 402 challenge is the authority.
+DRIFT=$(node -e '
+const W = "https://agent-evidence-api.thx93.workers.dev";
+const decode = (h) => JSON.parse(Buffer.from(h, "base64").toString("utf8"));
+const post = (u) => fetch(u, { method: "POST", headers: { "content-type": "application/json" },
+  body: JSON.stringify({ question: "q", urls: ["https://example.com"] }) });
+(async () => {
+  const [manifestRes, challengeRes] = await Promise.all([fetch(W + "/.well-known/x402"), post(W + "/v1/evidence")]);
+  const manifest = await manifestRes.json();
+  const charge = decode(challengeRes.headers.get("payment-required")).accepts[0];
+  const advertised = (manifest.resources || []).map((r) => (r.accepts || [])[0]).filter(Boolean);
+  if (advertised.length === 0) { console.log("manifest carries no accepts"); return; }
+  for (const a of advertised) {
+    for (const k of ["scheme", "network", "amount", "payTo", "asset"]) {
+      if (String(a[k]) !== String(charge[k])) { console.log(k + ": manifest=" + a[k] + " charged=" + charge[k]); return; }
+    }
+  }
+  console.log("agree");
+})().catch((e) => console.log("error: " + e.message));
+' 2>/dev/null)
+if [ "$DRIFT" = "agree" ]; then pass "manifest agrees with the live charge" "agree"; else fail "manifest agrees with the live charge" "$DRIFT"; fi
+
 echo "=== safe to charge ==="
 if (cd "$ROOT/buyer" && timeout 120 node verify-payment-path.mjs 2>/dev/null | grep -q 'PATH VERIFIED'); then
   pass "settlement simulated on-chain" "verified"

@@ -61,6 +61,18 @@ export interface AppConfig {
      * validator must all see the public address instead.
      */
     publicResourceUrl: string;
+    /**
+     * The PUBLIC url of the paid MCP route, i.e. `https://<host>/mcp`.
+     *
+     * The MCP paywall runs in the backend too now, so the same reasoning as
+     * `publicResourceUrl` applies - except that falling back to the request URL
+     * would advertise `http://127.0.0.1:8080/mcp` and a buyer or catalogue would
+     * index an unreachable address. When unset, it is derived from
+     * `publicResourceUrl` if that ends in `/v1/evidence`; otherwise it is empty
+     * and the route advertises the internal URL, which is a visible defect rather
+     * than a silent one.
+     */
+    publicMcpResourceUrl: string;
   };
 
   limits: ResourceLimits;
@@ -150,6 +162,24 @@ function optStr(name: string): string | undefined {
   return v === undefined || v === "" ? undefined : v;
 }
 
+/**
+ * The public MCP resource URL, given the public HTTP resource URL.
+ *
+ * The two paid routes are siblings on the same host, so a deployment that sets
+ * `X402_RESOURCE_URL=https://host/v1/evidence` almost always means
+ * `https://host/mcp` for the MCP route. Deriving it removes the failure mode
+ * where the HTTP challenge names the right host and the MCP challenge silently
+ * names `http://127.0.0.1:8080/mcp`. If the HTTP URL does not end in
+ * `/v1/evidence` there is nothing safe to infer, so the explicit variable is
+ * required and the value stays empty (the route then advertises the internal URL,
+ * which is a visible defect rather than a plausible-looking wrong one).
+ */
+export function deriveMcpResourceUrl(publicResourceUrl: string, explicit?: string): string {
+  if (explicit !== undefined) return explicit;
+  const base = publicResourceUrl.replace(/\/+$/, "");
+  return base.endsWith("/v1/evidence") ? `${base.slice(0, -"/v1/evidence".length)}/mcp` : "";
+}
+
 function int(name: string, fallback: number): number {
   const raw = process.env[name];
   if (raw === undefined || raw === "") return fallback;
@@ -189,7 +219,7 @@ export function loadConfig(): AppConfig {
 
   return {
     serviceName: str("SERVICE_NAME", "agent-evidence-api"),
-    serviceVersion: str("SERVICE_VERSION", "0.1.3"),
+    serviceVersion: str("SERVICE_VERSION", "0.1.4"),
     nodeEnv: str("NODE_ENV", "development"),
     logLevel: str("LOG_LEVEL", "info") as LogLevel,
 
@@ -210,6 +240,10 @@ export function loadConfig(): AppConfig {
       ...(optStr("CDP_API_KEY_SECRET") ? { cdpApiKeySecret: optStr("CDP_API_KEY_SECRET") } : {}),
       devBypassPayment: str("DEV_BYPASS_PAYMENT", "") === "true",
       publicResourceUrl: str("X402_RESOURCE_URL", ""),
+      publicMcpResourceUrl: deriveMcpResourceUrl(
+        str("X402_RESOURCE_URL", ""),
+        optStr("X402_MCP_RESOURCE_URL"),
+      ),
     },
 
     limits: loadLimits(),

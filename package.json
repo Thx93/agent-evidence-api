@@ -1,6 +1,6 @@
 {
   "name": "agent-evidence-api",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "type": "module",
   "description": "Evidence infrastructure for AI agents: MCP-native, x402-paid web evidence and claim verification.",

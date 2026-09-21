@@ -1,21 +1,16 @@
 {
-  // `@coinbase/cdp-sdk/x402` statically imports the OPTIONAL @x402/svm schemes.
-  // We use only its EVM facilitator client, and the SVM schemes are instantiated
-  // inside getCdpDefaultSchemes(), which this service never calls. Without these
-  // aliases the bundle fails to build and NO deployment is possible. See
-  // stubs/x402-svm.js for the full reasoning and the caveat.
-  "alias": {
-    "@x402/svm/exact/client": "./stubs/x402-svm.js",
-    "@x402/svm/exact/v1/client": "./stubs/x402-svm.js",
-    "@x402/svm/upto/client": "./stubs/x402-svm.js",
-    "@x402/svm/exact/server": "./stubs/x402-svm.js",
-    "@x402/svm/upto/server": "./stubs/x402-svm.js"
-  },
+  // NOTE: the `alias` block that stubbed @x402/svm is gone. It existed only
+  // because the CDP SDK was imported here for the payment gate, and this Worker
+  // no longer imports any x402 package: the paywall runs in the backend, where
+  // the CDP Facilitator can actually operate. If an x402 import is ever added
+  // back, expect six unresolved @x402/svm/* imports and re-read
+  // docs/market-analysis.md before treating that as a bundler problem.
 
   // Cloudflare Worker — the public edge.
-  // Responsibilities (SPEC section 13): x402 payment gating, basic request
-  // validation, forwarding authorised requests to the backend, MCP endpoint,
-  // health/capabilities. No heavy extraction or reasoning happens here.
+  // Responsibilities (SPEC section 13): request shape validation, forwarding
+  // authorised requests to the backend, MCP endpoint, health/capabilities.
+  // Payment enforcement is NOT here; see the header comment in src/index.ts.
+  // No heavy extraction or reasoning happens here.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "agent-evidence-api",
   "main": "src/index.ts",
@@ -30,6 +25,14 @@
   // from `wrangler secret put BACKEND_AUTH_SECRET`. Putting it here would commit
   // it to the repository.
   //
+  // The payment vars below are DISPLAY-ONLY. They are read by the landing page,
+  // the `GET /` capability document and `/.well-known/x402`; the paywall that
+  // actually charges runs in the backend and reads its own environment. They must
+  // be kept in step with the backend by hand — the live 402 challenge is the
+  // authority, and `scripts/check-readiness.sh` compares the two, because a
+  // manifest that advertises a price the service does not charge is worse than no
+  // manifest.
+  //
   // NOTE: wrangler does NOT inherit top-level `vars` into a named environment.
   // Every var the Worker reads is repeated in each env block below; omitting one
   // yields `undefined` with only a warning, not an error.
@@ -39,7 +42,8 @@
     "X402_NETWORK": "eip155:8453",
 
     // PUBLIC receiving address only — no private key is ever needed to receive.
-    // Placeholder: set the real production wallet before deploying.
+    // This is the production wallet; the backend holds the same value and is what
+    // actually receives.
     "X402_RECIPIENT": "0x9c0e2B44180439294Fa30Ae2B2a94f8655455FD0",
 
     "X402_FACILITATOR_URL": "https://facilitator.payai.network",
@@ -51,32 +55,26 @@
   },
 
   "env": {
-    // Local development: payment bypassed so the pipeline can be exercised
-    // without testnet funds. Activated with `wrangler dev --env dev`.
+    // Local development. Activated with `wrangler dev --env dev`.
     //
-    // The X402_RECIPIENT below is a THROWAWAY Base Sepolia testnet address used
-    // only for local/testnet development. It is not a production wallet and no
-    // private key for it exists in this repository (receiving needs only a
-    // public address). It is deliberately NOT the production value: the
-    // top-level configuration keeps a zero-address placeholder so a production
-    // deploy cannot silently reuse a testnet recipient. Replace it with your
-    // own testnet address if you prefer; production must set its own.
+    // The payment bypass is NO LONGER a Worker variable: the paywall runs in the
+    // backend, so the bypass is the backend's `DEV_BYPASS_PAYMENT=true` (which
+    // also requires a non-mainnet X402_NETWORK). Setting it here does nothing.
+    //
+    // X402_RECIPIENT is display-only here (see the note above). Never point any of
+    // it at a wallet holding real value when X402_NETWORK is a testnet.
     "dev": {
       "vars": {
         "X402_NETWORK": "eip155:84532",
         "X402_RECIPIENT": "0x9c0e2B44180439294Fa30Ae2B2a94f8655455FD0",
         "X402_FACILITATOR_URL": "https://facilitator.payai.network",
         "X402_PRICE_USD": "0.003",
-        "BACKEND_ORIGIN_URL": "http://127.0.0.1:8080",
-        "DEV_BYPASS_PAYMENT": "true"
+        "BACKEND_ORIGIN_URL": "http://127.0.0.1:8080"
       }
     },
 
     // Testnet integration: payment IS required, backend is local. This is the
     // environment the automated x402 tests target.
-    //
-    // Same throwaway Base Sepolia testnet recipient as `dev` (see the note
-    // there). Never point this at a wallet holding real value.
     "test": {
       "vars": {
         "X402_NETWORK": "eip155:84532",

@@ -378,12 +378,15 @@ workspace.
   layering rule of §6 in practice. Tool input schemas are generated from the same
   zod shapes via `z.toJSONSchema`.
 - `apps/backend` — the Fastify service: fail-closed startup, constant-time
-  shared-secret verification, `GET /health`, `POST /internal/v1/evidence`, and
-  all three MCP verbs.
-- `apps/worker` — the full edge: x402 gate, free `/health` and `/`
-  capabilities, `POST /v1/evidence` forwarding, MCP body inspection and
-  forwarding, dev bypass with mainnet guard, error envelope, not-found and
-  on-error handlers.
+  shared-secret verification, **the x402 paywall for both paid routes** (HTTP and
+  MCP), `GET /health`, `POST /internal/v1/evidence`, and all three MCP verbs. The
+  MCP gate is a `preHandler` because the free/paid decision needs the parsed
+  JSON-RPC body; see `apps/backend/src/mcp-paywall.ts`.
+- `apps/worker` — the public edge, now a **proxy**: free `/health` and `/`
+  capabilities, `POST /v1/evidence` and all MCP verbs forwarded with the origin
+  secret, the MCP body size cap, the origin-health precheck, the error envelope,
+  and not-found / on-error handlers. It contains no x402 code: the CDP Facilitator
+  cannot run on Workers at all, and the CDP Bazaar is the catalogue that matters.
 - `docker/` — a multi-stage `Dockerfile`, a single-service `docker-compose.yml`,
   separate production (mainnet) and development (testnet) env templates, and a
   root `.dockerignore`.

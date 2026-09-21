@@ -585,3 +585,95 @@ The state to keep in mind: **the HTTP route is on the CDP Facilitator and catalo
 the MCP route still gates at the edge on the generic facilitator.** Any future attempt
 should start by confirming that the adapter can see a request body in its hook, because
 this one cannot.
+
+---
+
+# Resolved: the MCP gate moved to the backend
+
+The paragraph above ends with "the MCP route still gates at the edge on the generic
+facilitator". It no longer does. The MCP paywall runs in the backend, next to the HTTP
+one, and `apps/worker` contains no x402 code at all.
+
+## The mechanism that works, and why the previous one could not
+
+The earlier attempt used `@x402/fastify`'s middleware, whose `onRequest` hook runs
+before Fastify parses the body. The decision needs the JSON-RPC method, so it cannot be
+made there. Replacing the hook was never going to work; the *hook point* was wrong.
+
+The MCP gate is now a Fastify **`preHandler`**, where `req.body` is parsed, driving
+`x402HTTPResourceServer.processHTTPRequest` directly:
+
+```
+preHandler:  body parsed  ->  needsMcpPayment(body)?  ->  processHTTPRequest()
+                                                          |-> payment-error  -> 402 challenge
+                                                          '-> payment-verified -> stash on request
+handler:     MCP transport writes into a capture buffer, not the socket
+              -> tool failed?  cancel settlement
+              '-> tool delivered? processSettlement() and flush
+```
+
+Three details are load-bearing:
+
+- **The free decision is per request, not per route.** `initialize`, `tools/list`,
+  `ping` and the free `health` tool are checked before the facilitator is touched at
+  all. A free request needing a facilitator round-trip would make the tool invisible
+  whenever the facilitator is down, which is the opposite of what discovery needs. A
+  test asserts the stub facilitator sees **zero** calls for `tools/list`.
+- **The response is buffered.** The MCP route hijacks the reply and hands the raw
+  socket to the transport, so Fastify's `onSend` — where the stock adapter settles —
+  never runs. `apps/backend/src/mcp-paywall.ts` captures `writeHead`/`write`/`end`, so
+  the settlement decision sees the status **and** the body. Without the body, every
+  `isError: true` tool result (HTTP 200) would still be charged, breaking the published
+  guarantee that nothing is charged when nothing is retrieved.
+- **Two `x402HTTPResourceServer` instances share one `x402ResourceServer`.** MCP needs
+  its own so the HTTP route's global `onRequest` hook never sees an MCP request. They
+  are initialized *sequentially*, because a concurrent pair interleaves `clear()` and
+  repopulate and the loser's route validation can observe an empty facilitator map and
+  abort startup.
+
+The Worker's edge gate, its `MCP_DISCOVERY` declaration, `needsPayment`,
+`cancelSettlementOnToolError`, the `@x402/svm` alias and the stub it pointed at are all
+deleted. The Worker still buffers the MCP body to enforce a cheap size cap and to forward
+the exact bytes, forwards `payment-signature` untouched, and proxies.
+
+## What is verified, and what is not
+
+Verified locally and in CI-style tests (`tests/e2e/mcp-paywall.test.ts`, 6 tests, real
+Fastify socket, deterministic stub facilitator):
+
+| check | result |
+|---|---|
+| `initialize` and `tools/list` free, facilitator never called | pass |
+| free `health` tool free | pass |
+| paid tool without payment -> 402 with the MCP bazaar declaration | pass |
+| challenge names the public `/mcp` URL, not the internal origin | pass |
+| verified payment -> tool served -> `/settle` called once | pass |
+| failed tool call -> **no** settlement | pass |
+
+Verified on the live service after deploy (`scripts/deploy-backend.sh`, then
+`scripts/check-readiness.sh`): MCP `tools/list` 200, paid tool 402, the challenge
+declares `type: mcp` / `toolName research_evidence` / `transport streamable-http` and
+the public `/mcp` address, the CDP validator still accepts the HTTP route, and the
+manifest agrees with the live charge.
+
+**Not yet claimed:** that the MCP route is now in the CDP Bazaar. The Bazaar is
+populated *per route by a settled payment*, so the `/mcp` entry appears only once a
+payment settles through the CDP Facilitator on that route. Until then its absence is
+expected, and the honest status is "gate moved, cataloguing pending a settlement".
+
+A useful side effect of the move: `usage.jsonl` and the MCP tool's `payment_provided`
+flag now mean a payment was **verified in this process**, rather than merely forwarded
+from the edge. They still do not mean money moved — see the note in `deployment.md`.
+
+## The related bug this exposed: the manifest can now drift
+
+While the Worker gated payment, its `/.well-known/x402` and the live 402 challenge were
+built from the same bindings and could not disagree. Now the Worker's copy is
+display-only and the backend is the authority, so they *can*. A manifest that advertises
+a price the service does not charge is worse than no manifest.
+
+`scripts/check-readiness.sh` now compares every `accepts` entry in the manifest against
+the live 402 challenge (`scheme`, `network`, `amount`, `payTo`, `asset`) and fails on any
+difference. That is a correctness check, not a fix: the two values are still entered in
+two places. The durable fix is to serve the manifest from the backend, which is a
+follow-up rather than part of this change.

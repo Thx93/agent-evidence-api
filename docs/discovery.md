@@ -15,15 +15,20 @@ Discovery here means three things in order of importance:
    sale; it produces a failed tool call, a wrong answer grounded in the wrong
    expectation, and a client that removes the server.
 
-> **Status.** Nothing has been published anywhere. The implementation is complete
-> and `pnpm typecheck` passes; `server.json` exists and is written against the
-> current official schema, and the publish procedure is documented in
-> [`registry-publication.md`](./registry-publication.md). SPEC §28 is explicit:
-> *"Do NOT automatically publish to the registry unless credentials and
-> authorization are explicitly available."* Prepare, validate, then publish by
-> hand. Read [§7 Before you publish](#7-before-you-publish) first — the endpoint is
-> not deployed and no on-chain payment has been demonstrated. The suites do pass
-> locally (199 tests plus two live smoke runs).
+> **Status.** Published and live. The service and its MCP server are deployed at
+> `https://agent-evidence-api.thx93.workers.dev`, listed in the CDP Bazaar (HTTP
+> route), PayAI's Bazaar (HTTP + MCP), agentic.market, the MCP Registry, Agent402,
+> 402 Index and glama.ai (owned, 4.3/5.0), and has passed every readiness check
+> (discoverable, gated, payable, safe to charge).
+>
+> **The open problem is not distribution.** Eight listings — one of them first place
+> for five of six buyer queries — have produced zero third-party customers. The
+> previously-open MCP gate has moved to the backend so the MCP route can be
+> catalogued too; that removes the last structural discovery defect, and the
+> sections below are honest about how little that is worth on its own. Read
+> [§7 Before you publish](#7-before-you-publish) and
+> [`market-analysis.md`](./market-analysis.md) before concluding that more listing
+> work is the answer.
 
 ---
 
@@ -697,7 +702,7 @@ this measures whether a listing is *findable*, which is a different thing.
 | MCP Registry | **server name only** | description unsearchable |
 | Agent402 | description | not in their top 5 |
 | glama.ai | crawls the MCP Registry | listed, healthy, 4.3/5.0 |
-| CDP Bazaar | description | **absent** — needs CDP credentials |
+| CDP Bazaar | exact name only — its search API ignores query params | **listed** (HTTP route, 2026-09-21); findable by enumeration, not by keyword |
 
 ## The Bazaar is the strong one
 
@@ -821,27 +826,49 @@ key with no value, which is consistent with zero recorded calls, but that is an
 inference from a serialised payload and not a measurement. The Admin tab is the
 first place in this project where real traffic, if any exists, can be observed.
 
-## Unchecked: three directories the official x402 README endorses
+## Checked: the three x402-README directories do not carry us, and the Bazaar does not reach them
 
-The x402 README's Ecosystem section lists community-maintained directories. Three of
-them have never been checked by this project:
+The previous version of this section said the status of these three directories was
+"unknown, not absent", because all three render client-side and a homepage grep proves
+nothing. That was correct, and it was then fixed properly: each was loaded in a real
+headless browser (Playwright/Chromium), each was searched through its own UI, and the
+HTTP endpoint its front-end actually calls was captured from live network traffic and
+queried directly. Measured 2026-09-21.
 
-- <https://x402scan.com>
-- <https://pay.sh>
-- <https://app.ampersend.ai/discover>
+| directory | data endpoint actually used | verdict |
+|---|---|---|
+| [x402scan.com](https://www.x402scan.com) | `POST /api/trpc/public.origins.search` + `public.resources.search` (tRPC batch) | **absent** |
+| [pay.sh](https://pay.sh) → `/api` | `GET https://pay.sh/api/catalog` | **absent** |
+| [app.ampersend.ai/discover](https://app.ampersend.ai/discover) | `GET /api/trpc/marketplace.list` (tRPC batch) | **absent** |
 
-**Status is unknown, not absent.** A search for `agent-evidence-api` in each homepage
-returns nothing, but all three render client-side, so a homepage grep proves nothing -
-and that is the same shallow check that made me report an expired Slack invite as
-"confirmed working". Their guessed API paths (`/api/resources`, `/api/services`,
-`/api/trpc/...`) all return 404, so the real data endpoint is still unidentified.
+The hard evidence, not the fuzzy search box:
 
-Whether a CDP Bazaar listing propagates to them automatically is also unverified.
-`x402scan` is known to index x402 catalogues, so it may already carry this service for
-all we can tell.
+- **x402scan** — `public.origins.search` returns `[]` for `thx93`,
+  `agent-evidence` and the full worker hostname. Its rendered search for `evidence`
+  returned unrelated services (`evidence.regulavita.com`, TempoChan, Agent Guild).
+- **pay.sh** — `GET /api/catalog` is a plain JSON document (74 providers,
+  snapshot dated 2026-09-01). `thx93`, `agent-evidence`, `workers.dev` and even
+  `evidence` each occur **zero** times. Its own directory search renders
+  "No services match these filters."
+- **ampersend** — `marketplace.list` returns 55 curated services; an empty search
+  returns all 55 and none is ours, and searching `evidence` or `thx93` returns `[]`.
+  The rendered page reads "No services match these filters."
 
-Next step, if pursued: load each in a real browser and search, or find the endpoint its
-front-end calls. Do not conclude anything from a `curl | grep`.
+**A CDP Bazaar listing does not propagate to any of them.** That was the open question,
+and it is now answered in the negative. x402scan auto-ingests *part* of the Bazaar — in
+a controlled sample of 100 CDP-Bazaar resources, 66 were also present in x402scan's
+origins table and 34 were not, and this service is in the missing 34. pay.sh is a dated
+curated catalogue with a "Get listed" submission path; ampersend is a curated
+marketplace whose `source` field reads `catalog`, not a Bazaar feed. Two of the three
+are therefore separate submissions, and the third is an incomplete mirror.
+
+Two honest caveats, both of which could change the answer: pay.sh's catalogue snapshot
+is dated 2026-09-01, so it lags; and x402scan's ingestion is demonstrably partial and
+may catch up. Neither is a reason to have skipped the check or to overstate the result.
+
+This is also the second time a "listing" has been confused with reach in this project's
+history. The correction is the same both times: the question is not whether a catalogue
+contains us, it is whether a *buyer* can arrive through it.
 
 ## Community channels: what actually exists
 
