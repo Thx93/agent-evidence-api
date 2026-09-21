@@ -113,6 +113,12 @@ duplicates.
 
 ---
 
+## For the full picture
+
+See [`ENGINEERING-REPORT.md`](./ENGINEERING-REPORT.md) — the §44 report, with the
+architecture, every verification command, x402 and MCP status, and an honest §42
+acceptance assessment (25 of 26 criteria met).
+
 ## What I could not do, and why
 
 - **Fund a wallet.** Needs money and a human.

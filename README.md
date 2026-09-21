@@ -75,6 +75,15 @@ Verified against the live deployment: a request whose sources all fail returns
 502 `NO_SOURCES_RETRIEVED`, and a request with one good source plus one dead one
 returns 200.
 
+## Engineering report
+
+**[docs/ENGINEERING-REPORT.md](./docs/ENGINEERING-REPORT.md)** — the report required
+by `SPEC.md` §44: what was built, the architecture, deployment and test commands,
+x402 and MCP status, registry readiness, remaining manual configuration, and known
+limitations. It states plainly what is **demonstrated** and what is not — including
+that no settlement has been exercised and that one §42 acceptance criterion is
+unmet. It does not claim the project is production ready.
+
 ## Actions only you can take
 
 **[docs/CHECKLIST.md](./docs/CHECKLIST.md)** — every remaining step that needs a
