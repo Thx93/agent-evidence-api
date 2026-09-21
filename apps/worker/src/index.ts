@@ -174,6 +174,11 @@ const HTTP_DISCOVERY = declareDiscoveryExtension({
 
 const MCP_DISCOVERY = declareDiscoveryExtension({
   toolName: "research_evidence",
+  // Optional in the SDK's type, but every MCP entry in the live x402 catalogue
+  // declares it, and it is accurate: this endpoint speaks streamable HTTP (the
+  // registry listing says so too). Without it the catalogue entry describes the
+  // tool but never says how to reach it.
+  transport: "streamable-http",
   description:
     "Fetch public web sources and return structured, cited web evidence for a question or claim.",
   inputSchema: {

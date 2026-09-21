@@ -458,3 +458,50 @@ curl -s "https://facilitator.payai.network/discovery/resources?limit=1000" \
 
 To check whether this service has been catalogued yet, search the pages for its
 resource URL. An entry appearing is proof a payment settled.
+
+## The catalogue is split by type, and the MCP side is nearly empty
+
+`/discovery/resources` filters on `type`:
+
+```bash
+curl -s "https://facilitator.payai.network/discovery/resources?type=mcp&limit=5"   # total: 33
+curl -s "https://facilitator.payai.network/discovery/resources?type=http&limit=5"  # total: 6567
+```
+
+**33 MCP tools against 6,567 HTTP endpoints.** Those are the two shelves this
+service could sit on, and they are not equally crowded.
+
+A service lands on the MCP shelf by declaring the MCP shape in its bazaar
+extension:
+
+```json
+"extensions": { "bazaar": { "info": { "input": {
+  "type": "mcp",
+  "toolName": "research_evidence",
+  "transport": "streamable-http",
+  "inputSchema": { ... }
+}}}}
+```
+
+The Worker declares this separately per route, so the two paid routes publish
+different shapes:
+
+| Route | Declares | Shelf |
+|---|---|---|
+| `POST /v1/evidence` | `type: "http"` + method + body example | ~6,567 |
+| `POST /mcp` | `type: "mcp"` + `toolName` + `transport` + `inputSchema` | ~33 |
+
+So once a payment settles, this service should appear on **both** — including the
+MCP shelf, where MCP-aware agents look and where there is far less to compete
+with.
+
+`transport` is optional in the SDK's type but present in every MCP entry that is
+actually catalogued, so it is declared. Without it the entry describes a tool but
+never says how to reach it. Verify what is published:
+
+```bash
+curl -sD - -o /dev/null -X POST https://agent-evidence-api.taher-h-alhaddad.workers.dev/mcp \
+  -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"research_evidence","arguments":{"question":"q","urls":["https://example.com"]}}}' \
+| grep -i '^payment-required:' | cut -d' ' -f2 | base64 -d | python3 -m json.tool | grep -A5 bazaar
+```
