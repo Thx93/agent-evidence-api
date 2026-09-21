@@ -124,17 +124,75 @@ before(async () => {
 });
 
 /** Run the CLI and capture both streams. */
-function runCli(url: string): Promise<{ code: number | null; out: string }> {
+function runCli(
+  url: string,
+  opts: { args?: string[]; env?: Record<string, string | undefined> } = {},
+): Promise<{ code: number | null; out: string }> {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [cliPath, "--url", url, "Is Rotamech a manufacturer?", "https://example.com/company"], {
-      env: { ...process.env, X402_PRIVATE_KEY: "0x" + "11".repeat(32) },
-    });
+    const env: Record<string, string | undefined> = {
+      ...process.env,
+      X402_PRIVATE_KEY: "0x" + "11".repeat(32),
+      ...(opts.env ?? {}),
+    };
+    for (const [k, v] of Object.entries(env)) if (v === undefined) delete env[k];
+
+    const child = spawn(
+      process.execPath,
+      [cliPath, ...(opts.args ?? ["--url", url, "Is Rotamech a manufacturer?", "https://example.com/company"])],
+      { env: env as NodeJS.ProcessEnv },
+    );
     let out = "";
     child.stdout.on("data", (d) => (out += String(d)));
     child.stderr.on("data", (d) => (out += String(d)));
     child.on("close", (code) => resolve({ code, out }));
   });
 }
+
+describe("first-run onboarding", () => {
+  test("with no wallet, the message says how to CREATE one, not just to set a variable", async () => {
+    // A mock is required because the client quotes the price before it looks for
+    // a key; without it the failure would be a connection error, not the
+    // onboarding message under test.
+    const mock = await startMock("ok");
+    const { code, out } = await runCli(mock.url, {
+      env: { X402_PRIVATE_KEY: undefined, X402_PRIVATE_KEY_FILE: undefined },
+    });
+    await mock.close();
+    assert.notEqual(code, 0);
+    // The gap this closes: the old message said "export X402_PRIVATE_KEY=0x..."
+    // without ever explaining where such a key comes from, so a first-time buyer
+    // was stuck at step zero.
+    assert.match(out, /randomBytes\(32\)/, "must show how to generate a key");
+    assert.match(out, /X402_PRIVATE_KEY_FILE/, "must offer the file option");
+    assert.match(out, /--address/, "must point at the way to fund a new wallet");
+  });
+
+  test("--address prints the address with NO network access at all", async () => {
+    // A wallet that cannot pay yet must still be able to learn its own address,
+    // so this must work even when the endpoint is down.
+    const { code, out } = await runCli("http://127.0.0.1:9/v1/evidence", {
+      args: ["--url", "http://127.0.0.1:9/v1/evidence", "--address"],
+    });
+    assert.equal(code, 0, `expected success, got ${code}: ${out.slice(0, 200)}`);
+    assert.match(out, /0x[0-9a-fA-F]{40}/, "must print an address");
+    assert.match(out, /Base network/, "must say which network to send on");
+    assert.match(out, /No ETH is needed/, "must pre-empt the gas question");
+  });
+
+  test("a key file is accepted and takes precedence over nothing", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "aee-key-"));
+    const keyFile = join(dir, "key");
+    await writeFile(keyFile, "0x" + "22".repeat(32) + "\n", "utf8");
+    const mock = await startMock("ok");
+    try {
+      const { code, out } = await runCli(mock.url, { env: { X402_PRIVATE_KEY: undefined, X402_PRIVATE_KEY_FILE: keyFile } });
+      assert.equal(code, 0, `key file should work: ${out.slice(0, 200)}`);
+      assert.equal(mock.paid(), 1);
+    } finally {
+      await mock.close();
+    }
+  });
+});
 
 describe("buyer CLI output", () => {
   test("a successful purchase renders the evidence and the settlement", async () => {

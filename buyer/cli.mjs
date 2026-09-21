@@ -10,15 +10,18 @@
  * retries automatically, then prints the evidence.
  *
  * Requirements: a wallet private key holding a little USDC on Base, supplied
- * through X402_PRIVATE_KEY. It is read from the environment only and is never
- * logged, printed, or written anywhere.
+ * through X402_PRIVATE_KEY or X402_PRIVATE_KEY_FILE. It is read only from there
+ * and is never logged, printed, or written anywhere.
  *
  * Options:
  *   --url <endpoint>   Override the endpoint (default: the public deployment)
  *   --max <usd>        Refuse to pay more than this per call (default 0.10)
  *   --json             Print the raw JSON response instead of a summary
  *   --dry-run          Show the quote without paying
+ *   --address          Print the wallet address and exit, so a fresh wallet can
+ *                      be funded before its first use
  */
+import { readFile } from "node:fs/promises";
 import { privateKeyToAccount } from "viem/accounts";
 import { createPublicClient, http, formatUnits } from "viem";
 import { base } from "viem/chains";
@@ -34,13 +37,14 @@ const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
 // --------------------------------------------------------------------- args
 const argv = process.argv.slice(2);
-const flags = { json: false, dryRun: false, url: DEFAULT_ENDPOINT, max: 0.1 };
+const flags = { json: false, dryRun: false, address: false, url: DEFAULT_ENDPOINT, max: 0.1 };
 const positional = [];
 
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   if (a === "--json") flags.json = true;
   else if (a === "--dry-run") flags.dryRun = true;
+  else if (a === "--address") flags.address = true;
   else if (a === "--url") flags.url = argv[++i] ?? DEFAULT_ENDPOINT;
   else if (a === "--max") flags.max = Number(argv[++i] ?? "0.1");
   else positional.push(a);
@@ -49,13 +53,50 @@ for (let i = 0; i < argv.length; i++) {
 const question = positional[0];
 const urls = positional.slice(1);
 
-if (!question) {
-  console.error(`usage: x402-evidence "<question>" [url ...] [--url <endpoint>] [--max <usd>] [--json] [--dry-run]
+if (!question && !flags.address) {
+  console.error(`usage: x402-evidence "<question>" [url ...] [--url <endpoint>] [--max <usd>] [--json] [--dry-run] [--address]
 
 example:
   npx @thx93/x402-evidence "Is Rotamech Industries a manufacturer of centrifugal pumps?" \\
       https://example.com/about https://example.com/products`);
   process.exit(2);
+}
+
+// ---- local-only mode ---------------------------------------------------------
+// Handled before any network call on purpose: the whole point is to obtain the
+// address of a wallet that cannot pay yet, which must work even when the
+// endpoint is down or the machine is offline.
+if (flags.address) {
+  const fromEnv = process.env.X402_PRIVATE_KEY;
+  const fromFile = process.env.X402_PRIVATE_KEY_FILE;
+  let k = fromEnv ?? null;
+  if (!k && fromFile) {
+    try {
+      k = (await readFile(fromFile, "utf8")).trim();
+    } catch (err) {
+      console.error(`\n  ✖ X402_PRIVATE_KEY_FILE could not be read: ${fromFile} (${err.code ?? "error"})\n`);
+      process.exit(1);
+    }
+  }
+  if (!k) {
+    console.error(`\n  ✖ --address needs X402_PRIVATE_KEY or X402_PRIVATE_KEY_FILE to be set.\n`);
+    process.exit(1);
+  }
+  if (!/^0x[0-9a-fA-F]{64}$/.test(k)) {
+    console.error("\n  ✖ the wallet key is not a 32-byte hex value starting with 0x.\n");
+    process.exit(1);
+  }
+  const acct = privateKeyToAccount(k);
+  console.log(`
+  Wallet address : ${acct.address}
+
+  Send USDC on the Base network to that address. Any amount works; this request
+  costs a few cents. No ETH is needed for gas — the facilitator submits the
+  payment.
+
+  Check the balance at https://basescan.org/address/${acct.address}
+`);
+  process.exit(0);
 }
 
 function fail(msg) {
@@ -109,18 +150,51 @@ if (flags.dryRun) {
 }
 
 // --------------------------------------------------------------- 2. the pay
-const key = process.env.X402_PRIVATE_KEY;
+// The key may come from the environment or from a file. A file is offered
+// because putting a private key on a command line leaks it into shell history
+// and into `ps` output for every user on the machine.
+let key = process.env.X402_PRIVATE_KEY;
+if (!key && process.env.X402_PRIVATE_KEY_FILE) {
+  const file = process.env.X402_PRIVATE_KEY_FILE;
+  try {
+    key = (await readFile(file, "utf8")).trim();
+  } catch (err) {
+    fail(`X402_PRIVATE_KEY_FILE could not be read: ${file} (${err.code ?? "error"})`);
+  }
+}
+
 if (!key) {
   fail(`no wallet key found.
 
-  Set X402_PRIVATE_KEY to a wallet private key holding a little USDC on Base:
+  This client needs a wallet holding a little USDC on Base. You have two options.
+
+  ── 1. Generate a dedicated wallet (recommended) ────────────────────────────
+
+      node -e "console.log('0x'+require('crypto').randomBytes(32).toString('hex'))" \
+        > ~/.x402-key && chmod 600 ~/.x402-key
+      export X402_PRIVATE_KEY_FILE=~/.x402-key
+
+  Then fund the address this prints:
+
+      node ${process.argv[1] ?? "buy.mjs"} --address
+
+  ── 2. Use an existing wallet ───────────────────────────────────────────────
 
       export X402_PRIVATE_KEY=0x...
 
-  The key is read from the environment only — never logged, stored, or sent
-  anywhere. Use a dedicated low-balance wallet.`);
+  Either way the key is read from the environment or a file and is never logged,
+  stored, or sent anywhere. Use a dedicated low-balance wallet — not a wallet
+  holding anything you care about.
+
+  You do NOT need ETH for gas: the facilitator submits the transaction.`);
 }
-if (!/^0x[0-9a-fA-F]{64}$/.test(key)) fail("X402_PRIVATE_KEY is not a 32-byte hex key");
+if (!/^0x[0-9a-fA-F]{64}$/.test(key)) {
+  fail(
+    "the wallet key is not a 32-byte hex value starting with 0x. Check for " +
+      "surrounding quotes or whitespace, and note that a mnemonic phrase is not " +
+      "accepted here — only a raw private key.",
+  );
+}
 
 const account = privateKeyToAccount(key);
 const publicClient = createPublicClient({ chain: base, transport: http() });

@@ -75,6 +75,11 @@ Verified against the live deployment: a request whose sources all fail returns
 502 `NO_SOURCES_RETRIEVED`, and a request with one good source plus one dead one
 returns 200.
 
+## Making the first sale
+
+See **[docs/FIRST-SALE.md](./docs/FIRST-SALE.md)** — the whole path from an empty
+wallet to a settled payment and a catalogue entry, in one page.
+
 ## How to see revenue
 
 Every request the backend serves on its internal route has already passed the
