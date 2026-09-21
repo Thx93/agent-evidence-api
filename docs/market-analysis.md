@@ -550,3 +550,38 @@ handshake while still charging for the paid tool.
 
 Eight listings, one of which is genuinely good at keyword discovery. That is worth
 stating plainly rather than counting the eight.
+
+## The MCP route cannot be gated this way, and here is exactly why
+
+The HTTP route moved to the backend and is catalogued in the CDP Bazaar. The obvious
+next step was to move the MCP route too, so `research_evidence` would appear in what
+the Bazaar MCP server enumerates. It was built, and it did not work.
+
+`x402HTTPResourceServer.onProtectedRequest` looked like the right mechanism: it can
+`grantAccess` for the free MCP handshake while still charging for the paid tool, by
+inspecting the parsed body through `ctx.adapter.getBody()`. The route config and the
+hook were wired, tests passed, and the deploy script caught the failure immediately:
+
+```
+MCP tools/list (free)  got 402, want 200
+```
+
+**The Fastify adapter registers `addHook("onRequest", ...)`.** `onRequest` runs before
+Fastify parses the body, so `getBody()` is empty inside the hook, `needsPayment(undefined)`
+returns true, and the free handshake is charged. The body is simply not available at the
+point where the decision has to be made.
+
+This is a limitation of the adapter's hook choice, not of the hook itself. Working
+around it would mean either parsing the body in an earlier hook and stashing it (the
+adapter would still read its own empty copy), or moving the free/paid decision back to
+the edge for MCP only - which is where it already is.
+
+**Reverted.** The uncommitted work was discarded and the previous image rebuilt and
+redeployed, because the alternative was leaving a service that charges for `tools/list`.
+Verified after: MCP `tools/list` 200, paid tool 402, HTTP paywall 402, manifest serving,
+CDP validator accepted, settlement path verified.
+
+The state to keep in mind: **the HTTP route is on the CDP Facilitator and catalogued;
+the MCP route still gates at the edge on the generic facilitator.** Any future attempt
+should start by confirming that the adapter can see a request body in its hook, because
+this one cannot.
