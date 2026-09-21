@@ -103,3 +103,63 @@ since the messages were sent minutes earlier.
 No bulk email, no purchased lists, no disposable-email account farming, no automated
 signups on platforms whose rules forbid it, and no unsubstantiated claims to
 prospects. Every number in every message is reproducible from this repository.
+
+---
+
+## The X attempt (2026-09-21, after the email batch)
+
+Credentials: the operator's `@leq6ah` session, read from
+`/root/.agent-reach/config.yaml` (`twitter_auth_token`, `twitter_ct0`) and used with
+the `twitter` CLI. `export TWITTER_AUTH_TOKEN=… TWITTER_CT0=…` is required in the
+same shell — the CLI does not read the config itself.
+
+**The account has 0 followers**, which decides the whole strategy: a standalone post
+reaches nobody (the one posted has 0 views), so the only reach available is
+**replies**, which notify the author and appear to everyone reading that thread.
+
+`twitter search` returns HTTP 404 — a known upstream breakage, documented in the
+skill's own reference as "可能不稳定 … 可能 404". Workaround: `twitter user-posts`,
+`twitter following` and `twitter tweet` (read a thread's replies) all work, so
+targets were found by walking the ecosystem's accounts and their reply threads
+rather than by searching.
+
+### Reach added
+
+A public landing page was deployed so the posts had somewhere to land:
+`https://agent-evidence-api.thx93.workers.dev/x402-market` (Worker version
+`313a3f18`). It carries the aggregate findings, the purchase terms ($25 USDC), and
+the two reproduce commands. Deliberately aggregated — it names no seller.
+
+| what | where | thread reach |
+|---|---|---|
+| standalone post | [2102111369042759927](https://x.com/i/status/2102111369042759927) | ~0 (0 followers) |
+| reply: "active buyers" is a loop metric too | [ax1vc, 9.7k views](https://x.com/i/status/2102111474827382944) | 9,729 |
+| reply: what agents actually pay for | [x402scan](https://x.com/i/status/2102111591374430467) | 1,407 |
+| reply: measure the demand side | [BlockRunAI](https://x.com/i/status/2102111629014163509) | 366 |
+| reply: rails vs buyers | [PayAI, 3.0k views](https://x.com/i/status/2102112010796495000) | 3,044 |
+| reply: settlement solved, demand not | [PayAI](https://x.com/i/status/2102111923454251288) | 1,967 |
+| reply: the same question from the chain | [PayAI](https://x.com/i/status/2102111951279255772) | 1,438 |
+
+All seven were verified **publicly visible** by reading the target threads back.
+The highest-reach reply sits in a PayAI thread that CoinDesk also replies to.
+
+Every reply is on-topic — the posts are about agent payments, x402 volume, or the
+"active buyers" ranking — and each carries a real number from this repository rather
+than a pitch. Replies to large announcement posts were deliberately avoided: an
+off-topic reply under a 685k-view post reads as spam and gets hidden.
+
+**No engagement yet** (0 views on the standalone post, no likes or replies on the
+replies at the time of writing). With a 0-follower account the realistic outcome is
+a handful of profile visits, so this is a low-probability channel that costs nothing
+to run — not a plan.
+
+### What would make X work
+
+1. **An account with an audience.** The current one has none, so every impression has
+   to be borrowed from someone else's thread. A 1,000-follower account posting the
+   same measurement would reach more than these six replies ever will.
+2. **A visible identity.** An Arabic deals account posting English x402 market data
+   is a poor signal. Renaming or a second account is the operator's call, not
+   something to do unilaterally to someone's existing handle.
+3. **The landing page indexed.** `x402-market` is a real, quotable artefact; it needs
+   a domain with history behind it to rank for anything.

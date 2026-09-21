@@ -276,6 +276,87 @@ there is no web search. Excerpts are short by design. Evidence, not truth.</p>
 </body></html>`;
 }
 
+/**
+ * The x402 market measurement, published.
+ *
+ * A data-driven post is only actionable if it has somewhere to land, and this is
+ * the one artefact this project has that nobody else had published at the time.
+ * Deliberately aggregated: it names no seller, because the point is the shape of
+ * the market rather than any individual's numbers.
+ */
+function marketReportHtml(): string {
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The x402 market, measured — 15,228 resources, median seller $0.08/month</title>
+<style>
+ body{max-width:44rem;margin:3rem auto;padding:0 1.25rem;font:16px/1.65 ui-sans-serif,system-ui,sans-serif;color-scheme:light dark}
+ h1{font-size:1.55rem;margin-bottom:.2rem}h2{font-size:1.05rem;margin-top:2rem}
+ table{border-collapse:collapse;font-size:.93rem;width:100%}td{padding:.3rem .8rem .3rem 0;vertical-align:top;border-bottom:1px solid rgba(127,127,127,.18)}
+ td:last-child{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+ code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+ pre{background:rgba(127,127,127,.12);padding:.85rem;border-radius:8px;overflow-x:auto;font-size:.85rem}
+ .sub{opacity:.72;margin-top:0}.big{font-weight:700}
+</style></head><body>
+
+<h1>The x402 market, measured</h1>
+<p class="sub">Whole catalogue, not a sample. 21 September 2026.</p>
+
+<p>Every x402 catalogue entry that publishes usage, paged in full, then checked
+on-chain. The published per-resource payer count overstates the market badly: one
+seller publishing ~70 routes behind a single payout address reported ~18,300
+payer-slots, while <strong>534 distinct wallets</strong> actually paid that address in
+seven days.</p>
+
+<h2>Thirty days</h2>
+<table>
+<tr><td>resources in the CDP Bazaar</td><td class="big">15,228</td></tr>
+<tr><td>distinct payout addresses (sellers)</td><td class="big">1,362</td></tr>
+<tr><td>sellers with more than ten buyers</td><td class="big">141</td></tr>
+<tr><td>sellers with more than a hundred buyers</td><td class="big">6</td></tr>
+<tr><td>volume</td><td>$869k organic</td></tr>
+<tr><td>median seller revenue</td><td class="big">$0.08</td></tr>
+<tr><td>top 10 sellers' share of volume</td><td class="big">78.9%</td></tr>
+</table>
+
+<h2>Seven days, verified from USDC transfers on Base</h2>
+<table>
+<tr><td>distinct wallets paying the top 15 sellers (76% of calls)</td><td>1,855</td></tr>
+<tr><td>union across the top 75 sellers (~80% of calls)</td><td class="big">2,764</td></tr>
+<tr><td>of those, wallets making 100+ payments</td><td>421 (22.7%)</td></tr>
+<tr><td>…and their share of all payments</td><td class="big">83.7%</td></tr>
+<tr><td>wallets paying both a content seller and an assessment seller</td><td>204</td></tr>
+<tr><td>wallets in the verification / evidence category</td><td class="big">228</td></tr>
+</table>
+
+<p>Read together: this is a few hundred agent loops, not a market. The single largest
+endpoint by call volume drew 326,493 calls from 183 wallets — about 1,800 calls per
+payer. Independent work reaches the same place: TRM Labs measured that only
+<strong>0.6–7.5%</strong> of screened x402 commerce is plausibly agentic.</p>
+
+<h2>Buy the data</h2>
+<p>The full dataset and method — the complete catalogue snapshot, distinct paying
+wallets per seller read from Base, and the analysis scripts — is
+<strong>$25 in USDC on Base</strong>:</p>
+<pre><code>0x9c0e2B44180439294Fa30Ae2B2a94f8655455FD0</code></pre>
+<p>Send it, then reply to whichever message brought you here with the transaction
+hash, and the data plus the scripts follow the same day. If you would rather not pay,
+ask and the summary tables are free.</p>
+
+<h2>Reproduce it</h2>
+<pre><code>node scripts/analyze-bazaar-demand.mjs --refresh   # pages all 15,228 resources
+node scripts/count-x402-payers.mjs &lt;payTo&gt; 7      # distinct wallets, from the chain</code></pre>
+<p>Both ship with the service's repository. The chain is the authority, not the
+catalogue's own counters.</p>
+
+<p><a href="/">Agent Evidence API</a> · <a href="/health?deep=1">status</a></p>
+</body></html>`;
+}
+
+app.get("/x402-market", (c) =>
+  c.html(marketReportHtml(), 200, { "cache-control": "public, max-age=600" }),
+);
+
 /** Capability description, so an agent can discover what this offers for free. */
 app.get("/", (c) => {
   // Content negotiation: browsers get a page a human can act on; agents (which
