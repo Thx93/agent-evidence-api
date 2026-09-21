@@ -820,3 +820,32 @@ authenticated Admin tab — the public page payload carries a `recentToolCallCou
 key with no value, which is consistent with zero recorded calls, but that is an
 inference from a serialised payload and not a measurement. The Admin tab is the
 first place in this project where real traffic, if any exists, can be observed.
+
+## Unchecked: three directories the official x402 README endorses
+
+The x402 README's Ecosystem section lists community-maintained directories. Three of
+them have never been checked by this project:
+
+- <https://x402scan.com>
+- <https://pay.sh>
+- <https://app.ampersend.ai/discover>
+
+**Status is unknown, not absent.** A search for `agent-evidence-api` in each homepage
+returns nothing, but all three render client-side, so a homepage grep proves nothing -
+and that is the same shallow check that made me report an expired Slack invite as
+"confirmed working". Their guessed API paths (`/api/resources`, `/api/services`,
+`/api/trpc/...`) all return 404, so the real data endpoint is still unidentified.
+
+Whether a CDP Bazaar listing propagates to them automatically is also unverified.
+`x402scan` is known to index x402 catalogues, so it may already carry this service for
+all we can tell.
+
+Next step, if pursued: load each in a real browser and search, or find the endpoint its
+front-end calls. Do not conclude anything from a `curl | grep`.
+
+## Community channels: what actually exists
+
+- **x402 Slack** - the only community channel. No GitHub Discussions (disabled on both
+  `x402-foundation/x402` and `coinbase/x402`), no forum, no Telegram.
+- **GitHub Issues** - open on `x402-foundation/x402`; suitable for defects, not for a
+  launch post.
