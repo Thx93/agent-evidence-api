@@ -1,5 +1,17 @@
 # What the x402 market actually pays for
 
+> **Correction, 2026-09-21.** The measurements in this file came from a 500-entry
+> sample of a 15,213-entry catalogue, and two of its conclusions do not survive the
+> full read. "Verification is 1% of search" was a sampling artifact, and "retrieval
+> has 1,649 distinct payers" was a sum of per-resource payer counts, which counts
+> the same wallet once per route. The full-catalogue measurement, with wallet counts
+> verified on-chain, is in [`buyer-pool.md`](./buyer-pool.md). Its headline: the
+> entire paying population for the sellers that take 80% of x402's call volume is
+> **2,764 distinct wallets in a week**, the retrieval pool is a strict subset of it
+> (zero new wallets), and the evidence-shaped pool is **228 wallets**. The
+> recommendations below about price and framing still stand; the idea that a
+> different positioning reaches a *larger* pool does not.
+
 Measured 2026-09-21 from Coinbase's CDP Bazaar
 (`https://api.cdp.coinbase.com/platform/v2/x402/discovery/resources`), which is
 the one catalogue that publishes **real usage**: every entry carries
@@ -22,13 +34,23 @@ anywhere in the ecosystem, and it does not flatter this service.
 | **verification** | **22** | **833** | **302** |
 | social | 8 | 182 | 97 |
 
-**Verification is 1% of search by call volume**: 833 calls across 22 services in
-thirty days, roughly **1.3 calls per service per day**. And most of those 22 are
-false matches — liquidation maps, marine charts and token registries matched on the
-word "verified" or "evidence" appearing in unrelated copy.
+**Verification looked like 1% of search by call volume** — 833 calls across 22
+services in thirty days, roughly 1.3 calls per service per day — and most of those
+22 were false matches: liquidation maps, marine charts and token registries matched
+on the word "verified" or "evidence" appearing in unrelated copy.
+
+That was the sample. The full catalogue contains 2,115 resources whose own text
+matches verification-ish words, with 17,760 calls in thirty days, so the *category*
+is not 1% of search. What is 1% — or less — is the part of it a stranger would call
+this product's job: with the token-verdict outlier removed, the eleven busiest
+evidence-shaped sellers were paid by **228 distinct wallets in a week**, and two of
+those wallets produced 69% of the payments. See
+[`buyer-pool.md`](./buyer-pool.md).
 
 The market pays for **finding things** (search) and **fetching things**
-(retrieval). It does not visibly pay for adjudicating them.
+(retrieval). It does not visibly pay for adjudicating them — and the full read shows
+it does not pay for much else in volume either: 1,362 payout addresses, 141 with
+more than ten buyers, and 76% of all calls going to ten sellers.
 
 ## Our price band is the weakest of the five
 
@@ -73,8 +95,15 @@ Three honest options, in descending order of how much I would recommend them:
 fetch and extract content, and it returns something the commodity extractors do
 not: a content hash, a retrieval timestamp and an assessment per source. "Content
 retrieval with provenance" is accurate and sits in the category with the most
-distinct payers in the ecosystem (1,649). It requires dropping the price by 10× and
-leading with retrieval language rather than verification language.
+distinct payers in the ecosystem. It requires dropping the price by 10× and leading
+with retrieval language rather than verification language.
+
+> **Amended by [`buyer-pool.md`](./buyer-pool.md).** The 1,649 figure was a sum of
+> per-route payer counts and overstated the pool. Measured on-chain, the top 15
+> retrieval/search sellers were paid by **932 distinct wallets in a week — every one
+> of them also a buyer from the wider top 75 sellers, i.e. zero new wallets.** So
+> this option may still be right on price and framing, but it is not a route to a
+> larger buyer pool. There isn't one.
 
 **2. Find a genuinely scarce angle and charge properly for it.** The ≥$0.10 band
 averages 22 payers per service — worse than the cheap band but better than ours.

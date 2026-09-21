@@ -876,3 +876,13 @@ contains us, it is whether a *buyer* can arrive through it.
   `x402-foundation/x402` and `coinbase/x402`), no forum, no Telegram.
 - **GitHub Issues** - open on `x402-foundation/x402`; suitable for defects, not for a
   launch post.
+
+## The question behind all of this: how many buyers are there?
+
+Every listing in this document is a route to a buyer. [`buyer-pool.md`](./buyer-pool.md)
+measures how many buyers there are to route to, from the whole catalogue rather than a
+sample, with wallet counts verified on-chain. The short version: **2,764 distinct
+wallets** paid the 75 sellers that take ~80% of x402's call volume in a week, the
+retrieval pool is a strict subset of them, and the evidence-shaped pool is 228. There
+is no larger pool of this kind of buyer to find, which is why more listing work is not
+the lever it looks like.
