@@ -161,12 +161,13 @@ docker logs aee-live 2>&1 | grep 'extension responses'
 
 `processing` means CDP accepted the declaration; it does not mean the entry is live.
 Observed 2026-09-21: after an MCP settlement, `type=mcp` still returned one unrelated
-entry and the full catalogue (15,211 resources) still held only the `/v1/evidence`
-entry, ~15 minutes later. Two explanations remain open — indexing latency, or an
-unstated shape requirement for MCP entries. The one catalogued MCP entry uses a
-per-tool `resource` fragment (`https://mcp.memestack.ai/mcp#generate_meme#generate_meme`)
-where ours is the bare `/mcp`; that is the first thing to vary if it never appears.
-Varying it costs another settlement, so decide deliberately rather than repeatedly.
+entry ~35 minutes later, and in that same window the full catalogue grew from 15,209
+to 15,215 resources — CDP was indexing other entries while ours did not appear. That
+makes "general latency" a weak explanation and an MCP-specific requirement the
+stronger one. The single catalogued MCP entry uses a per-tool `resource` fragment
+(`https://mcp.memestack.ai/mcp#generate_meme#generate_meme`) where ours is the bare
+`/mcp`; that is the first thing to vary, and it costs another settlement, so decide
+deliberately rather than repeatedly.
 
 **PayAI shows the route but the manifest disagrees with the charge** — run
 `bash scripts/check-readiness.sh`. It compares the Worker's `/.well-known/x402`

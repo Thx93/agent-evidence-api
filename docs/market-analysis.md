@@ -699,13 +699,23 @@ is still the earlier HTTP settlement.
 
 So the honest status is: **gate moved, settlement verified on-chain, bazaar
 declaration accepted by the facilitator as "processing", catalogue entry not yet
-visible.** Cataloguing latency is the leading explanation and the one this document
-cannot rule out; the alternative is an unstated CDP requirement for MCP entries. The
-one MCP entry that is catalogued carries a `resource` of the form
-`https://mcp.memestack.ai/mcp#generate_meme#generate_meme` — a per-tool fragment — and
-ours is the bare `/mcp`, which is the shape to test first if it never appears. Testing
-it costs another settlement, so it is a decision for the operator rather than something
-to spend unilaterally.
+visible.**
+
+Two observations, roughly thirty-five minutes after the settlement:
+
+- The MCP shelf (`?type=mcp`) still holds exactly **one** entry, and it is not this
+  service.
+- The full catalogue grew from 15,209 to **15,215** resources in that window. CDP was
+  actively indexing other entries while ours did not appear, which weakens "general
+  indexing latency" as the explanation and points instead at something specific to
+  MCP routes.
+
+The one entry that *is* catalogued on the MCP shelf carries a `resource` of the form
+`https://mcp.memestack.ai/mcp#generate_meme#generate_meme` — a per-tool fragment —
+where ours is the bare `/mcp`. That is the shape to vary first, and varying it costs
+another settlement: a decision for the operator, not something to spend unilaterally.
+It is written down here rather than guessed at because the next attempt should start
+from this observation instead of from the identical-looking 402 challenge.
 
 **This is not a sale.** It is a catalogue entry, or the attempt at one. No third party
 has ever paid this service.
