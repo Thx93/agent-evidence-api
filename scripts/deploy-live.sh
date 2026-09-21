@@ -102,6 +102,25 @@ check "manifest" 200 "$PUBLIC_URL/.well-known/x402"
 check "MCP tools/list (free)" 200 "$PUBLIC_URL/mcp" \
   -X POST -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+# The MCP paywall lives in the backend now, but the guard stays here: this is the
+# buyer-visible outcome, and an earlier attempt at moving the gate charged the FREE
+# handshake above. Both directions are checked so neither can regress unnoticed.
+check "MCP paid tool gated" 402 "$PUBLIC_URL/mcp" \
+  -X POST -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"research_evidence","arguments":{"question":"q"}}}'
+
+# The MCP challenge has to name the PUBLIC /mcp address and declare the MCP tool
+# shape; that declaration is what the CDP Bazaar catalogues.
+MCP_CHALLENGE="$(curl -s -m 25 -D - -o /dev/null -X POST "$PUBLIC_URL/mcp" \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"research_evidence","arguments":{"question":"q"}}}' 2>/dev/null \
+  | grep -i '^payment-required:' | cut -d' ' -f2 | tr -d '\r' | base64 -d 2>/dev/null)"
+if printf '%s' "$MCP_CHALLENGE" | grep -q '"type":"mcp"' && printf '%s' "$MCP_CHALLENGE" | grep -q '/mcp"'; then
+  printf '  ✓ %-24s %s\n' "MCP challenge" "public /mcp, declares mcp"
+else
+  printf '  ✖ %-24s %s\n' "MCP challenge" "missing the public /mcp resource or the mcp declaration"
+  FAILED=1
+fi
 
 # The deep probe must report a reachable backend, not merely a live Worker.
 DEEP="$(curl -s -m 25 "$PUBLIC_URL/health?deep=1" 2>/dev/null)"

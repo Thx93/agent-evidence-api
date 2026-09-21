@@ -97,13 +97,13 @@ async function main(): Promise<void> {
     log_level: config.logLevel,
     cache_enabled: cache !== null,
     usage_log: config.usageLogPath || "off",
-    // Payment is enforced at the Cloudflare Worker, which holds the x402
-    // configuration. This process never sees or verifies a payment, so logging
-    // the x402 fields here reported the unset LOCAL defaults - it printed
-    // eip155:84532 (Base Sepolia) and recipient_configured:false for a service
-    // running on mainnet with a live recipient, which reads as a misconfigured
-    // payment layer and invites someone to "fix" it.
-    payment_boundary: "cloudflare-worker",
+    // Payment is enforced HERE, for both the HTTP route and the MCP route. The
+    // history is worth keeping: while the gate was at the edge this process never
+    // saw a payment and reported the unset LOCAL x402 defaults, which read as a
+    // misconfiguration and invited someone to "fix" it. Now the values are real,
+    // and `app.ts` logs the facilitator when the paywall is installed, which is
+    // where to look for the CDP-vs-generic selection.
+    payment_boundary: "backend",
     limits: config.limits,
   });
 
