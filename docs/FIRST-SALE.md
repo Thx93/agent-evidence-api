@@ -19,6 +19,14 @@ mechanism that makes this service discoverable to x402 buyers.
 | Payment goes to | `0x9c0e2B44180439294Fa30Ae2B2a94f8655455FD0` |
 | MCP endpoint | `…/mcp` (tool `research_evidence`) |
 | Buyer client | `…/buy.mjs` — one file, no install, no signup |
+| Service version | `0.1.4` (backend `agent-evidence-api-backend:0.1.4` in container `aee-live`) |
+| Settlements to date | **operator's own only** — 0.066 USDC, zero third-party customers |
+
+Read that last row as the point of this document rather than a footnote: the service
+is complete on every channel reachable from here, and no stranger has ever paid for
+it. A runbook cannot fix that. What follows is the one mechanism that turns a route
+into a catalogue entry; whether anyone then buys is a separate, unanswered question,
+and [`market-analysis.md`](./market-analysis.md) is the honest read on it.
 
 ---
 
@@ -54,9 +62,17 @@ more than enough. Two ways to get it:
 
 ## 2. Make the purchase
 
+The HTTP route:
+
 ```bash
 node buy.mjs "Is Rotamech Industries a manufacturer of centrifugal pumps?" \
   https://en.wikipedia.org/wiki/Centrifugal_pump
+```
+
+The MCP route — a **separate** catalogue entry, because x402 catalogues per route:
+
+```bash
+X402_PRIVATE_KEY_FILE=~/.x402-key node mcp-paid-client.mjs
 ```
 
 Expected output:
@@ -68,33 +84,46 @@ Assessment: SUPPORTED
    [direct] "<the passage that answers the question>"
 ```
 
-**Why this is not just a test.** The x402 discovery catalogue holds ~6,600
-services and has no submission endpoint — entries appear when a payment settles
-through a facilitator. Until one settles, this service is invisible to the buyers
-who browse x402 listings. This purchase is not a rehearsal for distribution; it
-*is* the distribution event.
+**Why this is not just a test.** The x402 discovery catalogue has no submission
+endpoint — an entry appears when a payment settles through a facilitator. Until one
+settles, the route is invisible to the buyers who browse x402 listings. This purchase
+is not a rehearsal for distribution; it *is* the distribution event. The HTTP entry
+was created this way, and the MCP entry only exists after the MCP call above.
 
 ---
 
 ## 3. Confirm you are now discoverable
 
+PayAI's catalogue (the one this service ranks first in):
+
 ```bash
 curl -s "https://facilitator.payai.network/discovery/resources?limit=1000" \
-| grep -c agent-evidence-api      # → 1 once catalogued
+| grep -c agent-evidence-api      # → 2 once both routes are catalogued
 ```
 
-And confirm the money moved, from the service side:
+Coinbase's CDP Bazaar (the one that reaches the Bazaar MCP server and
+agentic.market), and the whole catalogue rather than a page — the entry lands on the
+last page:
 
 ```bash
-docker exec aee-live sh -c "grep -c '"payment_provided":true' /app/data/usage.jsonl"   # → 1
+node scripts/check-cdp-bazaar.mjs
+# and the MCP shelf specifically:
+curl -s "https://api.cdp.coinbase.com/platform/v2/x402/discovery/resources?limit=100&type=mcp" \
+| node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j.pagination.total,"mcp entries");for(const e of j.items)console.log(" -",e.resource)})'
 ```
 
-The catalogue check is the one that matters for discovery. The usage-log number
-confirms a request carried a payment proof, which excludes operator and test
-traffic — but it is **not** proof the money moved: the facilitator settles *after*
-the backend responds. For the money itself, read the settlement transaction the
-client printed, or the recipient address on
+Confirm the money moved **on-chain**, not from the usage log:
+
+```bash
+docker exec aee-live sh -c "grep -c '"payment_provided":true' /app/data/usage.jsonl"
+```
+
+That count is not proof of payment: the facilitator settles *after* the backend
+responds, so the log line is written first. Read the settlement transaction the client
+printed, or the recipient balance on
 [basescan](https://basescan.org/address/0x9c0e2B44180439294Fa30Ae2B2a94f8655455FD0).
+`buyer/` has no balance helper; the reliable form is to read `asset` and `payTo` from
+the live 402 challenge rather than retyping an address.
 
 ---
 
@@ -122,7 +151,24 @@ the cause and re-running is safe.
 **"no wallet key found"** — the message now prints the exact commands to generate
 a wallet and to fund it.
 
-**Nothing appears in the catalogue** — cataloguing happens on settlement, which
-can lag. Re-check step 3 after a minute. If the payment shows in step 3 but not in
-the catalogue after several minutes, the facilitator did not record the bazaar
-extension; that is worth reporting to them with the transaction hash.
+**A route settled but does not appear in the CDP Bazaar.** Check the backend log for
+the facilitator's own answer:
+
+```bash
+docker logs aee-live 2>&1 | grep 'extension responses'
+# [x402] extension responses: {"bazaar":{"status":"processing"}}
+```
+
+`processing` means CDP accepted the declaration; it does not mean the entry is live.
+Observed 2026-09-21: after an MCP settlement, `type=mcp` still returned one unrelated
+entry and the full catalogue (15,211 resources) still held only the `/v1/evidence`
+entry, ~15 minutes later. Two explanations remain open — indexing latency, or an
+unstated shape requirement for MCP entries. The one catalogued MCP entry uses a
+per-tool `resource` fragment (`https://mcp.memestack.ai/mcp#generate_meme#generate_meme`)
+where ours is the bare `/mcp`; that is the first thing to vary if it never appears.
+Varying it costs another settlement, so decide deliberately rather than repeatedly.
+
+**PayAI shows the route but the manifest disagrees with the charge** — run
+`bash scripts/check-readiness.sh`. It compares the Worker's `/.well-known/x402`
+against the live 402 challenge and fails on any difference; the Worker's values are
+display-only and can drift.

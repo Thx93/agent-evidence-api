@@ -592,25 +592,27 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
    * Internal evidence endpoint.
    *
    * "Internal" in the sense that it requires the Worker's shared secret — it is
-   * not callable by customers. The public, x402-gated equivalent is
-   * POST /v1/evidence on the Worker.
+   * not callable by customers. It is also the route the x402 middleware above
+   * protects, so by the time this handler runs a payment has been verified. The
+   * public equivalent is `POST /v1/evidence` on the Worker, which proxies here.
    */
   app.post("/internal/v1/evidence", async (req: FastifyRequest, reply: FastifyReply) => {
     const requestId = String(req.id);
     const started = Date.now();
     const body = (req.body ?? {}) as { question?: unknown; urls?: unknown };
     const question = typeof body.question === "string" ? body.question : "";
-    // The Worker forwards the x402 proof, so this distinguishes a buyer's request
-    // from an operator or test call. It does NOT indicate settlement: the
-    // facilitator settles after this response. See usage-log.ts.
+    // The Worker forwards the x402 proof and the middleware above verified it, so
+    // this distinguishes a buyer's request from an operator or test call. It does
+    // NOT indicate settlement: the facilitator settles after this response. See
+    // usage-log.ts.
     const paymentProvided = Boolean(req.headers["payment-signature"]);
     const urlsRequested = Array.isArray(body.urls) ? body.urls.length : 0;
 
     try {
       const result = await service.execute(req.body, requestId);
 
-      // Reaching this point means the Worker's x402 gate already accepted a
-      // payment, so this is a revenue event.
+      // Reaching this point means the x402 middleware already accepted a payment
+      // for this route.
       await usage.record({
         ts: new Date().toISOString(),
         request_id: requestId,

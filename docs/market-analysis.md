@@ -656,10 +656,59 @@ declares `type: mcp` / `toolName research_evidence` / `transport streamable-http
 the public `/mcp` address, the CDP validator still accepts the HTTP route, and the
 manifest agrees with the live charge.
 
-**Not yet claimed:** that the MCP route is now in the CDP Bazaar. The Bazaar is
-populated *per route by a settled payment*, so the `/mcp` entry appears only once a
-payment settles through the CDP Facilitator on that route. Until then its absence is
-expected, and the honest status is "gate moved, cataloguing pending a settlement".
+### The MCP route settled on-chain through the CDP Facilitator
+
+One real MCP payment was made on 2026-09-21 to prove the gate moved, because the 402
+challenge looks identical whichever facilitator is behind it. This is the operator's
+own money, not a customer.
+
+`buyer/mcp-paid-client.mjs` ran `initialize` (free), `tools/list` (free), then
+`tools/call research_evidence` (paid): settlement transaction
+`0xe28786484108994064c758cdca32206951d6d62627a3cce3c3b43b953cba7dea`, 1.1 s,
+`isError: false`, assessment `supported`, 5 excerpts.
+
+Read from the live challenge's own `asset` and `payTo` (so neither could be mistyped),
+and confirmed against the transaction receipt:
+
+| wallet | before | after |
+|---|---|---|
+| seller `0x9c0e2B44…` | 0.063000 USDC | **0.066000** |
+| buyer `0xA048c543…` | 2.937000 USDC | **2.934000** |
+
+The receipt carries exactly one ERC-20 transfer log: `0.003000` USDC to the seller.
+Lifetime operator spend is now 0.066 USDC, all of it the operator's own.
+
+The backend's log records the facilitator's own answer to that settlement:
+
+```
+[x402] extension responses: {"bazaar":{"status":"processing"}}
+```
+
+That header comes back from the **CDP** Facilitator's `/settle` — an independent
+confirmation, beyond the configuration line `facilitator: "cdp"`, that the settlement
+travelled the CDP path and that the bazaar catalogue accepted the declaration for
+processing.
+
+### Not yet confirmed: the Bazaar's MCP entry
+
+The MCP shelf is checked directly —
+`GET /platform/v2/x402/discovery/resources?type=mcp` — and at the time of writing it
+holds **exactly one** entry, which is not this service. The whole catalogue (15,211
+resources across 61 pages) contains only the `/v1/evidence` entry, whose `lastUpdated`
+is still the earlier HTTP settlement.
+
+So the honest status is: **gate moved, settlement verified on-chain, bazaar
+declaration accepted by the facilitator as "processing", catalogue entry not yet
+visible.** Cataloguing latency is the leading explanation and the one this document
+cannot rule out; the alternative is an unstated CDP requirement for MCP entries. The
+one MCP entry that is catalogued carries a `resource` of the form
+`https://mcp.memestack.ai/mcp#generate_meme#generate_meme` — a per-tool fragment — and
+ours is the bare `/mcp`, which is the shape to test first if it never appears. Testing
+it costs another settlement, so it is a decision for the operator rather than something
+to spend unilaterally.
+
+**This is not a sale.** It is a catalogue entry, or the attempt at one. No third party
+has ever paid this service.
 
 A useful side effect of the move: `usage.jsonl` and the MCP tool's `payment_provided`
 flag now mean a payment was **verified in this process**, rather than merely forwarded
