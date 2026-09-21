@@ -129,3 +129,84 @@ for e in json.load(sys.stdin)['items'][:10]:
           (e.get('resource') or '')[:60])
 "
 ```
+
+---
+
+# The channel that actually matters — and we are not in it
+
+Everything above is about competing in a market. This is about being in one at all.
+
+## The CDP Bazaar is where the volume is
+
+Coinbase's own documentation is blunt about what the Bazaar reaches:
+
+> *"Getting discovered makes your endpoint available to **tens of thousands of
+> agents** through CDP APIs, the **Bazaar MCP server**, and **Amazon Bedrock
+> AgentCore**, and to people browsing **agentic.market**. The x402 Bazaar lists
+> more than **23,000 x402 resources**."*
+
+**This service is not in it.** Verified by sampling 500 of its entries: zero
+occurrences. It is listed in the PayAI facilitator catalogue, in the MCP Registry,
+in Agent402's index and in 402 Index — but not in the largest catalogue of all,
+and not in the one that feeds Amazon Bedrock.
+
+## Why not, and what it costs to fix
+
+The Bazaar is populated through the **CDP Facilitator**, not through the open
+catalogue. We settle through PayAI's facilitator, so our routes are invisible to it.
+
+The CDP Facilitator is:
+
+| | |
+|---|---|
+| Cost | **Free for the first 1,000 onchain transactions per month**, then $0.001 each |
+| Extras | OFAC and Know-Your-Transaction screening on every settlement |
+| Requirement | A Coinbase CDP account and an **API key ID + secret** |
+
+This service has processed **two** payments in its life. The free tier is 1,000 a
+month.
+
+## It is already wired — it needs two environment variables
+
+The Worker now selects its facilitator from credentials:
+
+```ts
+const useCdp = Boolean(env.CDP_API_KEY_ID && env.CDP_API_KEY_SECRET);
+const facilitator = useCdp
+  ? createCdpFacilitatorClient({ apiKeyId, apiKeySecret })   // -> CDP, and the Bazaar
+  : new HTTPFacilitatorClient({ url: env.X402_FACILITATOR_URL }); // -> PayAI, today
+```
+
+Both are an `HTTPFacilitatorClient`, so nothing downstream changes. **Without the
+credentials the behaviour is byte-for-byte what it was** — verified after deploying:
+same 402, same challenge, same settlement simulation.
+
+To switch settlements to CDP and become eligible for the Bazaar:
+
+1. Create a Coinbase CDP account and an API key (free):
+   <https://docs.cdp.coinbase.com/x402/seller/quickstart>
+2. Add both values as Worker secrets — **never in the repository**:
+
+   ```bash
+   cd apps/worker
+   wrangler secret put CDP_API_KEY_ID
+   wrangler secret put CDP_API_KEY_SECRET
+   wrangler deploy
+   ```
+3. Confirm the switch took effect and then confirm the listing appears:
+
+   ```bash
+   curl -s "https://api.cdp.coinbase.com/platform/v2/x402/discovery/resources?limit=100" \
+   | grep -c agent-evidence-api     # 0 today, 1 once the Bazaar picks it up
+   ```
+
+## Which recommendation this changes
+
+The three options earlier in this document assumed we were competing inside a
+market we could already reach. We are not. **Entering the CDP Bazaar is a
+prerequisite for every one of them**, it costs nothing at our volume, and it is
+gated only on two credentials that take a few minutes to create.
+
+I would do this before repricing, before more directory submissions, and before
+any further positioning work — because none of it is visible to the agents that
+matter until this is done.

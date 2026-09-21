@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { HTTPFacilitatorClient } from "@x402/core/server";
+import { createCdpFacilitatorClient } from "@coinbase/cdp-sdk/x402";
 import { declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import type { Context, MiddlewareHandler } from "hono";
 import type { Network } from "@x402/core/types";
@@ -30,6 +31,15 @@ export interface Env {
   X402_NETWORK: string;
   X402_RECIPIENT: string;
   X402_FACILITATOR_URL: string;
+  /**
+   * Coinbase CDP credentials. Setting both switches settlement to the CDP
+   * Facilitator, which is the only route into the CDP Bazaar - the largest x402
+   * catalogue, reaching the Bazaar MCP server, Amazon Bedrock AgentCore and
+   * agentic.market. Absent, the service settles through X402_FACILITATOR_URL as
+   * before, so this changes nothing until credentials exist.
+   */
+  CDP_API_KEY_ID?: string;
+  CDP_API_KEY_SECRET?: string;
   X402_PRICE_USD: string;
   BACKEND_ORIGIN_URL: string;
   /** Secret. Set via `wrangler secret put BACKEND_AUTH_SECRET`. */
@@ -251,11 +261,28 @@ function paymentGate(env: Env, routeKey: string): MiddlewareHandler {
     env.X402_NETWORK,
     env.X402_PRICE_USD,
     env.X402_FACILITATOR_URL,
+    // Credentials present or not selects a different facilitator, so it belongs
+    // in the cache key or a config change would keep serving the old gate.
+    env.CDP_API_KEY_ID ? "cdp" : "http",
   ].join("|");
 
   if (cachedGate && cachedKey === key) return cachedGate;
 
-  const facilitator = new HTTPFacilitatorClient({ url: env.X402_FACILITATOR_URL });
+  // CDP when configured, the existing HTTP facilitator otherwise. Both are an
+  // HTTPFacilitatorClient, so the resource server below is unchanged either way.
+  //
+  // The CDP Facilitator is what gets an endpoint into the CDP Bazaar: "Your path
+  // to joining the most comprehensive marketplace for x402 endpoints", reaching
+  // tens of thousands of agents through the Bazaar MCP server and Amazon Bedrock
+  // AgentCore. It is free for the first 1,000 onchain transactions per month,
+  // then $0.001 each - more headroom than this service has ever used.
+  const useCdp = Boolean(env.CDP_API_KEY_ID && env.CDP_API_KEY_SECRET);
+  const facilitator = useCdp
+    ? createCdpFacilitatorClient({
+        apiKeyId: env.CDP_API_KEY_ID,
+        apiKeySecret: env.CDP_API_KEY_SECRET,
+      })
+    : new HTTPFacilitatorClient({ url: env.X402_FACILITATOR_URL });
   const resourceServer = new x402ResourceServer(facilitator).register(
     env.X402_NETWORK as Network,
     new ExactEvmScheme(),
