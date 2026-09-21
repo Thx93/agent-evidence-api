@@ -267,3 +267,23 @@ Checklist — every box must be true before publishing:
 | `Invalid or expired Registry JWT token` | Re-run `mcp-publisher login github`. |
 | `Registry validation failed for package` | Only relevant when a `packages` entry exists; this server declares none. |
 | Validation fails on the remote URL | The URL is still a placeholder or is not publicly reachable. Deploy first (see [SPEC section 31](../SPEC.md)). |
+
+## The registry API is intermittently flaky
+
+Observed 2026-09-21: the same query returned an **empty response body** on one
+attempt and the correct payload on the next, seconds apart. The listing itself was
+never affected — a direct fetch of the versioned endpoint confirmed
+`io.github.Thx93/agent-evidence-api 0.1.1 status=active` throughout.
+
+This matters for anyone scripting a health check: `curl -s ... | grep -q <something>`
+reports a false failure when the body is empty, because an empty body is not the
+same as a missing listing. Retry, and confirm against the versioned endpoint:
+
+```bash
+# flaky: an empty body looks like a failure
+curl -s "https://registry.modelcontextprotocol.io/v0.1/servers?search=agent-evidence-api" | grep -q agent-evidence-api
+
+# reliable: names the version, and a non-200 is unambiguous
+curl -s -o /dev/null -w '%{http_code}\n' \
+  "https://registry.modelcontextprotocol.io/v0.1/servers/io.github.Thx93%2Fagent-evidence-api/versions/0.1.1"
+```
