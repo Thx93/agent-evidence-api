@@ -75,6 +75,12 @@ Verified against the live deployment: a request whose sources all fail returns
 502 `NO_SOURCES_RETRIEVED`, and a request with one good source plus one dead one
 returns 200.
 
+## Actions only you can take
+
+**[docs/CHECKLIST.md](./docs/CHECKLIST.md)** — every remaining step that needs a
+human: the first payment, confirming the catalogue listing, posting, and the
+decisions I deliberately left to you. Everything else is done.
+
 ## Making the first sale
 
 See **[docs/FIRST-SALE.md](./docs/FIRST-SALE.md)** — the whole path from an empty
