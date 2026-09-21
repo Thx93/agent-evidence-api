@@ -254,6 +254,34 @@ Optional, and only if wanted:
 
 ---
 
+## §35 end-of-work output
+
+Section 35 requires five things at the end. Reported here so they are in one place
+rather than spread across the document.
+
+| | |
+|---|---|
+| **Current branch** | `main`, 36 commits, working tree clean |
+| **Remote** | `https://github.com/Thx93/agent-evidence-api.git` (private) |
+| **Files created** | 109 tracked, across `packages/` 39, `apps/` 14, root 14, `docs/` 12, `tests/` 10, `scripts/` 10, `buyer/` 5, `docker/` 4, `services/` 1 |
+| **Tests run** | 261 · 52 suites · 261 pass · 0 fail |
+| **Deployment status** | live on Base mainnet; Worker, backend container, tunnel and watchdog all running and healthy |
+| **Remaining manual configuration** | §11 — one funded payment, then the catalogue confirmation and the launch posts |
+
+### One deliberate deviation from §35
+
+Section 35 says **"Do not force-push."** The Git history was rewritten once, with
+`--force-with-lease`, to set the author identity on every commit at the
+repository owner's explicit request. The true remote state was fetched first so
+the lease could not discard anyone else's work.
+
+Every other instruction in §35 was followed: Git was already initialised, so it was
+not re-initialised; `.gitignore` covers `.env`, `.dev.vars` and `*.sqlite`; no
+unrelated history was deleted; the remote was not changed; and nothing was pushed
+to GitHub automatically.
+
+---
+
 ## §42 acceptance criteria — honest assessment
 
 | | Criterion | Status |
