@@ -653,3 +653,30 @@ The published descriptions now cover 12 of the 13 forms a buyer is likely to typ
 The missing one is the bare verb `cite` — the least likely query form, and working
 it in would read as stuffing rather than description. Leaving it is a deliberate
 choice, not an oversight.
+
+### Multi-word queries are an AND of tokens, order-independent
+
+Established by querying the same words in both orders:
+
+| Query | Results |
+|---|---:|
+| `cited evidence` | 1 |
+| `evidence cited` | 1 |
+| `claim verification` | 4 |
+| `verification claim` | 4 |
+
+Reversing the word order gives an identical count every time, so the query is a
+**bag of tokens**, not a phrase. A multi-word search matches anything containing all
+the words, in any order and not necessarily adjacent.
+
+Two practical consequences:
+
+1. **Word order and phrase contiguity do not matter.** Only which tokens are present.
+2. **Morphology still does** (see above): `verify` and `verification` remain separate
+   keys, so both forms must appear. That is the property worth checking, and the
+   token set is what to audit — not whether a particular bigram reads continuously.
+
+This is why the phrase-coverage checks for SPEC §10 and §29 are done on tokens. A
+description containing `cited` and `evidence` separately satisfies a buyer searching
+"cited evidence", and rewriting prose to place them adjacently would buy nothing and
+risk reading as keyword stuffing.
