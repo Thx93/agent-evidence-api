@@ -69,6 +69,7 @@ async function main(): Promise<void> {
     port: config.backendPort,
     log_level: config.logLevel,
     cache_enabled: cache !== null,
+    usage_log: config.usageLogPath || "off",
     x402_network: config.x402.network,
     // Presence only — the value itself is never logged.
     x402_recipient_configured: config.x402.recipient.length > 0,

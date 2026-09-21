@@ -491,6 +491,19 @@ variable list. Copy it to `.env` (gitignored) for local use.
 | `FETCH_USER_AGENT` | `AgentEvidenceAPI/0.1.0 (+https://example.invalid/bot)` | Clearly identifiable User-Agent (SPEC §19). Point the URL at a real page once you have a domain. |
 | `ROBOTS_POLICY` | `warn` | `ignore` \| `warn` \| `enforce`. Any other value makes startup fail. Enforced by `EvidenceService`: `ignore` never consults robots.txt, `warn` attaches a `ROBOTS_DISALLOWED` warning and proceeds, `enforce` refuses the source. |
 
+### Seeing revenue
+
+`USAGE_LOG_PATH` (default `./data/usage.jsonl`, i.e. `/app/data/usage.jsonl` in
+the container) is an append-only record where **one line == one settled
+payment**, because only the Worker's paid route reaches the backend. It sits on
+the data volume so it survives redeploys, which Docker logs do not.
+
+```bash
+docker exec aee-live wc -l < /app/data/usage.jsonl
+```
+
+Set `USAGE_LOG_PATH=off` to disable it.
+
 ### Verify the payment path before trusting it
 
 ```bash

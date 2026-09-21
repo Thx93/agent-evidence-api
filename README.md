@@ -1,4 +1,30 @@
 # Agent Evidence API
+## How to see revenue
+
+Every request the backend serves on its internal route has already passed the
+Worker's x402 gate, so **one line in the usage log equals one settled payment**.
+It is append-only on the data volume, so it survives container recreation and
+redeploys — unlike Docker logs.
+
+```bash
+docker exec aee-live cat /app/data/usage.jsonl            # the raw record
+docker exec aee-live wc -l < /app/data/usage.jsonl        # payments received
+```
+
+Each line carries the timestamp, request id, a salted hash of the question
+(never the text), how many sources were retrieved, how many evidence items came
+back, the assessment, and the server-side duration.
+
+```json
+{"ts":"2026-09-21T07:53:04.341Z","request_id":"req_2fcc…","question_hash":"725f50fca9fbe049",
+ "question_chars":32,"sources_requested":1,"sources_retrieved":1,"evidence_items":5,
+ "assessment":"supported","processing_ms":6,"outcome":"ok"}
+```
+
+For the on-chain side, the payment response carries a settlement transaction
+hash, and the recipient is `0x9c0e2B44180439294Fa30Ae2B2a94f8655455FD0` — check it
+on [basescan](https://basescan.org/address/0x9c0e2B44180439294Fa30Ae2B2a94f8655455FD0).
+
 ## Live deployment
 
 | | |

@@ -15,6 +15,7 @@ import {
 } from "@aee/core";
 import type { EvidenceMcpServer } from "@aee/mcp";
 import { extractCredential, isPublicPath, secretMatches } from "./auth.js";
+import { createUsageLog } from "./usage-log.js";
 import { createRateLimiter } from "./rate-limit.js";
 
 export interface BuildAppDeps {
@@ -69,6 +70,9 @@ export function clientKey(req: FastifyRequest): string {
  */
 export function buildApp(deps: BuildAppDeps): FastifyInstance {
   const { config, logger, service, mcp } = deps;
+
+  // One line per served request == one settled payment.
+  const usage = createUsageLog({ path: config.usageLogPath });
 
   const app = Fastify({
     // Trust no proxy headers by default; the Worker sets x-request-id itself.
@@ -175,10 +179,44 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
    */
   app.post("/internal/v1/evidence", async (req: FastifyRequest, reply: FastifyReply) => {
     const requestId = String(req.id);
+    const started = Date.now();
+    const body = (req.body ?? {}) as { question?: unknown; urls?: unknown };
+    const question = typeof body.question === "string" ? body.question : "";
+    const urlsRequested = Array.isArray(body.urls) ? body.urls.length : 0;
+
     try {
       const result = await service.execute(req.body, requestId);
+
+      // Reaching this point means the Worker's x402 gate already accepted a
+      // payment, so this is a revenue event.
+      await usage.record({
+        ts: new Date().toISOString(),
+        request_id: requestId,
+        question_hash: usage.hashQuestion(question),
+        question_chars: question.length,
+        sources_requested: urlsRequested,
+        sources_retrieved: result.sources.filter((s) => s.status === 200).length,
+        evidence_items: result.sources.reduce((n, s) => n + s.evidence.length, 0),
+        assessment: result.assessment.status,
+        processing_ms: result.processing_ms,
+        outcome: "ok",
+      });
+
       return reply.code(200).send(result);
     } catch (err) {
+      await usage.record({
+        ts: new Date().toISOString(),
+        request_id: requestId,
+        question_hash: usage.hashQuestion(question),
+        question_chars: question.length,
+        sources_requested: urlsRequested,
+        sources_retrieved: 0,
+        evidence_items: 0,
+        assessment: "n/a",
+        processing_ms: Date.now() - started,
+        outcome: "error",
+        error_code: err instanceof ServiceError ? err.code : "INTERNAL_ERROR",
+      });
       return sendServiceError(reply, err, requestId, logger);
     }
   });

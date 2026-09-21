@@ -47,6 +47,12 @@ export interface AppConfig {
     maxEntries: number;
   };
 
+  /**
+   * Append-only record of served (i.e. PAID) requests. Every line is a settled
+   * payment, so this is the revenue record. Empty or "off" disables it.
+   */
+  usageLogPath: string;
+
   fetch: {
     userAgent: string;
     robotsPolicy: "ignore" | "warn" | "enforce";
@@ -136,6 +142,8 @@ export function loadConfig(): AppConfig {
       path: str("CACHE_DB_PATH", "./data/cache.sqlite"),
       maxEntries: int("CACHE_MAX_ENTRIES", 5000),
     },
+
+    usageLogPath: str("USAGE_LOG_PATH", "./data/usage.jsonl"),
 
     fetch: {
       userAgent: str(

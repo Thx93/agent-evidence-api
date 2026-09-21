@@ -11,6 +11,7 @@
 process.env.NODE_ENV = "test";
 
 import { test, describe, before, after } from "node:test";
+import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 import { EvidenceService, createLogger, loadConfig } from "@aee/core";
 import type { EvidenceMcpServer } from "@aee/mcp";
@@ -23,6 +24,10 @@ const SECRET = "test-secret-value-that-is-long-enough";
 process.env.BACKEND_AUTH_SECRET = SECRET;
 process.env.ALLOW_LOOPBACK_FOR_TESTS = "true";
 process.env.CACHE_ENABLED = "false"; // cache behaviour is covered in packages/cache
+// Every request served on the internal route corresponds to a settled payment,
+// so the usage log is the revenue record. Point it at a scratch file.
+const USAGE_LOG = `/tmp/aee-usage-${process.pid}.jsonl`;
+process.env.USAGE_LOG_PATH = USAGE_LOG;
 process.env.LOG_LEVEL = "error";
 process.env.MAX_CONCURRENT_FETCHES = "4";
 
@@ -105,6 +110,37 @@ describe("origin protection", () => {
       "the CLI must not hard-code a private key",
     );
     assert.ok(body.includes("X402_PRIVATE_KEY"), "the CLI should read the key from the environment");
+  });
+
+  test("a served request is recorded in the usage log", async () => {
+    // The Worker gates this route with x402, so a 200 here means a payment was
+    // accepted. The log must capture that, and must NOT capture the question.
+    const secret = "SEKRIT-QUESTION-TEXT-do-not-log";
+    const res = await app.inject({
+      method: "POST",
+      url: "/internal/v1/evidence",
+      headers: { "x-backend-auth": SECRET },
+      payload: {
+        question: `${secret} manufacturer of centrifugal pumps?`,
+        urls: [`${fx.url}/company`],
+      },
+    });
+    assert.equal(res.statusCode, 200);
+
+    const raw = await readFile(USAGE_LOG, "utf8");
+    const lines = raw.trim().split("\n").filter(Boolean);
+    assert.ok(lines.length > 0, "the usage log should have at least one line");
+
+    const last = JSON.parse(lines[lines.length - 1] as string);
+    assert.equal(last.outcome, "ok");
+    assert.equal(last.assessment, "supported");
+    assert.ok(last.question_hash && last.question_hash.length === 16);
+    assert.ok(last.sources_retrieved >= 1);
+    assert.ok(typeof last.processing_ms === "number");
+    assert.ok(last.ts && Date.parse(last.ts) > 0);
+
+    // Privacy: the question text must never be written.
+    assert.ok(!raw.includes(secret), "the usage log must not contain the question text");
   });
 
   test("health is reachable without a credential and leaks nothing", async () => {
