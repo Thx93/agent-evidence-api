@@ -793,3 +793,30 @@ never be committed.
 
 **Do not remove this route.** Glama re-checks periodically, and ownership lapses if
 the file stops being discoverable; the usage reports lapse with it.
+
+### Claimed: 2026-09-21
+
+The HTTP challenge verified and the listing now reads **"Ownership verified"**
+publicly, with the "claim ownership" prompt gone and an **Admin** tab available to
+the operator. Status stayed Healthy (last tested 13:05 UTC) and the TDQS score is
+unchanged at **4.3/5.0 (A)** across 2 tools:
+
+| dimension | score | note |
+|---|---|---|
+| Disambiguation | 5/5 | "the two tools are completely distinct… no ambiguity" |
+| Completeness | 4/5 | covers the primary domain |
+| Behavior | 4/5 | |
+| Naming Consistency | 4/5 | "`health` is a bare noun; `research_evidence` is verb_noun" |
+| Tool Count | 3/5 | "only two tools… the set feels thin" |
+
+The two low scores are deliberately left alone. Raising Tool Count means adding a
+bare fetch or scrape tool, and SPEC section 1 says this is not a web scraper;
+renaming `health` to satisfy a naming convention that no agent consumes would churn
+a working tool for part of a point. A directory score is not worth a product
+boundary.
+
+**What claiming is actually for here: usage reports.** They are visible only in the
+authenticated Admin tab — the public page payload carries a `recentToolCallCount`
+key with no value, which is consistent with zero recorded calls, but that is an
+inference from a serialised payload and not a measurement. The Admin tab is the
+first place in this project where real traffic, if any exists, can be observed.
