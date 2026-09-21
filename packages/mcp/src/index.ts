@@ -52,10 +52,36 @@ export interface McpToolDefinition {
   inputSchema: unknown; // JSON Schema object
 }
 
+/**
+ * What the server reports after each paid tool call.
+ *
+ * The MCP path never touches the durable usage log - that is written by the HTTP
+ * route - so an MCP sale was invisible in the revenue record. This callback lets
+ * the caller record it without the MCP package knowing anything about storage.
+ *
+ * `question` is passed through for the caller to hash; it must never be logged.
+ */
+export interface McpToolCallSummary {
+  tool: string;
+  outcome: "ok" | "error";
+  requestId: string;
+  question: string;
+  sourcesRequested: number;
+  sourcesRetrieved: number;
+  evidenceItems: number;
+  assessment: string;
+  processingMs: number;
+  errorCode?: string;
+  /** The request carried a payment proof. Same rule as the HTTP route. */
+  paymentProvided: boolean;
+}
+
 export interface EvidenceMcpServerOptions {
   service: EvidenceService;
   logger: Logger;
   serviceVersion: string;
+  /** Called after a paid tool call. Never throws into the request path. */
+  onToolCall?: (summary: McpToolCallSummary) => void | Promise<void>;
 }
 
 export interface EvidenceMcpServer {
@@ -193,6 +219,22 @@ function textResult(payload: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(payload) }] };
 }
 
+/**
+ * Report a paid tool call, swallowing any failure: the buyer has already paid, so
+ * bookkeeping must never fail the request.
+ */
+async function reportToolCall(
+  opts: EvidenceMcpServerOptions,
+  summary: McpToolCallSummary,
+): Promise<void> {
+  if (!opts.onToolCall) return;
+  try {
+    await opts.onToolCall(summary);
+  } catch (err) {
+    opts.logger.warn("mcp usage report failed", { error: describeError(err) });
+  }
+}
+
 /** A tool error result carrying the canonical error envelope (SPEC section 22). */
 function errorResult(envelope: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(envelope) }], isError: true };
@@ -214,6 +256,7 @@ async function invokeTool(
   opts: EvidenceMcpServerOptions,
   name: string,
   rawArguments: Record<string, unknown> | undefined,
+  paymentProvided: boolean,
 ): Promise<CallToolResult> {
   const requestId = newRequestId();
   const startedAt = Date.now();
@@ -248,6 +291,18 @@ async function invokeTool(
         // assessment happens in this package (SPEC section 39).
         const response = await opts.service.execute(parsed.data, requestId);
         result = textResult(response);
+        await reportToolCall(opts, {
+          tool: name,
+          outcome: "ok",
+          requestId,
+          question: parsed.data.question,
+          sourcesRequested: parsed.data.urls?.length ?? 0,
+          sourcesRetrieved: response.sources.filter((s) => s.status === 200).length,
+          evidenceItems: response.sources.reduce((n, s) => n + s.evidence.length, 0),
+          assessment: response.assessment.status,
+          processingMs: response.processing_ms,
+          paymentProvided,
+        });
         fields["outcome"] = "ok";
         fields["assessment"] = response.assessment.status;
         fields["sources"] = response.sources.length;
@@ -256,6 +311,19 @@ async function invokeTool(
         if (err instanceof ServiceError) {
           const message = err.message.length > 0 ? err.message : undefined;
           result = errorResult(errorResponse(err.code, requestId, message, err.details));
+          await reportToolCall(opts, {
+            tool: name,
+            outcome: "error",
+            requestId,
+            question: parsed.data.question,
+            sourcesRequested: parsed.data.urls?.length ?? 0,
+            sourcesRetrieved: 0,
+            evidenceItems: 0,
+            assessment: "n/a",
+            processingMs: Date.now() - startedAt,
+            errorCode: err.code,
+            paymentProvided,
+          });
           fields["outcome"] = "service_error";
           fields["error_code"] = err.code;
         } else {
@@ -290,7 +358,7 @@ export function createEvidenceMcpServer(opts: EvidenceMcpServerOptions): Evidenc
   /** In-flight (server, transport) pairs; released when a response closes. */
   const active = new Set<{ server: Server; transport: StreamableHTTPServerTransport }>();
 
-  function buildProtocolServer(): Server {
+  function buildProtocolServer(paymentProvided: boolean): Server {
     const server = new Server(
       { name: SERVICE_NAME, version: opts.serviceVersion },
       { capabilities: { tools: {} }, instructions: SERVER_INSTRUCTIONS },
@@ -299,7 +367,7 @@ export function createEvidenceMcpServer(opts: EvidenceMcpServerOptions): Evidenc
     server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: wireTools() }));
 
     server.setRequestHandler(CallToolRequestSchema, (request) =>
-      invokeTool(opts, request.params.name, request.params.arguments),
+      invokeTool(opts, request.params.name, request.params.arguments, paymentProvided),
     );
 
     return server;
@@ -310,7 +378,12 @@ export function createEvidenceMcpServer(opts: EvidenceMcpServerOptions): Evidenc
     res: ServerResponse,
     parsedBody?: unknown,
   ): Promise<void> {
-    const server = buildProtocolServer();
+    // The Worker forwards the x402 proof on paid calls, so its presence is the
+    // signal - the same one the HTTP route uses. Without this the MCP path would
+    // report every tool call as paid, including operator and test calls, which is
+    // the false-positive corrected on the HTTP side.
+    const paymentProvided = Boolean(req.headers["payment-signature"]);
+    const server = buildProtocolServer(paymentProvided);
     const transport = new StreamableHTTPServerTransport({
       // No session id: stateless mode. The transport is single-use, so a new
       // one is created for every HTTP request.

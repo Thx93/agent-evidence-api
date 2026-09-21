@@ -16,6 +16,7 @@ import {
 } from "@aee/core";
 import { createEvidenceMcpServer, type EvidenceMcpServer } from "@aee/mcp";
 import { buildApp } from "./app.js";
+import { createUsageLog } from "./usage-log.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -55,12 +56,38 @@ async function main(): Promise<void> {
 
   // ---- core service + adapters -------------------------------------------
   const service = new EvidenceService({ config, logger, cache });
+
+  // Created here rather than inside the app so the MCP adapter can write to the
+  // SAME file. The HTTP route recorded its requests but the MCP route did not, so
+  // a sale made over MCP was invisible in the revenue record - visible only from
+  // the on-chain balance. Both routes now report to one log.
+  const usage = createUsageLog({ path: config.usageLogPath });
+
   const mcp: EvidenceMcpServer = createEvidenceMcpServer({
     service,
     logger,
     serviceVersion: config.serviceVersion,
+    onToolCall: async (call) => {
+      await usage.record({
+        ts: new Date().toISOString(),
+        request_id: call.requestId,
+        // The question text is never written - only this hash and its length.
+        question_hash: usage.hashQuestion(call.question),
+        question_chars: call.question.length,
+        sources_requested: call.sourcesRequested,
+        sources_retrieved: call.sourcesRetrieved,
+        evidence_items: call.evidenceItems,
+        assessment: call.assessment,
+        processing_ms: call.processingMs,
+        outcome: call.outcome,
+        ...(call.errorCode ? { error_code: call.errorCode } : {}),
+        // Taken from the request, not assumed: a direct operator call to the MCP
+        // route carries no proof and must not read as revenue.
+        payment_provided: call.paymentProvided,
+      });
+    },
   });
-  const app = buildApp({ config, logger, service, mcp });
+  const app = buildApp({ config, logger, service, mcp, usage });
 
   // ---- startup summary (no secrets) --------------------------------------
   logger.info("starting backend", {

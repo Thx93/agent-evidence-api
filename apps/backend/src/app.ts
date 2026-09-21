@@ -23,6 +23,8 @@ export interface BuildAppDeps {
   logger: Logger;
   service: EvidenceService;
   mcp: EvidenceMcpServer;
+  /** Shared with the MCP adapter so both routes write to one usage log. */
+  usage?: ReturnType<typeof createUsageLog>;
 }
 
 function newRequestId(): string {
@@ -74,7 +76,10 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
   // One line per served request. NOTE: a request carries a payment proof, but
   // settlement happens after this process responds, so these lines are not proof
   // of payment. See usage-log.ts.
-  const usage = createUsageLog({ path: config.usageLogPath });
+  //
+  // Injected when the caller also needs it - the MCP adapter reports its paid
+  // tool calls through the same instance, so both routes land in one file.
+  const usage = deps.usage ?? createUsageLog({ path: config.usageLogPath });
 
   const app = Fastify({
     // Trust no proxy headers by default; the Worker sets x-request-id itself.
