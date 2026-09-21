@@ -690,7 +690,11 @@ Cloudflare Worker (public edge)  →  protected origin  →  Docker container  �
 1. **Backend on the VPS.** A Node.js + Fastify service built from `docker/` and
    run with `docker compose`, with `restart: unless-stopped` and a persistent
    volume mounted at `/app/data` for the SQLite cache.
-2. **Cloudflare Worker.** `wrangler deploy` ships the production environment
+2. **Cloudflare Worker.** `bash scripts/deploy-live.sh` ships the production
+   environment, and refuses to report success unless the build exits cleanly, the
+   version ID actually changed, and the live service verifies from the outside.
+   (`wrangler deploy` alone pipes badly: `wrangler deploy | tail` exits 0 even when
+   the build fails, which hid a broken deploy twice.)
    (Base mainnet).
 3. **The shared secret.** `BACKEND_AUTH_SECRET` is deliberately absent from
    `wrangler.jsonc` so it can never be committed:

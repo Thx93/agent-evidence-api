@@ -108,7 +108,7 @@ bash scripts/check-load.sh               # holds under concurrency
 
 ```bash
 bash scripts/go-live.sh        # container + tunnel + origin wiring
-bash scripts/deploy-live.sh    # deploy the Worker at the current origin
+bash scripts/deploy-live.sh    # deploy AND verify the Worker (fails loudly)
 bash scripts/supervise.sh      # detached watchdog, every 5 minutes
 ```
 
