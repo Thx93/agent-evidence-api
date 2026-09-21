@@ -853,6 +853,34 @@ app.get("/.well-known/402index-verify.txt", (c) =>
   }),
 );
 
+/**
+ * glama.ai connector-ownership proof.
+ *
+ * Glama lists this MCP server (crawled from the official registry, scored 4.3/5.0)
+ * and lets the author claim it. Claiming is what unlocks usage reports - the only
+ * analytics available to us, and the only way to learn whether anyone is finding
+ * this at all.
+ *
+ * The claim is proven by serving this exact JSON on the connector's own origin.
+ * The token is NOT a secret: the whole scheme is that it is published at a public
+ * URL so Glama can fetch it. The other two methods are unavailable to us - the
+ * GitHub method needs a public repository (ours is private) and the DNS method needs
+ * a DNS zone (a workers.dev subdomain has none).
+ *
+ * DO NOT REMOVE THIS ROUTE. Glama re-checks periodically and ownership lapses if the
+ * file stops being discoverable; when it lapses the usage reports go with it.
+ */
+app.get("/.well-known/glama.json", (c) =>
+  c.json(
+    {
+      $schema: "https://glama.ai/mcp/schemas/connector.json",
+      claim: "glama_claim_Q_TR9WzmB7yGxCqFoVqs1uiNipCRlCsO",
+    },
+    200,
+    { "cache-control": "public, max-age=300" },
+  ),
+);
+
 app.get("/.well-known/x402", (c) => {
   const base = new URL(c.req.url).origin;
   return c.json(

@@ -766,3 +766,30 @@ Agent402's router — are both gated on credentials or on having customers alrea
 
 Four rounds of listing work have produced: four listings, one of them first place,
 and zero customers. The remaining levers are not listing quality.
+
+## glama.ai ownership: how it is verified, and what must not be removed
+
+Glama carries this MCP server (crawled from the official registry) and scores it
+4.3/5.0. Claiming it unlocks **usage reports** — the only analytics available to us,
+and the only way to find out whether anyone is finding this service at all.
+
+Ownership is proven by publishing an exact JSON document on the connector's own
+origin, at a URL Glama fetches:
+
+    https://agent-evidence-api.thx93.workers.dev/.well-known/glama.json
+
+Three methods exist; only one is available to this project:
+
+| method | requirement | usable |
+|---|---|---|
+| GitHub repo file | `glama.json` in the repo root, **public** repo | no — ours is private |
+| **HTTP challenge** | serve the token JSON at `/.well-known/glama.json` | **yes** |
+| DNS record | control of a DNS zone | no — `workers.dev` has none |
+
+The file is served by the Worker as a literal route. **The token is not a secret** —
+the entire scheme is that it is published publicly so Glama can read it — which is
+why committing it is correct rather than a leak. It is unlike an API key, which must
+never be committed.
+
+**Do not remove this route.** Glama re-checks periodically, and ownership lapses if
+the file stops being discoverable; the usage reports lapse with it.
