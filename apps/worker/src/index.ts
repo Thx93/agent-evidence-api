@@ -777,6 +777,24 @@ function acceptsEntry(env: Env, base: string): Record<string, unknown> {
 /** USDC on Base mainnet - the settlement asset (SPEC section 11). */
 const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
+/**
+ * Domain-ownership proof for 402 Index.
+ *
+ * They verify a domain by asking for a SHA-256 hash at this path - an HTTP
+ * challenge, not DNS, which matters because a workers.dev subdomain has no DNS
+ * zone we could add a TXT record to. A verified domain is ranked first in their
+ * directory, which is the only reason to bother.
+ *
+ * The file contains the HASH, never the token: the token is the ongoing
+ * credential for editing listings and is deliberately not in this repository.
+ */
+app.get("/.well-known/402index-verify.txt", (c) =>
+  c.text("f81447cf52c146a84aa6fb3f2ab6081216d1ff6b0508145e1f851c4455f7d300\n", 200, {
+    "content-type": "text/plain; charset=utf-8",
+    "cache-control": "public, max-age=300",
+  }),
+);
+
 app.get("/.well-known/x402", (c) => {
   const base = new URL(c.req.url).origin;
   return c.json(
