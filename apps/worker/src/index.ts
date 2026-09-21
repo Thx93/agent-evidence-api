@@ -337,9 +337,89 @@ app.get("/health", async (c) => {
   );
 });
 
+/** Human-facing landing page. Plain HTML, no dependencies, no tracking. */
+function landingHtml(env: Env): string {
+  const price = priceString(env.X402_PRICE_USD);
+  const net = env.X402_NETWORK === MAINNET ? "Base mainnet" : "Base Sepolia (testnet)";
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agent Evidence API — cited web evidence for AI agents</title>
+<style>
+ :root{color-scheme:light dark}
+ body{max-width:46rem;margin:3rem auto;padding:0 1.25rem;
+      font:16px/1.6 ui-sans-serif,system-ui,-apple-system,sans-serif}
+ h1{font-size:1.7rem;margin-bottom:.2rem} h2{font-size:1.05rem;margin-top:2rem}
+ .sub{opacity:.7;margin-top:0}
+ pre{background:rgba(127,127,127,.12);padding:.85rem;border-radius:8px;
+     overflow-x:auto;font-size:.86rem}
+ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+ .price{font-weight:700}
+ table{border-collapse:collapse;font-size:.92rem} td{padding:.25rem 1rem .25rem 0;vertical-align:top}
+ ul{padding-left:1.1rem}
+</style></head><body>
+
+<h1>Agent Evidence API</h1>
+<p class="sub">Cited, timestamped web evidence for AI agents. No account, no API key.</p>
+
+<p>Send a question and the public pages you want checked. You get back short
+quoted excerpts with their source URL, retrieval time and content hash, plus an
+explicit <code>supported</code> / <code>contradicted</code> / <code>mixed</code> /
+<code>inconclusive</code> assessment.</p>
+
+<p class="price">${price} USDC per request · ${net} · paid over HTTP 402 (x402)</p>
+
+<h2>See the paywall — no wallet needed</h2>
+<pre><code>curl -X POST ${"https://agent-evidence-api.taher-h-alhaddad.workers.dev"}/v1/evidence \
+  -H 'content-type: application/json' \
+  -d '{"question":"Is Rotamech a manufacturer of centrifugal pumps?","urls":["https://example.com"]}'</code></pre>
+<p>You get a <code>402</code> with the price and the payment address. Nothing is charged.</p>
+
+<h2>Buy something (zero install)</h2>
+<pre><code>curl -fsSL ${"https://agent-evidence-api.taher-h-alhaddad.workers.dev"}/buy.mjs -o buy.mjs
+X402_PRIVATE_KEY=0x... node buy.mjs "Is Rotamech a manufacturer of centrifugal pumps?" https://example.com</code></pre>
+<p>That is the whole setup. The key is read from your environment, used to sign one
+payment, and never sent to us.</p>
+
+<h2>Or use it as an MCP tool</h2>
+<pre><code>{ "mcpServers": { "evidence": {
+  "type": "streamable-http",
+  "url": "${"https://agent-evidence-api.taher-h-alhaddad.workers.dev"}/mcp" } } }</code></pre>
+<table>
+<tr><td><code>research_evidence</code></td><td>${price} — fetch sources, return cited evidence</td></tr>
+<tr><td><code>health</code></td><td>free</td></tr>
+<tr><td><code>initialize</code> / <code>tools/list</code></td><td>free, so an agent can look before it pays</td></tr>
+</table>
+
+<h2>What it does that a plain fetch does not</h2>
+<ul>
+ <li>Refuses private, loopback, link-local and cloud-metadata addresses — including
+     octal, decimal and hex IP encodings, and redirects into any of them.</li>
+ <li>Re-validates DNS <em>at connect time</em>, which is what defeats DNS rebinding.</li>
+ <li>Returns a citation, not an opinion: URL, final URL, retrieval timestamp, SHA-256.</li>
+ <li>Says <code>mixed</code> when sources disagree, and <code>inconclusive</code> when
+     the text does not clearly support or contradict.</li>
+</ul>
+
+<h2>Honest limitations</h2>
+<p>The assessment is deterministic lexical matching, not semantic reasoning. It
+never invents a fact and never emits a confidence score. You supply the URLs —
+there is no web search. Excerpts are short by design. Evidence, not truth.</p>
+
+<p><a href="/health?deep=1">status</a> · <a href="/buy.mjs">buyer CLI source</a> ·
+<a href="https://github.com/Thx93/agent-evidence-api">source</a></p>
+</body></html>`;
+}
+
 /** Capability description, so an agent can discover what this offers for free. */
-app.get("/", (c) =>
-  c.json({
+app.get("/", (c) => {
+  // Content negotiation: browsers get a page a human can act on; agents (which
+  // send Accept: application/json, or curl's */*) get the JSON contract.
+  const accept = c.req.header("accept") ?? "";
+  if (accept.includes("text/html")) {
+    return c.html(landingHtml(c.env));
+  }
+  return c.json({
     service: SERVICE_NAME,
     version: SERVICE_VERSION,
     description:
@@ -366,8 +446,8 @@ app.get("/", (c) =>
       recipient: c.env.X402_RECIPIENT,
       facilitator: c.env.X402_FACILITATOR_URL,
     },
-  }),
-);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // paid HTTP API
@@ -510,6 +590,13 @@ app.post("/mcp", async (c) => {
     contentType: "application/json",
   });
 });
+
+/**
+ * The zero-install buyer CLI. Free, public, and proxied from the origin so the
+ * Worker bundle stays small (the CLI is ~380 KB; inlining it here would bloat
+ * every deploy for no benefit).
+ */
+app.get("/buy.mjs", (c) => proxyToBackend(c, "/buy.mjs", { method: "GET" }));
 
 /** SSE stream for server-initiated messages. Free. */
 app.get("/mcp", (c) => proxyToBackend(c, "/mcp", { method: "GET" }));

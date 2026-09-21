@@ -42,7 +42,12 @@ export function extractCredential(headers: Record<string, unknown>): string | un
  * endpoint — requires the shared secret, because it is the Worker that owns
  * payment enforcement.
  */
-export const PUBLIC_PATHS = new Set(["/health"]);
+export const PUBLIC_PATHS = new Set([
+  "/health",
+  // The buyer CLI is meant to be downloaded by anyone; it contains no secrets
+  // (it reads the payer's own key from their environment).
+  "/buy.mjs",
+]);
 
 export function isPublicPath(path: string): boolean {
   return PUBLIC_PATHS.has(path);

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import {
   SERVICE_NAME,
@@ -144,6 +145,28 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
   );
 
   /**
+   * The zero-install buyer CLI.
+   *
+   * Served from here so a buyer needs no npm account and no install step:
+   *   curl -fsSL <public-url>/buy.mjs -o buy.mjs && node buy.mjs "question" https://src
+   *
+   * It is a build artifact (scripts/build-buyer.sh), read once at startup and
+   * held in memory. Public by design and contains no secrets.
+   */
+  app.get("/buy.mjs", async (_req, reply) => {
+    const cli = loadBuyerCli();
+    if (!cli) {
+      return reply
+        .code(503)
+        .send(errorResponse("NOT_CONFIGURED", "buyer-cli", "The buyer CLI is not bundled in this image."));
+    }
+    return reply
+      .header("content-type", "text/javascript; charset=utf-8")
+      .header("cache-control", "public, max-age=300")
+      .send(cli);
+  });
+
+  /**
    * Internal evidence endpoint.
    *
    * "Internal" in the sense that it requires the Worker's shared secret — it is
@@ -215,6 +238,18 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
   });
 
   return app;
+}
+
+/** Read the bundled buyer CLI once and keep it in memory. */
+let buyerCliCache: string | null | undefined;
+function loadBuyerCli(): string | null {
+  if (buyerCliCache !== undefined) return buyerCliCache;
+  try {
+    buyerCliCache = readFileSync(new URL("../public/x402-evidence.mjs", import.meta.url), "utf8");
+  } catch {
+    buyerCliCache = null;
+  }
+  return buyerCliCache;
 }
 
 /** Map a thrown error onto the canonical error envelope. */

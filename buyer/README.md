@@ -4,10 +4,19 @@
 
 No account. No API key. No signup. No subscription. One command, one payment, one answer.
 
+**Nothing to install** — the service serves this client as a single self-contained file:
+
 ```bash
+curl -fsSL https://agent-evidence-api.taher-h-alhaddad.workers.dev/buy.mjs -o buy.mjs
 export X402_PRIVATE_KEY=0x...        # a wallet holding a little USDC on Base
-npx @thx93/x402-evidence "Is Company X a manufacturer of centrifugal pumps?" \
+node buy.mjs "Is Company X a manufacturer of centrifugal pumps?" \
     https://company.example/about https://company.example/products
+```
+
+Or, if you prefer npm:
+
+```bash
+npx @thx93/x402-evidence "your question" https://source.example
 ```
 
 ## What you get back

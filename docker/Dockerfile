@@ -80,6 +80,8 @@ RUN pnpm install --frozen-lockfile \
 COPY tsconfig.base.json tsconfig.json ./
 COPY apps/backend/tsconfig.json apps/backend/tsconfig.json
 COPY apps/backend/src apps/backend/src
+# The bundled buyer CLI served at /buy.mjs (see scripts/build-buyer.sh).
+COPY apps/backend/public apps/backend/public
 COPY packages/schemas/tsconfig.json packages/schemas/tsconfig.json
 COPY packages/schemas/src packages/schemas/src
 COPY packages/cache/tsconfig.json packages/cache/tsconfig.json
@@ -145,6 +147,9 @@ RUN groupadd --system --gid 10001 aee \
 COPY --from=build --chown=aee:aee /prod/backend/package.json ./package.json
 COPY --from=build --chown=aee:aee /prod/backend/dist ./dist
 COPY --from=build --chown=aee:aee /prod/backend/node_modules ./node_modules
+# The zero-install buyer CLI served at /buy.mjs. It is read from
+# ../public relative to dist/server.js, so it must sit alongside them.
+COPY --from=build --chown=aee:aee /repo/apps/backend/public ./public
 
 USER aee
 

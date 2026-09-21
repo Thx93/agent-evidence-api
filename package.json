@@ -19,7 +19,8 @@
     "fixtures": "node --import tsx tests/fixtures/server.ts",
     "dev:backend": "pnpm --filter @aee/backend dev",
     "dev:worker": "pnpm --filter @aee/worker dev",
-    "validate": "pnpm typecheck && pnpm test"
+    "validate": "pnpm typecheck && pnpm test",
+    "build:buyer": "bash scripts/build-buyer.sh"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

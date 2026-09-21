@@ -86,6 +86,27 @@ describe("origin protection", () => {
     assert.equal(res.statusCode, 401);
   });
 
+  test("the buyer CLI is downloadable without a credential", async () => {
+    // This is the zero-install purchase path: a buyer with no npm account
+    // fetches one file and runs it. It must be public and must not 401.
+    const res = await app.inject({ method: "GET", url: "/buy.mjs" });
+    assert.equal(res.statusCode, 200);
+    assert.match(res.headers["content-type"] as string, /javascript/);
+    const body = res.body;
+    assert.ok(body.length > 1000, "the bundled CLI should not be empty");
+    // It must never embed the origin secret, nor hard-code a wallet key.
+    assert.ok(!body.includes(SECRET), "the CLI must not contain the origin secret");
+    // Note: a naive /0x[0-9a-fA-F]{64}/ would false-positive here — the bundle
+    // legitimately contains viem's secp256k1 field prime and compiled contract
+    // bytecode. What must never appear is a key ASSIGNED as a literal; the CLI
+    // is required to read it from the environment.
+    assert.ok(
+      !/PRIVATE_KEY["'\s]*[:=]["'\s]*0x[0-9a-fA-F]{64}/.test(body),
+      "the CLI must not hard-code a private key",
+    );
+    assert.ok(body.includes("X402_PRIVATE_KEY"), "the CLI should read the key from the environment");
+  });
+
   test("health is reachable without a credential and leaks nothing", async () => {
     const res = await app.inject({ method: "GET", url: "/health" });
     assert.equal(res.statusCode, 200);

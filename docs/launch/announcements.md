@@ -23,7 +23,7 @@ Channel: `#showcase` or `#general` (http://slack.x402.org/)
 > SHA-256 of normalised content) and returns an explicit
 > `supported`/`contradicted`/`mixed`/`inconclusive` assessment.
 >
-> **Try it without writing any code:**
+> **See the paywall with no wallet at all:**
 > ```
 > curl -X POST https://agent-evidence-api.taher-h-alhaddad.workers.dev/v1/evidence \
 >   -H 'content-type: application/json' \
@@ -34,7 +34,12 @@ Channel: `#showcase` or `#general` (http://slack.x402.org/)
 > **Or as an MCP tool:** `https://agent-evidence-api.taher-h-alhaddad.workers.dev/mcp`
 > (`research_evidence` is paid, `initialize`/`tools/list`/`health` are free)
 >
-> **Buyer CLI:** `npx @thx93/x402-evidence "your question" https://a.com` *(publishing shortly)*
+> **Buy it with zero install** — one file, no npm account, no signup:
+> ```
+> curl -fsSL https://agent-evidence-api.taher-h-alhaddad.workers.dev/buy.mjs -o buy.mjs
+> X402_PRIVATE_KEY=0x... node buy.mjs "Is Rotamech a manufacturer of centrifugal pumps?" https://example.com
+> ```
+> It signs one USDC payment, retries, and prints the cited evidence.
 >
 > Two things I learned the hard way, in case they save anyone else time:
 > 1. The public x402.org facilitator is **testnet-only** — it advertises no

@@ -8,9 +8,17 @@
 | **Health** | [`/health`](https://agent-evidence-api.taher-h-alhaddad.workers.dev/health) · deep: [`/health?deep=1`](https://agent-evidence-api.taher-h-alhaddad.workers.dev/health?deep=1) |
 | **Registry** | `io.github.Thx93/agent-evidence-api` — published, status active |
 | **Payment** | x402, `exact`, **0.03 USDC** on Base mainnet (`eip155:8453`) |
-| **Buy it** | `npx @thx93/x402-evidence "your question" https://source.example` |
+| **Buy it** | zero install: `curl -fsSL .../buy.mjs -o buy.mjs && node buy.mjs "question" https://source.example` |
 
-Try the paywall with no wallet at all — this returns a 402 and charges nothing:
+Buy something with no npm account and nothing to install — the buyer CLI is a
+single self-contained file served by the service itself:
+
+```bash
+curl -fsSL https://agent-evidence-api.taher-h-alhaddad.workers.dev/buy.mjs -o buy.mjs
+X402_PRIVATE_KEY=0x... node buy.mjs "Is Rotamech a manufacturer of centrifugal pumps?" https://example.com
+```
+
+Or just look at the paywall first — this returns a 402 and charges nothing:
 
 ```bash
 curl -X POST https://agent-evidence-api.taher-h-alhaddad.workers.dev/v1/evidence \
