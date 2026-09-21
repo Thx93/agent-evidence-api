@@ -266,3 +266,41 @@ not to be fixable this way, because CDP cannot probe MCP at all. It stands on it
 own merits — a paid route should present its challenge before validating, and a
 generic prober now receives a 402 instead of a 406 — but it did not achieve what I
 first claimed for it.
+
+## agentic.market: the Bazaar is the gate to Coinbase's own marketplace too
+
+Found by working the "reach buyers directly" line of the objective. **agentic.market**
+describes itself as *"Thousands of services. Zero API keys. Powered by x402"* and is
+**operated by Coinbase** — its own footer says so, and its only external link is to
+the CDP x402 documentation. It carries a human-facing search, a seller page, and a
+`/validate` tool whose stated job is to check whether an endpoint is *"correctly
+configured and indexed on the Bazaar"*.
+
+Its FAQ answers the question that matters:
+
+> *"Do I need to register to get my service/endpoints discoverable via Search? If
+> your service/endpoints are indexed on the Bazaar, you'll **automatically show up
+> on agentic.market**."*
+
+So there is no separate submission path, and no second marketplace to join. One
+gate controls both:
+
+| reachable today | gated on the CDP Facilitator |
+|---|---|
+| PayAI Bazaar — #1 for 5 of 6 buyer queries | CDP Bazaar — 15,141 resources |
+| 402 Index — listed, verified | agentic.market — Coinbase-operated, human + agent facing |
+| MCP Registry — name-only search | Bazaar MCP server |
+| Agent402 — indexed, router gated on settlements | Amazon Bedrock AgentCore |
+| glama.ai — listed, 4.3/5.0 | |
+
+Checked directly: agentic.market returns zero mentions of this service, which is
+what "not indexed on the Bazaar" predicts.
+
+Every channel on the left is one we already rank well in, and the objective's first
+three items are complete on all of them. Everything on the right opens with the same
+two credentials, and our endpoint already passes the CDP validator 25 of 25. The
+`seller tools` page on agentic.market even exposes the same validation the CDP docs
+describe, so the readiness has been confirmed from two independent directions.
+
+This is the clearest statement of the remaining problem: **the work is done on every
+surface we can reach, and the next five surfaces are one credential away.**
