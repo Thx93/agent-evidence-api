@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { HTTPFacilitatorClient } from "@x402/core/server";
+import { declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import type { Context, MiddlewareHandler } from "hono";
 import type { Network } from "@x402/core/types";
 import {
@@ -76,6 +77,35 @@ function priceString(usd: string): string {
   return `$${n.toFixed(2)}`;
 }
 
+/**
+ * Cached origin health.
+ *
+ * Payment is verified BEFORE the request is proxied, so without this a buyer
+ * could pay for evidence and receive a 502 from a dead backend. We probe the
+ * origin first (10s cache, so it is not a fetch per request) and refuse the
+ * paid path outright when it is down.
+ */
+let originHealthCache: { ok: boolean; at: number } | null = null;
+const ORIGIN_HEALTH_TTL_MS = 10_000;
+
+async function originHealthy(env: Env): Promise<boolean> {
+  const now = Date.now();
+  if (originHealthCache && now - originHealthCache.at < ORIGIN_HEALTH_TTL_MS) {
+    return originHealthCache.ok;
+  }
+  let ok = false;
+  try {
+    const res = await fetch(new URL("/health", env.BACKEND_ORIGIN_URL).toString(), {
+      signal: AbortSignal.timeout(4_000),
+    });
+    ok = res.ok;
+  } catch {
+    ok = false;
+  }
+  originHealthCache = { ok, at: now };
+  return ok;
+}
+
 function newRequestId(): string {
   return `req_${crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`;
 }
@@ -83,6 +113,86 @@ function newRequestId(): string {
 // ---------------------------------------------------------------------------
 // x402 gate
 // ---------------------------------------------------------------------------
+
+/**
+ * Bazaar discovery declarations (x402's machine-readable catalog).
+ *
+ * A facilitator that implements the bazaar extension catalogs a route once a
+ * payment settles against it, which makes the endpoint discoverable through
+ * `/discovery/resources` to agents that have never heard of us. The declared
+ * input/output is what a prospective buyer sees BEFORE paying.
+ */
+const HTTP_DISCOVERY = declareDiscoveryExtension({
+  bodyType: "json",
+  input: {
+    question: "Is Company X a manufacturer of centrifugal pumps?",
+    urls: ["https://company.example/about", "https://company.example/products"],
+    max_sources: 5,
+    language: "auto",
+    mode: "evidence",
+  },
+  output: {
+    example: {
+      request_id: "req_1f2e3d4c5b6a7988",
+      version: "1",
+      question: "Is Company X a manufacturer of centrifugal pumps?",
+      assessment: {
+        status: "supported",
+        basis:
+          "1 source(s) contained passages matching the question (company.example) with no contradicting passages found.",
+      },
+      sources: [
+        {
+          requested_url: "https://company.example/about",
+          final_url: "https://company.example/about",
+          status: 200,
+          content_type: "text/html; charset=utf-8",
+          title: "Company X - About",
+          canonical_url: "https://company.example/about",
+          publisher: "Company X",
+          language: "en",
+          retrieved_at: "2026-01-01T00:00:00.000Z",
+          word_count: 412,
+          content_hash_sha256: "9f2c…",
+          evidence: [
+            {
+              excerpt: "Company X manufactures centrifugal pumps at its facility.",
+              context: "h2:Products > p[1]",
+              relevance: "direct",
+            },
+          ],
+          warnings: [],
+        },
+      ],
+      limitations: [
+        "Assessment is derived from deterministic lexical matching, not semantic reasoning.",
+      ],
+      processing_ms: 812,
+    },
+  },
+});
+
+const MCP_DISCOVERY = declareDiscoveryExtension({
+  toolName: "research_evidence",
+  description:
+    "Fetch public web sources and return structured, cited web evidence for a question or claim.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      question: { type: "string", minLength: 1, maxLength: 2000 },
+      urls: { type: "array", items: { type: "string" }, maxItems: 25 },
+      max_sources: { type: "integer", minimum: 1, maximum: 25 },
+      language: { type: "string" },
+      mode: { type: "string", enum: ["evidence"] },
+    },
+    required: ["question"],
+    additionalProperties: false,
+  },
+  example: {
+    question: "Is Company X a manufacturer of centrifugal pumps?",
+    urls: ["https://company.example/about"],
+  },
+});
 
 let cachedKey: string | null = null;
 let cachedGate: MiddlewareHandler | null = null;
@@ -118,6 +228,11 @@ function paymentGate(env: Env, routeKey: string): MiddlewareHandler {
           payTo: env.X402_RECIPIENT,
         },
         description: "Agent Evidence API — structured, cited web evidence",
+        serviceName: "Agent Evidence API",
+        tags: ["web-evidence", "claim-verification", "source-verification"],
+        // Only advertise the discovery payload that matches the route being
+        // priced: an HTTP body schema on the MCP route would be wrong.
+        extensions: routeKey === "POST /mcp" ? { ...MCP_DISCOVERY } : { ...HTTP_DISCOVERY },
       },
     },
     resourceServer,
@@ -202,9 +317,25 @@ async function proxyToBackend(
 // ---------------------------------------------------------------------------
 
 /** Free liveness probe. No secrets, no infrastructure detail (SPEC section 4A). */
-app.get("/health", (c) =>
-  c.json({ status: "ok" as const, service: SERVICE_NAME, version: SERVICE_VERSION }),
-);
+app.get("/health", async (c) => {
+  // The shallow form is unchanged: three fields, no infrastructure detail.
+  if (c.req.query("deep") !== "1") {
+    return c.json({ status: "ok" as const, service: SERVICE_NAME, version: SERVICE_VERSION });
+  }
+  // Deep form additionally reports whether the origin can serve, and returns
+  // 503 when it cannot, so monitors and the watchdog see the real state.
+  const ok = await originHealthy(c.env);
+  return c.json(
+    {
+      status: ok ? ("ok" as const) : ("degraded" as const),
+      service: SERVICE_NAME,
+      version: SERVICE_VERSION,
+      backend: ok ? "ok" : "unreachable",
+      payment: c.env.X402_NETWORK === MAINNET ? "mainnet" : "testnet",
+    },
+    ok ? 200 : 503,
+  );
+});
 
 /** Capability description, so an agent can discover what this offers for free. */
 app.get("/", (c) =>
@@ -267,6 +398,15 @@ function basicRequestProblem(body: unknown): string | null {
 
 app.use("/v1/evidence", async (c, next) => {
   if (c.req.method !== "POST") return next();
+  // Never charge for a request we cannot fulfil: check the origin first.
+  if (!(await originHealthy(c.env))) {
+    return fail(
+      c,
+      "BACKEND_UNREACHABLE",
+      newRequestId(),
+      "The evidence service is temporarily unavailable; no payment was taken.",
+    );
+  }
   if (devBypassActive(c.env)) return next();
   return paymentGate(c.env, "POST /v1/evidence")(c, next);
 });
@@ -345,6 +485,14 @@ app.use("/mcp", async (c, next) => {
   c.set("mcpBody" as never, raw as never);
 
   if (needsPayment(raw)) {
+    if (!(await originHealthy(c.env))) {
+      return fail(
+        c,
+        "BACKEND_UNREACHABLE",
+        newRequestId(),
+        "The evidence service is temporarily unavailable; no payment was taken.",
+      );
+    }
     if (devBypassActive(c.env)) {
       c.header("X-Dev-Payment-Bypass", "active");
       return next();

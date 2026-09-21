@@ -47,6 +47,9 @@ importers:
       '@x402/evm':
         specifier: ^2.26.0
         version: 2.26.0(typescript@5.9.3)
+      '@x402/extensions':
+        specifier: ^2.26.0
+        version: 2.26.0(typescript@5.9.3)
       '@x402/hono':
         specifier: ^2.26.0
         version: 2.26.0(hono@4.13.8)(typescript@5.9.3)

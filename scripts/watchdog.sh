@@ -22,8 +22,12 @@ export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-/root/dsh-workspace/.config}"
 PUBLIC_URL="https://agent-evidence-api.taher-h-alhaddad.workers.dev"
 LOG() { printf '[%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 
-# --- 1. is the public service already serving? ------------------------------
-if curl -s -m 15 -o /dev/null "$PUBLIC_URL/health" 2>/dev/null; then
+# --- 1. is the public service actually able to SERVE? -----------------------
+# Deliberately the deep check. The shallow /health is answered by the Worker
+# itself and stays 200 even when the backend is dead - which would let a buyer
+# pay for nothing, and previously made this watchdog exit early on a broken
+# service.
+if curl -s -m 15 -o /dev/null "$PUBLIC_URL/health?deep=1" 2>/dev/null; then
   exit 0
 fi
 LOG "public health check failed; investigating"
@@ -53,7 +57,7 @@ if [ -z "$ORIGIN" ] || ! curl -s -m 15 -o /dev/null "$ORIGIN/health" 2>/dev/null
 fi
 
 # --- 4. final confirmation --------------------------------------------------
-if curl -s -m 15 -o /dev/null "$PUBLIC_URL/health" 2>/dev/null; then
+if curl -s -m 15 -o /dev/null "$PUBLIC_URL/health?deep=1" 2>/dev/null; then
   LOG "recovered; public service healthy"
 else
   LOG "WARNING: public service still unhealthy after recovery attempt"
