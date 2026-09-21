@@ -148,8 +148,38 @@ try {
 
 console.log(`  Wallet   : ${account.address}`);
 console.log(`  Balance  : ${formatUnits(balance, 6)} USDC`);
+
 if (balance < BigInt(quote.amount)) {
-  fail(`insufficient USDC. Need ${priceUsd} USDC on Base; wallet holds ${formatUnits(balance, 6)}.`);
+  const short = priceUsd - Number(formatUnits(balance, 6));
+  console.error(`
+  ✖ Not enough USDC on Base yet.
+
+    Need     ${priceUsd.toFixed(4)} USDC
+    Have     ${formatUnits(balance, 6)} USDC
+    Short    ${short.toFixed(4)} USDC
+
+    This service is paid in USDC on the Base network (chain id 8453).
+    You do NOT need ETH for gas — the payment facilitator submits the
+    transaction and covers it. You only need USDC.
+
+    Send any amount of USDC on Base to:
+
+        ${account.address}
+
+    If you already hold USDC on another chain (Ethereum, Arbitrum, Polygon…),
+    bridge it to Base:
+        https://bridge.base.org
+
+    If you have no USDC at all, the simplest route is a Coinbase account:
+    buy USDC and withdraw it to the address above, choosing the Base network.
+        https://www.coinbase.com/wallet
+
+    ⚠ Send on the BASE network only. USDC sent on another chain to this address
+      will not be visible here and this client cannot spend it.
+
+    Then re-run exactly the same command.
+`);
+  process.exit(1);
 }
 
 console.log("\n  Paying…");
