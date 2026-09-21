@@ -20,10 +20,24 @@ REASONING_PROVIDER=laya REASONING_URL=http://127.0.0.1:8077 ...
 
 Measured on the case above, single source:
 
-| | Top 3 contains the answer? | Latency |
-|---|---|---|
-| `REASONING_PROVIDER=none` | ❌ | ~1.4 s |
-| `REASONING_PROVIDER=laya` | ✅ | ~11.6 s |
+| Sources | `none` | `laya` | Top 3 contains the answer? |
+|---|---|---|---|
+| 1 | ~1.4 s | ~11.4 s | ❌ → ✅ |
+| 5 | ~1.6 s | ~1.8 s (falls back) | ❌ → ❌ |
+
+**The model is engaged only when the budget can afford the full pool.** Cost is
+~800 ms per candidate (a single call measures ~420 ms, but the sidecar
+serialises, so ~700 ms under real concurrency). The budget is divided across
+sources, so 1–2 sources can afford a 12-wide pool and larger requests cannot. A
+narrower pool was measured to be worthless — it can only reshuffle passages that
+already excluded the answer — so rather than spend ~20 s on that, those requests
+fall back to lexical and stay fast. Lower `REASONING_POOL_SIZE` to engage on
+larger requests, trading recall.
+
+The budget is a hard ceiling, not a target: it is *reserved* before each call, so
+concurrent sources cannot collectively overshoot it. (An earlier version checked
+and then awaited, which let five sources each pass the check before any
+decremented it — an 8 s budget produced a 50 s request.)
 
 **The trade is latency, not accuracy**: ~420 ms per candidate, so a 12-candidate
 pool costs ~5 s of inference per source. That is why it is off by default.

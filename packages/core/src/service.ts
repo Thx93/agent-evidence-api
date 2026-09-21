@@ -112,6 +112,17 @@ function uniqueUrls(urls: readonly string[]): string[] {
   return out;
 }
 
+/**
+ * Pessimistic per-candidate cost estimate, for RESERVING budget before a call.
+ *
+ * A single call measures ~420 ms, but the sidecar serialises on a lock, so under
+ * the concurrency of a real multi-source request each call costs closer to
+ * 700 ms: a 20 s budget with 8 candidates across 5 sources produced a 28.7 s
+ * request, 1.3 s inside the Worker's cap. 800 ms is the honest figure to plan
+ * against, and over-estimating only costs candidates, never correctness.
+ */
+const MS_PER_CANDIDATE = 800;
+
 export class EvidenceService {
   private readonly config: AppConfig;
   private readonly logger: Logger;
@@ -119,6 +130,10 @@ export class EvidenceService {
   private readonly doFetch: typeof fetchSource;
   private readonly semaphore: ReturnType<typeof createSemaphore>;
   private readonly reasoning: ReasoningProvider;
+  /** Wall-clock left for semantic scoring in the current request. */
+  private reasoningBudgetMs = 0;
+  /** Per-source share of the budget, so cost cannot scale with source count. */
+  private reasoningPerSourceMs = 0;
 
   constructor(deps: EvidenceServiceDeps) {
     this.config = deps.config;
@@ -126,6 +141,8 @@ export class EvidenceService {
     this.cache = deps.cache ?? null;
     this.doFetch = deps.fetchImpl ?? fetchSource;
     this.semaphore = createSemaphore(Math.max(1, deps.config.limits.maxConcurrentFetches));
+    this.reasoningBudgetMs = deps.config.reasoning.budgetMs;
+    this.reasoningPerSourceMs = deps.config.reasoning.budgetMs;
     this.reasoning =
       deps.reasoning ??
       (deps.config.reasoning.provider === "laya"
@@ -160,6 +177,21 @@ export class EvidenceService {
     const request: EvidenceRequest = parsed.data;
 
     const requested = uniqueUrls(request.urls ?? []);
+
+    // Reset the semantic budget for THIS request. Without this the budget is
+    // only ever set in the constructor, so it drains across the service's
+    // lifetime and silently switches semantic ranking off for good. Tests that
+    // build a fresh service per case cannot see that.
+    const perSourceMs = this.config.reasoning.budgetMs / Math.max(1, requested.length);
+    const affordable = Math.floor(perSourceMs / MS_PER_CANDIDATE);
+    // Engage the model only when the per-source budget can afford the FULL
+    // configured pool. A narrow pool cannot recover what lexical missed - the
+    // reference answer ranked 8th-20th, so a 5-wide pool never contains it and
+    // the model can only reshuffle the same five, at a cost of seconds. Setting
+    // the budget to zero here is what actually disengages refineOrder.
+    const engaged = affordable >= this.config.reasoning.poolSize;
+    this.reasoningBudgetMs = engaged ? this.config.reasoning.budgetMs : 0;
+    this.reasoningPerSourceMs = perSourceMs;
     if (requested.length === 0) {
       throw new ServiceError(
         "INVALID_REQUEST",
@@ -364,10 +396,19 @@ export class EvidenceService {
       // The model can only promote passages it is shown, so ranking a list that
       // already truncated the answer away cannot recover it - which is exactly
       // what the first version of this got wrong.
+      // Never retrieve more candidates than the remaining budget can score.
+      // ~420 ms per candidate measured on 4 vCPU; the divisor is deliberately
+      // pessimistic so we under-run the budget rather than over-run it.
+      // refineOrder sets the budget to zero when it is not engaged for this
+      // request, so that is the single source of truth here too.
+      const affordable = Math.floor(this.reasoningPerSourceMs / MS_PER_CANDIDATE);
       const poolSize =
-        this.reasoning.name === "none"
+        this.reasoning.name === "none" || this.reasoningBudgetMs <= 0
           ? this.config.limits.maxEvidenceItems
-          : Math.max(this.config.limits.maxEvidenceItems, this.config.reasoning.poolSize);
+          : Math.min(
+              Math.max(this.config.limits.maxEvidenceItems, this.config.reasoning.poolSize),
+              affordable,
+            );
 
       const lexicallyRanked = findEvidenceCandidates(doc, request.question, {
         maxItems: poolSize,
@@ -459,6 +500,25 @@ export class EvidenceService {
       return { candidates, refined: false };
     }
 
+    // Reserve the estimated cost SYNCHRONOUSLY, before awaiting anything.
+    //
+    // Sources are processed concurrently, so a check-then-await lets every
+    // source pass the test before any of them decrements the budget - which is
+    // how an 8 s budget produced a 50 s request and would have breached the
+    // Worker's 30 s cap. Reserving first makes the decision atomic: Node is
+    // single-threaded, so this read-modify-write cannot interleave.
+    const estimate = candidates.length * MS_PER_CANDIDATE;
+    if (this.reasoningBudgetMs < estimate) {
+      this.logger.warn("semantic budget cannot cover this source; using lexical order", {
+        provider: this.reasoning.name,
+        needed_ms: estimate,
+        remaining_ms: this.reasoningBudgetMs,
+      });
+      return { candidates, refined: false };
+    }
+    this.reasoningBudgetMs -= estimate;
+
+    const startedAt = Date.now();
     let scores: number[] | null = null;
     try {
       scores = await this.reasoning.scorePassages(
@@ -473,6 +533,9 @@ export class EvidenceService {
         error: err instanceof Error ? err.message : String(err),
       });
       return { candidates, refined: false };
+    } finally {
+      // Reconcile the reservation with what the call actually cost.
+      this.reasoningBudgetMs += estimate - (Date.now() - startedAt);
     }
     if (!scores) {
       this.logger.warn("semantic ranking unavailable; keeping lexical order", {

@@ -76,6 +76,19 @@ export interface AppConfig {
      * had placed 8th-20th. Cost is linear — one model call per candidate.
      */
     poolSize: number;
+
+    /**
+     * Total wall-clock budget for semantic scoring across the WHOLE request.
+     *
+     * Without this, cost scales as sources x poolSize x ~420 ms: at
+     * MAX_SOURCES=25 with a pool of 12 that is roughly 126 seconds, four times
+     * the Worker's 30 s origin timeout. The buyer would have paid and received a
+     * timeout - the one failure mode this service must never produce.
+     *
+     * When the budget runs out the remaining sources simply keep their lexical
+     * order, so the worst case degrades in quality rather than failing.
+     */
+    budgetMs: number;
   };
 
   fetch: {
@@ -175,6 +188,7 @@ export function loadConfig(): AppConfig {
       url: str("REASONING_URL", "http://127.0.0.1:8077"),
       timeoutMs: int("REASONING_TIMEOUT_MS", 8000),
       poolSize: int("REASONING_POOL_SIZE", 12),
+      budgetMs: int("REASONING_BUDGET_MS", 20000),
     },
 
     fetch: {
