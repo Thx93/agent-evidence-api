@@ -468,3 +468,46 @@ configuration that 500s every paid request in place is worse. Coinbase shows the
 Secret once. It was recovered from the shell history and is available there; that is
 luck rather than process, and secrets should not be entered on a machine whose
 history is kept.
+
+---
+
+# Resolved: the CDP Bazaar is now reachable, and this service is in it
+
+The analysis above concluded that entering the CDP Bazaar was a prerequisite for every
+other recommendation, and that it was gated on credentials. That was half right. It
+was gated on **architecture**: the CDP Facilitator cannot run in a Cloudflare Worker
+at all, so no credential would have helped. The paywall moved to the Node backend,
+and the route is now catalogued.
+
+## The settlement, verified on-chain
+
+Read from the live 402 challenge's own `asset` and `payTo` values, so the addresses
+could not be mistyped:
+
+| wallet | before | after |
+|---|---|---|
+| seller `0x9c0e2B44…` | 0.060000 USDC | **0.063000** |
+| buyer `0xA048c543…` | 2.940000 USDC | **2.937000** |
+
+Exactly one price moved, in the right direction, through the CDP Facilitator.
+
+## What it unlocked
+
+```
+CDP Bazaar : LISTED — scanned 15,215 of 15,212 resources across 61 pages
+             https://agent-evidence-api.thx93.workers.dev/v1/evidence
+agentic.market : listed automatically
+```
+
+`agentic.market` is operated by Coinbase, and its FAQ states that anything indexed on
+the Bazaar appears there without a separate signup. That is exactly what happened —
+and earlier rounds spent real effort looking for a signup that does not exist.
+
+The Bazaar is the largest x402 catalogue, and it also feeds the Bazaar MCP server and
+Amazon Bedrock AgentCore. All of them open together.
+
+## What is still not claimed
+
+**No third party has paid.** Every settlement on this service, including this one, is
+the operator's own. Being listed is not being bought, and the market data in this
+document remains the honest read on whether anyone is buying this category at all.
