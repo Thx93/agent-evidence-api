@@ -398,3 +398,73 @@ deliberately rather than attempted as a hotfix.
 Two smaller possibilities, both unverified: a Workers-compatible crypto shim for the
 JWT signing, and an Ajv build without runtime code generation. Neither is confirmed
 to be sufficient, and both would need real-credential testing to establish.
+
+## Follow-up investigation: the precise cause, and why it is not a config fix
+
+A targeted diagnostic (a temporary secret-guarded route, since removed) isolated the
+facilitator handshake from the middleware and produced the real stack:
+
+```
+globalThis.crypto                 : "object"
+globalThis.crypto.getRandomValues : "function"        <-- it IS available
+nonce (index.js:18009:3)
+  TypeError: getRandomValues is not a function
+    at generateJwt
+    at getEndpointAuthHeaders
+    at HTTPFacilitatorClient.createAuthHeaders
+    at HTTPFacilitatorClient.getSupported
+```
+
+**The first explanation was wrong.** The global crypto is present and working. The
+CDP SDK's JWT signing imports `getRandomValues` from the `uncrypto` shim, which ships
+two builds:
+
+```
+crypto.node.mjs : nodeCrypto.webcrypto.getRandomValues(array)   <- chosen under nodejs_compat
+crypto.web.mjs  : globalThis.crypto.getRandomValues(array)
+```
+
+`nodejs_compat` makes the "node" condition match, and workerd's `node:crypto` shim has
+no usable `webcrypto`. So the SDK calls an undefined function.
+
+### The alias does not fix it
+
+Aliasing `uncrypto` to a local web-crypto stub rewrote the module in the bundle —
+verified, `node:crypto` references went to zero and the stub's code was present — but
+the runtime still failed at the same line. The stub's export is assigned by an
+esbuild `__esm` lazy initialiser, and although `init_jwt()` does call
+`init_uncrypto()`, the binding reaching `nonce()` is still undefined. Whatever the
+precise cause, an alias is not a reliable fix for it, and an unverified change to the
+payment path was reverted rather than left in place.
+
+Removing `nodejs_compat` is not an option either: the build fails with twelve
+unresolved `crypto` imports.
+
+### And there is a second, independent blocker
+
+```
+x402: Route "POST /v1/evidence" has an invalid bazaar extension:
+  Schema validation failed: Code generation from strings disallowed for this context
+```
+
+The x402 library validates the route's bazaar declaration with **Ajv, which compiles
+schemas via `new Function` — forbidden in Workers by design.** `nodejs_compat` does
+not change this and no bundler setting will. This one is independent of the crypto
+problem: it would remain even if the JWT signing worked.
+
+### Conclusion
+
+Two separate Workers restrictions block the CDP facilitator at the edge — one
+bundler/runtime crypto issue, one platform-level prohibition on runtime code
+generation. The reliable path is to **move x402 payment gating from the Worker to the
+Node backend**, where neither restriction exists, leaving the Worker as a proxy. That
+is a change to the component SPEC section 5 treats as security-sensitive and needs to
+be designed and tested deliberately.
+
+### A note on the credentials
+
+The CDP key was deleted from the Worker twice during this, because leaving a
+configuration that 500s every paid request in place is worse. Coinbase shows the
+Secret once. It was recovered from the shell history and is available there; that is
+luck rather than process, and secrets should not be entered on a machine whose
+history is kept.
