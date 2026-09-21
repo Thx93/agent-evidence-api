@@ -11,7 +11,20 @@ answer it can cite.*
 
 ## 1. x402 Slack — highest intent audience
 
-Channel: `#showcase` or `#general` (http://slack.x402.org/)
+Channel: `#showcase` or `#general`
+
+**Join link (checked 2026-09-21):**
+<https://join.slack.com/t/x402workspace/shared_invite/zt-49ug1ivvr-M5LYYp_eZ4OD3lA5n2qM1g>
+
+Take it from <https://x402.org> -> "Join Community" rather than from `slack.x402.org`.
+That shortlink redirects to a **different, now-expired** invite token
+(`zt-3yixb1rj7-...`), which lands on Slack's "This link is no longer active" page. The
+x402 GitHub README still advertises the same stale shortlink, so it is not a reliable
+source either.
+
+Slack shared invites expire - by time or by use count. **If this link is dead, do not
+hunt for another shared invite: fetch the current one from the x402.org homepage, or
+ask in the repository's discussions.** That is the only durable instruction here.
 
 > **Live mainnet x402 endpoint: Agent Evidence API**
 >
