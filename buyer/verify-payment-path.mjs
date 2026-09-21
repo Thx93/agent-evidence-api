@@ -27,7 +27,7 @@ import { toClientEvmSigner } from "@x402/evm";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import { x402HTTPClient } from "@x402/core/http";
 
-const ENDPOINT = process.argv[2] ?? "https://agent-evidence-api.taher-h-alhaddad.workers.dev/v1/evidence";
+const ENDPOINT = process.argv[2] ?? "https://agent-evidence-api.thx93workersdev.workers.dev/v1/evidence";
 const FACILITATOR = process.argv[3] ?? "https://facilitator.payai.network";
 
 const key = "0x" + Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("hex");

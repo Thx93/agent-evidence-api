@@ -19,7 +19,7 @@ cd "$ROOT"
 export PATH="/root/dsh-workspace/bin:$PATH"
 export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-/root/dsh-workspace/.config}"
 
-PUBLIC_URL="https://agent-evidence-api.taher-h-alhaddad.workers.dev"
+PUBLIC_URL="https://agent-evidence-api.thx93workersdev.workers.dev"
 LOG() { printf '[%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 
 # --- 1. is the public service actually able to SERVE? -----------------------

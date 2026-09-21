@@ -500,7 +500,7 @@ actually catalogued, so it is declared. Without it the entry describes a tool bu
 never says how to reach it. Verify what is published:
 
 ```bash
-curl -sD - -o /dev/null -X POST https://agent-evidence-api.taher-h-alhaddad.workers.dev/mcp \
+curl -sD - -o /dev/null -X POST https://agent-evidence-api.thx93workersdev.workers.dev/mcp \
   -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"research_evidence","arguments":{"question":"q","urls":["https://example.com"]}}}' \
 | grep -i '^payment-required:' | cut -d' ' -f2 | base64 -d | python3 -m json.tool | grep -A5 bazaar

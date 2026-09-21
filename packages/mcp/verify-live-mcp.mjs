@@ -22,16 +22,34 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 const SERVER_NAME = "io.github.Thx93/agent-evidence-api";
 
 async function resolveFromRegistry() {
-  const res = await fetch(
-    `https://registry.modelcontextprotocol.io/v0.1/servers?search=${encodeURIComponent(SERVER_NAME)}&version=latest`,
-  );
-  const body = await res.json();
-  const entry = (body.servers ?? []).find((e) => e.server?.name === SERVER_NAME);
-  const remote = entry?.server?.remotes?.[0];
-  if (!remote?.url) throw new Error(`registry has no remote URL for ${SERVER_NAME}`);
-  if (remote.type !== "streamable-http") throw new Error(`unexpected remote type: ${remote.type}`);
-  console.log(`  registry: ${SERVER_NAME} v${entry.server.version} -> ${remote.url}`);
-  return remote.url;
+  // The registry intermittently returns an EMPTY body rather than an error, which
+  // made this tool report a spurious failure roughly one run in ten. Retry before
+  // concluding anything, and say so when a retry is what made it work.
+  let lastError = "no attempt made";
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    try {
+      const res = await fetch(
+        `https://registry.modelcontextprotocol.io/v0.1/servers?search=${encodeURIComponent(SERVER_NAME)}&version=latest`,
+        { signal: AbortSignal.timeout(20_000) },
+      );
+      const text = await res.text();
+      if (!text.trim()) throw new Error("registry returned an empty body");
+
+      const body = JSON.parse(text);
+      const entry = (body.servers ?? []).find((e) => e.server?.name === SERVER_NAME);
+      const remote = entry?.server?.remotes?.[0];
+      if (!remote?.url) throw new Error(`registry has no remote URL for ${SERVER_NAME}`);
+      if (remote.type !== "streamable-http") throw new Error(`unexpected remote type: ${remote.type}`);
+
+      if (attempt > 1) console.log(`  registry: (succeeded on attempt ${attempt})`);
+      console.log(`  registry: ${SERVER_NAME} v${entry.server.version} -> ${remote.url}`);
+      return remote.url;
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
+      await new Promise((r) => setTimeout(r, 300 * attempt));
+    }
+  }
+  throw new Error(`${lastError} (after 5 attempts)`);
 }
 
 let target = process.argv[2];

@@ -7,7 +7,7 @@ No account. No API key. No signup. No subscription. One command, one payment, on
 **Nothing to install** — the service serves this client as a single self-contained file:
 
 ```bash
-curl -fsSL https://agent-evidence-api.taher-h-alhaddad.workers.dev/buy.mjs -o buy.mjs
+curl -fsSL https://agent-evidence-api.thx93workersdev.workers.dev/buy.mjs -o buy.mjs
 export X402_PRIVATE_KEY=0x...        # a wallet holding a little USDC on Base
 node buy.mjs "Is Company X a manufacturer of centrifugal pumps?" \
     https://company.example/about https://company.example/products
@@ -63,7 +63,7 @@ The same capability is exposed as a remote MCP server, so an agent can call it a
 a tool:
 
 ```
-https://agent-evidence-api.taher-h-alhaddad.workers.dev/mcp
+https://agent-evidence-api.thx93workersdev.workers.dev/mcp
 ```
 
 Tools:
@@ -81,7 +81,7 @@ before deciding to pay for one. Only an actual `research_evidence` call is charg
   "mcpServers": {
     "evidence": {
       "type": "streamable-http",
-      "url": "https://agent-evidence-api.taher-h-alhaddad.workers.dev/mcp"
+      "url": "https://agent-evidence-api.thx93workersdev.workers.dev/mcp"
     }
   }
 }

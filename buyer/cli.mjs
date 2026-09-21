@@ -31,7 +31,7 @@ import { toClientEvmSigner } from "@x402/evm";
 import { wrapFetchWithPayment } from "@x402/fetch";
 
 const DEFAULT_ENDPOINT =
-  "https://agent-evidence-api.taher-h-alhaddad.workers.dev/v1/evidence";
+  "https://agent-evidence-api.thx93workersdev.workers.dev/v1/evidence";
 const NETWORK = "eip155:8453"; // Base mainnet
 const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
