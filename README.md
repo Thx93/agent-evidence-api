@@ -1,4 +1,45 @@
 # Agent Evidence API
+## Optional: semantic ranking
+
+Ranking is deterministic lexical matching by default, and it has a measured
+ceiling. Asked *"What is the population of Tokyo?"* it returns passages that
+mention "population" and "Tokyo" — 1603 history, wartime declines, municipal
+taxes — and misses the sentence that answers the question, because that sentence
+says *"the city proper"* instead of repeating "Tokyo". Two lexical heuristics
+were tried and reverted; no keyword trick bridges it.
+
+An optional [Laya](https://github.com/NandhaKishorM/laya) sidecar closes it. Laya
+is an open-weight (Apache-2.0) typed-decision model: it scores a passage with
+`noul`, P(this passage directly answers the question). No vendor, no API key, no
+per-call fee, and your content never leaves the host.
+
+```bash
+python services/laya/server.py                 # ~2 GB resident, ~35 s cold load
+REASONING_PROVIDER=laya REASONING_URL=http://127.0.0.1:8077 ...
+```
+
+Measured on the case above, single source:
+
+| | Top 3 contains the answer? | Latency |
+|---|---|---|
+| `REASONING_PROVIDER=none` | ❌ | ~1.4 s |
+| `REASONING_PROVIDER=laya` | ✅ | ~11.6 s |
+
+**The trade is latency, not accuracy**: ~420 ms per candidate, so a 12-candidate
+pool costs ~5 s of inference per source. That is why it is off by default.
+Enabling it changes only the ORDER of evidence — every excerpt, source, URL and
+hash is identical — and if the sidecar is missing, slow, or returns anything
+unexpected the service silently keeps its lexical result. The raw model
+probability is never exposed (SPEC §21).
+
+Note the pool matters: the first version of this ranked only the 5 candidates
+lexical had already chosen, and the answer had been ranked 8th–20th, so it was
+never available to promote. The wider pool is what makes it work.
+
+Running the backend in Docker? The sidecar must be reachable from the container:
+`--add-host=host.docker.internal:host-gateway` and point `REASONING_URL` at
+`http://host.docker.internal:8077`, or put both on one Docker network.
+
 ## How to see revenue
 
 Every request the backend serves on its internal route has already passed the

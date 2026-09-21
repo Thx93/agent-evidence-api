@@ -53,6 +53,31 @@ export interface AppConfig {
    */
   usageLogPath: string;
 
+  /**
+   * Optional semantic reasoning (SPEC section 37). "none" keeps the deterministic
+   * lexical scorer as the only ranker, which is the default and reproduces the
+   * service's existing behaviour exactly. "laya" refines candidate ORDER using a
+   * self-hosted judgement model.
+   *
+   * Cost of enabling: measured ~410 ms per passage on a 4 vCPU CPU, so a
+   * 5-source request costs ~10 s of inference, plus ~2.9 GB resident for the
+   * sidecar. It is opt-in for that reason, not for quality reasons.
+   */
+  reasoning: {
+    provider: "none" | "laya";
+    url: string;
+    timeoutMs: number;
+    /**
+     * How many lexical candidates to retrieve BEFORE semantic ranking.
+     *
+     * This must exceed maxEvidenceItems or the model has nothing to work with:
+     * reordering a list that already excluded the answer cannot recover it. The
+     * measured case needed a pool of ~12 to include a passage the lexical ranker
+     * had placed 8th-20th. Cost is linear — one model call per candidate.
+     */
+    poolSize: number;
+  };
+
   fetch: {
     userAgent: string;
     robotsPolicy: "ignore" | "warn" | "enforce";
@@ -144,6 +169,13 @@ export function loadConfig(): AppConfig {
     },
 
     usageLogPath: str("USAGE_LOG_PATH", "./data/usage.jsonl"),
+
+    reasoning: {
+      provider: (str("REASONING_PROVIDER", "none") === "laya" ? "laya" : "none") as "none" | "laya",
+      url: str("REASONING_URL", "http://127.0.0.1:8077"),
+      timeoutMs: int("REASONING_TIMEOUT_MS", 8000),
+      poolSize: int("REASONING_POOL_SIZE", 12),
+    },
 
     fetch: {
       userAgent: str(

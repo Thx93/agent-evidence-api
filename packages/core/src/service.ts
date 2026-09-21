@@ -20,6 +20,7 @@ import {
 import { cacheKey, type CacheProvider, type CacheRecord } from "@aee/cache";
 import { assess, type SourceEvidence } from "./assessment.js";
 import { checkRobots, robotsWarning } from "./robots.js";
+import { createLayaProvider, noReasoning, type ReasoningProvider } from "./reasoning.js";
 import type { AppConfig } from "./config.js";
 import type { Logger } from "./logger.js";
 
@@ -43,6 +44,8 @@ export interface EvidenceServiceDeps {
   cache?: CacheProvider | null;
   /** Injectable fetch implementation — used by tests to avoid the network. */
   fetchImpl?: typeof fetchSource;
+  /** Injectable semantic ranker. Defaults to none (lexical only). */
+  reasoning?: ReasoningProvider;
 }
 
 /** Cached representation of one successfully processed source. */
@@ -55,6 +58,8 @@ interface CachedPayload {
   contentType: string | null;
   redirectChain: string[];
   warnings: SourceWarning[];
+  /** True when a reasoning provider reordered these candidates. */
+  refined?: boolean;
 }
 
 /**
@@ -113,6 +118,7 @@ export class EvidenceService {
   private readonly cache: CacheProvider | null;
   private readonly doFetch: typeof fetchSource;
   private readonly semaphore: ReturnType<typeof createSemaphore>;
+  private readonly reasoning: ReasoningProvider;
 
   constructor(deps: EvidenceServiceDeps) {
     this.config = deps.config;
@@ -120,6 +126,14 @@ export class EvidenceService {
     this.cache = deps.cache ?? null;
     this.doFetch = deps.fetchImpl ?? fetchSource;
     this.semaphore = createSemaphore(Math.max(1, deps.config.limits.maxConcurrentFetches));
+    this.reasoning =
+      deps.reasoning ??
+      (deps.config.reasoning.provider === "laya"
+        ? createLayaProvider({
+            url: deps.config.reasoning.url,
+            timeoutMs: deps.config.reasoning.timeoutMs,
+          })
+        : noReasoning);
   }
 
   /**
@@ -192,6 +206,14 @@ export class EvidenceService {
         `${failed} of ${sources.length} source(s) could not be retrieved; see per-source warnings.`,
       );
     }
+    // Only claim refinement when it actually occurred. Reporting it after a
+    // fallback would be a lie in the response.
+    if (results.some((r) => r.refined)) {
+      limitations.push(
+        `Evidence ordering was refined by ${this.reasoning.name}. The model reorders ` +
+          `candidate passages only; every excerpt, source and hash is unchanged.`,
+      );
+    }
     if (sources.some((s) => s.from_cache)) {
       limitations.push(
         "Some sources were served from cache. Each source reports its actual retrieval time.",
@@ -227,7 +249,7 @@ export class EvidenceService {
     requestedUrl: string,
     request: EvidenceRequest,
     requestId: string,
-  ): Promise<{ source: Source; candidates: EvidenceCandidate[] }> {
+  ): Promise<{ source: Source; candidates: EvidenceCandidate[]; refined: boolean }> {
     const log = this.logger.child({ request_id: requestId });
 
     // ---- cache lookup -----------------------------------------------------
@@ -248,6 +270,7 @@ export class EvidenceService {
               return {
                 source: this.toSource(payload, hit, request, true),
                 candidates: payload.candidates,
+                refined: payload.refined === true,
               };
             }
           }
@@ -286,6 +309,7 @@ export class EvidenceService {
                 ),
               ),
               candidates: [],
+              refined: false,
             };
           }
           robotsWarningForSource = robotsWarning(verdict.rule);
@@ -308,7 +332,7 @@ export class EvidenceService {
         allowLoopbackForTests: this.config.fetch.allowLoopbackForTests,
       });
     } catch (err) {
-      return { source: this.failedSource(requestedUrl, err), candidates: [] };
+      return { source: this.failedSource(requestedUrl, err), candidates: [], refined: false };
     } finally {
       release();
     }
@@ -328,6 +352,7 @@ export class EvidenceService {
           fetched,
         ),
         candidates: [],
+        refined: false,
       };
     }
 
@@ -335,10 +360,22 @@ export class EvidenceService {
     let payload: CachedPayload;
     try {
       const doc = extractDocument(fetched.body ?? "", fetched.finalUrl);
-      const candidates = findEvidenceCandidates(doc, request.question, {
-        maxItems: this.config.limits.maxEvidenceItems,
+      // Retrieve a WIDER pool than we will return when semantic ranking is on.
+      // The model can only promote passages it is shown, so ranking a list that
+      // already truncated the answer away cannot recover it - which is exactly
+      // what the first version of this got wrong.
+      const poolSize =
+        this.reasoning.name === "none"
+          ? this.config.limits.maxEvidenceItems
+          : Math.max(this.config.limits.maxEvidenceItems, this.config.reasoning.poolSize);
+
+      const lexicallyRanked = findEvidenceCandidates(doc, request.question, {
+        maxItems: poolSize,
         maxExcerptChars: this.config.limits.maxExcerptChars,
       });
+      // Optional semantic refinement. Reorders only; never adds or removes
+      // evidence, and silently keeps the lexical order if the model is absent.
+      const { candidates, refined } = await this.refineOrder(request.question, lexicallyRanked);
       payload = {
         doc,
         candidates,
@@ -350,6 +387,7 @@ export class EvidenceService {
         warnings: robotsWarningForSource
           ? [...fetched.warnings, robotsWarningForSource]
           : fetched.warnings,
+        refined,
       };
     } catch (err) {
       log.warn("extraction failed", {
@@ -363,6 +401,7 @@ export class EvidenceService {
           fetched,
         ),
         candidates: [],
+        refined: false,
       };
     }
 
@@ -395,7 +434,66 @@ export class EvidenceService {
     return {
       source: this.toSource(payload, null, request, false),
       candidates: payload.candidates,
+      refined: payload.refined === true,
     };
+  }
+
+  /**
+   * Reorder candidates by how directly they answer the question.
+   *
+   * Only the ORDER changes. Nothing is added, dropped or rewritten, so the
+   * lexical result remains a complete, valid answer if the model is missing —
+   * which is what makes this safe to leave enabled or disabled at will.
+   *
+   * A passage the model judges clearly on-topic is relabelled `direct` so the
+   * label cannot contradict the position it now holds. The probability itself is
+   * deliberately NOT surfaced: SPEC section 21 forbids emitting confidence
+   * scores we cannot justify, and a model score is a ranking signal, not a
+   * statement about the world.
+   */
+  private async refineOrder(
+    question: string,
+    candidates: EvidenceCandidate[],
+  ): Promise<{ candidates: EvidenceCandidate[]; refined: boolean }> {
+    if (this.reasoning.name === "none" || candidates.length < 2) {
+      return { candidates, refined: false };
+    }
+
+    let scores: number[] | null = null;
+    try {
+      scores = await this.reasoning.scorePassages(
+        question,
+        candidates.map((c) => c.excerpt),
+      );
+    } catch (err) {
+      // Defence in depth: the provider contract says "return null", but a bug
+      // or an unexpected transport error must still degrade, never propagate.
+      this.logger.warn("semantic ranking threw; keeping lexical order", {
+        provider: this.reasoning.name,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return { candidates, refined: false };
+    }
+    if (!scores) {
+      this.logger.warn("semantic ranking unavailable; keeping lexical order", {
+        provider: this.reasoning.name,
+      });
+      return { candidates, refined: false };
+    }
+
+    const keep = this.config.limits.maxEvidenceItems;
+
+    const reordered = candidates
+      .map((candidate, index) => ({ candidate, rank: scores[index] ?? 0, index }))
+      .sort((a, b) => b.rank - a.rank || a.index - b.index)
+      .slice(0, keep)
+      .map(({ candidate, rank, index }) =>
+        index === 0 || rank < 0.5 || candidate.relevance === "contradictory"
+          ? candidate
+          : { ...candidate, relevance: "direct" as const },
+      );
+
+    return { candidates: reordered, refined: true };
   }
 
   /** Build a provenance record for a source that could not be retrieved. */
