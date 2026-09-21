@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Refuse to commit on a red suite.
+#
+# Added after a round where a run reported 260 pass / 1 fail, the commit went
+# through anyway, and the message asserted "261 tests pass" - the same failure to
+# look at the evidence that the deploy fix was written to correct. A test command
+# whose result does not block anything is decoration.
+#
+# Tests are deliberately NOT skipped for doc-only commits: the flaky run that
+# prompted this had no obvious relationship to the change, and guessing which
+# changes are safe is how it got missed.
+set -uo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+export PATH="/root/dsh-workspace/bin:$PATH"
+
+echo "pre-commit: typecheck + tests (SKIP_TESTS=1 to bypass deliberately)"
+
+if ! (cd "$ROOT" && npx tsc --noEmit -p tsconfig.json); then
+  echo "pre-commit: TYPECHECK FAILED — commit refused" >&2
+  exit 1
+fi
+
+if [ "${SKIP_TESTS:-0}" = "1" ]; then
+  echo "pre-commit: SKIP_TESTS=1 — tests skipped (this is recorded in your head, not the repo)"
+  exit 0
+fi
+
+OUT="$(mktemp)"
+if ! (cd "$ROOT" && node scripts/run-tests.mjs) >"$OUT" 2>&1; then
+  echo "pre-commit: TESTS FAILED — commit refused. Output:" >&2
+  grep -E '^(not ok|ℹ (tests|pass|fail))|✖' "$OUT" | tail -20 >&2
+  rm -f "$OUT"
+  exit 1
+fi
+
+grep -E '^ℹ (tests|pass|fail)' "$OUT" | sed 's/^/  /'
+rm -f "$OUT"
+echo "pre-commit: ok"
