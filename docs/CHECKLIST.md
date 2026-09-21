@@ -9,7 +9,7 @@ Run this at any time to see the current truth:
 
 ```bash
 docker exec aee-live sh -c "grep -c '"payment_provided":true' /app/data/usage.jsonl"   # buyer requests
-curl -s https://agent-evidence-api.thx93workersdev.workers.dev/health?deep=1
+curl -s https://agent-evidence-api.thx93.workers.dev/health?deep=1
 ```
 
 ---
@@ -41,7 +41,7 @@ node -e "console.log('0x'+require('crypto').randomBytes(32).toString('hex'))" \
   > ~/.x402-key && chmod 600 ~/.x402-key
 export X402_PRIVATE_KEY_FILE=~/.x402-key
 
-curl -fsSL https://agent-evidence-api.thx93workersdev.workers.dev/buy.mjs -o buy.mjs
+curl -fsSL https://agent-evidence-api.thx93.workers.dev/buy.mjs -o buy.mjs
 node buy.mjs --address          # send ~$1 USDC on Base to this address
 node buy.mjs "Is Rotamech Industries a manufacturer of centrifugal pumps?" \
   https://en.wikipedia.org/wiki/Centrifugal_pump

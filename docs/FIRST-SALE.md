@@ -13,7 +13,7 @@ mechanism that makes this service discoverable to x402 buyers.
 
 | | |
 |---|---|
-| Public endpoint | `https://agent-evidence-api.thx93workersdev.workers.dev` |
+| Public endpoint | `https://agent-evidence-api.thx93.workers.dev` |
 | Price | **$0.0300 USDC** per request |
 | Network / asset | Base mainnet (`eip155:8453`), USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 | Payment goes to | `0x9c0e2B44180439294Fa30Ae2B2a94f8655455FD0` |
@@ -37,7 +37,7 @@ export X402_PRIVATE_KEY_FILE=~/.x402-key
 Print the address to fund (works offline, so it works even if the service is down):
 
 ```bash
-curl -fsSL https://agent-evidence-api.thx93workersdev.workers.dev/buy.mjs -o buy.mjs
+curl -fsSL https://agent-evidence-api.thx93.workers.dev/buy.mjs -o buy.mjs
 node buy.mjs --address
 ```
 

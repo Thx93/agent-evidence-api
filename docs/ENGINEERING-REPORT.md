@@ -195,7 +195,7 @@ neither duplicates business logic (SPEC §39).
 
 ```
 io.github.Thx93/agent-evidence-api   0.1.1   status: active
-remote: https://agent-evidence-api.thx93workersdev.workers.dev/mcp
+remote: https://agent-evidence-api.thx93.workers.dev/mcp
 ```
 
 `server.json` validates. The superseded 0.1.0 is deprecated with a pointer to

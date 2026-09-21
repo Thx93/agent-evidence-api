@@ -454,7 +454,7 @@ explicit <code>supported</code> / <code>contradicted</code> / <code>mixed</code>
 <p class="price">${price} USDC per request · ${net} · paid over HTTP 402 (x402)</p>
 
 <h2>See the paywall — no wallet needed</h2>
-<pre><code>curl -X POST ${"https://agent-evidence-api.thx93workersdev.workers.dev"}/v1/evidence \
+<pre><code>curl -X POST ${"https://agent-evidence-api.thx93.workers.dev"}/v1/evidence \
   -H 'content-type: application/json' \
   -d '{"question":"Is Rotamech a manufacturer of centrifugal pumps?","urls":["https://example.com"]}'</code></pre>
 <p>You get a <code>402</code> with the price and the payment address. Nothing is charged.</p>
@@ -464,7 +464,7 @@ fails and <em>no payment is taken</em> — x402 cancels settlement whenever the 
 returns an error. Partial success does bill, because you received real evidence.</p>
 
 <h2>Buy something (zero install)</h2>
-<pre><code>curl -fsSL ${"https://agent-evidence-api.thx93workersdev.workers.dev"}/buy.mjs -o buy.mjs
+<pre><code>curl -fsSL ${"https://agent-evidence-api.thx93.workers.dev"}/buy.mjs -o buy.mjs
 
 # no wallet yet? one command creates one, kept out of your shell history
 node -e "console.log('0x'+require('crypto').randomBytes(32).toString('hex'))" \
@@ -479,7 +479,7 @@ never sent to us. No ETH is needed — the facilitator submits the transaction.<
 <h2>Or use it as an MCP tool</h2>
 <pre><code>{ "mcpServers": { "evidence": {
   "type": "streamable-http",
-  "url": "${"https://agent-evidence-api.thx93workersdev.workers.dev"}/mcp" } } }</code></pre>
+  "url": "${"https://agent-evidence-api.thx93.workers.dev"}/mcp" } } }</code></pre>
 <table>
 <tr><td><code>research_evidence</code></td><td>${price} — fetch sources, return cited evidence</td></tr>
 <tr><td><code>health</code></td><td>free</td></tr>

@@ -18,7 +18,7 @@
 # spends anything.
 set -uo pipefail
 
-BASE="${1:-https://agent-evidence-api.thx93workersdev.workers.dev}"
+BASE="${1:-https://agent-evidence-api.thx93.workers.dev}"
 N="${2:-40}"
 
 echo "  target: $BASE"

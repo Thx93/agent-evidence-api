@@ -12,7 +12,7 @@
 # Exits non-zero if any link on the page does not resolve.
 set -uo pipefail
 
-BASE="${1:-https://agent-evidence-api.thx93workersdev.workers.dev}"
+BASE="${1:-https://agent-evidence-api.thx93.workers.dev}"
 FAILED=0
 
 html="$(curl -s -m 25 -H 'accept: text/html' "$BASE/" 2>/dev/null)" || {

@@ -138,9 +138,9 @@ on [basescan](https://basescan.org/address/0x9c0e2B44180439294Fa30Ae2B2a94f86554
 
 | | |
 |---|---|
-| **Endpoint** | https://agent-evidence-api.thx93workersdev.workers.dev |
-| **MCP** | https://agent-evidence-api.thx93workersdev.workers.dev/mcp |
-| **Health** | [`/health`](https://agent-evidence-api.thx93workersdev.workers.dev/health) · deep: [`/health?deep=1`](https://agent-evidence-api.thx93workersdev.workers.dev/health?deep=1) |
+| **Endpoint** | https://agent-evidence-api.thx93.workers.dev |
+| **MCP** | https://agent-evidence-api.thx93.workers.dev/mcp |
+| **Health** | [`/health`](https://agent-evidence-api.thx93.workers.dev/health) · deep: [`/health?deep=1`](https://agent-evidence-api.thx93.workers.dev/health?deep=1) |
 | **Registry** | `io.github.Thx93/agent-evidence-api` — published, status active |
 | **Payment** | x402, `exact`, **0.03 USDC** on Base mainnet (`eip155:8453`) |
 | **Buy it** | zero install: `curl -fsSL .../buy.mjs -o buy.mjs && node buy.mjs "question" https://source.example` |
@@ -149,14 +149,14 @@ Buy something with no npm account and nothing to install — the buyer CLI is a
 single self-contained file served by the service itself:
 
 ```bash
-curl -fsSL https://agent-evidence-api.thx93workersdev.workers.dev/buy.mjs -o buy.mjs
+curl -fsSL https://agent-evidence-api.thx93.workers.dev/buy.mjs -o buy.mjs
 X402_PRIVATE_KEY=0x... node buy.mjs "Is Rotamech a manufacturer of centrifugal pumps?" https://example.com
 ```
 
 Or just look at the paywall first — this returns a 402 and charges nothing:
 
 ```bash
-curl -X POST https://agent-evidence-api.thx93workersdev.workers.dev/v1/evidence \
+curl -X POST https://agent-evidence-api.thx93.workers.dev/v1/evidence \
   -H 'content-type: application/json' \
   -d '{"question":"Is Rotamech a manufacturer of centrifugal pumps?","urls":["https://example.com"]}'
 ```

@@ -25,18 +25,18 @@ Channel: `#showcase` or `#general` (http://slack.x402.org/)
 >
 > **See the paywall with no wallet at all:**
 > ```
-> curl -X POST https://agent-evidence-api.thx93workersdev.workers.dev/v1/evidence \
+> curl -X POST https://agent-evidence-api.thx93.workers.dev/v1/evidence \
 >   -H 'content-type: application/json' \
 >   -d '{"question":"Is Rotamech a manufacturer of centrifugal pumps?","urls":["https://example.com"]}'
 > ```
 > You'll get a 402 with the payment requirements.
 >
-> **Or as an MCP tool:** `https://agent-evidence-api.thx93workersdev.workers.dev/mcp`
+> **Or as an MCP tool:** `https://agent-evidence-api.thx93.workers.dev/mcp`
 > (`research_evidence` is paid, `initialize`/`tools/list`/`health` are free)
 >
 > **Buy it with zero install** — one file, no npm account, no signup:
 > ```
-> curl -fsSL https://agent-evidence-api.thx93workersdev.workers.dev/buy.mjs -o buy.mjs
+> curl -fsSL https://agent-evidence-api.thx93.workers.dev/buy.mjs -o buy.mjs
 > X402_PRIVATE_KEY=0x... node buy.mjs "Is Rotamech a manufacturer of centrifugal pumps?" https://example.com
 > ```
 > It signs one USDC payment, retries, and prints the cited evidence.
@@ -95,7 +95,7 @@ Follow-up posts:
 
 > 5/ It's pay-per-call, which means I have no idea if anyone wants it. If you run
 > agents that need to check facts, I'd love 5 minutes of your honesty:
-> https://agent-evidence-api.thx93workersdev.workers.dev
+> https://agent-evidence-api.thx93.workers.dev
 
 ---
 
@@ -146,7 +146,7 @@ Body:
 > build anything that does its own DNS validation, test it against a real
 > hostname.
 >
-> Live: https://agent-evidence-api.thx93workersdev.workers.dev
+> Live: https://agent-evidence-api.thx93.workers.dev
 > Registry: io.github.Thx93/agent-evidence-api
 >
 > It's in the MCP Registry and on Base mainnet. I'm a first-time seller, so
