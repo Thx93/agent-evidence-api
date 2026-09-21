@@ -1,5 +1,5 @@
 import type { AssessmentStatus } from "@aee/schemas";
-import { hasNegationCue, type EvidenceCandidate } from "@aee/extraction";
+import type { EvidenceCandidate } from "@aee/extraction";
 
 /**
  * Deterministic, lexical-only assessment (SPEC sections 9, 21).
@@ -50,17 +50,24 @@ interface SourceStance {
  * published basis string says so.
  */
 function classify(source: SourceEvidence): SourceStance {
+  // `context` candidates are background, not evidence-bearing, so they do not
+  // grant a source a stance. Everything else does.
   const relevant = source.candidates.filter(
-    (c) => c.relevance === "direct" || c.relevance === "supporting",
+    (c) =>
+      c.relevance === "direct" ||
+      c.relevance === "supporting" ||
+      c.relevance === "contradictory",
   );
 
   if (relevant.length === 0) {
     return { url: source.url, stance: "none", candidateCount: source.candidates.length };
   }
 
+  // The extraction layer already applied the lexical negation check when it
+  // labelled candidates, so the stance follows the strongest passage's label.
   const strongest = relevant[0];
   const stance: Stance =
-    strongest && hasNegationCue(strongest.excerpt) ? "contradicts" : "supports";
+    strongest && strongest.relevance === "contradictory" ? "contradicts" : "supports";
 
   return { url: source.url, stance, candidateCount: relevant.length };
 }

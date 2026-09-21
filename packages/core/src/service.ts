@@ -9,7 +9,7 @@ import {
   SCHEMA_VERSION,
   HARD_CAPS,
 } from "@aee/schemas";
-import { FetchError, fetchSource, type FetchResult } from "@aee/fetcher";
+import { FetchError, fetchSource, isSupportedContentType, type FetchResult } from "@aee/fetcher";
 import {
   extractDocument,
   findEvidenceCandidates,
@@ -311,6 +311,24 @@ export class EvidenceService {
       return { source: this.failedSource(requestedUrl, err), candidates: [] };
     } finally {
       release();
+    }
+
+    // ---- content-type gate (SPEC section 18) ------------------------------
+    // A type this service cannot process is a source-level failure carrying a
+    // stable code, not a silent empty result. The fetcher still returns the
+    // body-less result so status and headers survive as provenance.
+    if (!isSupportedContentType(fetched.contentType)) {
+      return {
+        source: this.failedSource(
+          requestedUrl,
+          new ServiceError(
+            "UNSUPPORTED_CONTENT",
+            `The source returned ${fetched.contentType ?? "no content type"}, which this service does not process.`,
+          ),
+          fetched,
+        ),
+        candidates: [],
+      };
     }
 
     // ---- extract ----------------------------------------------------------

@@ -465,24 +465,23 @@ inflate to several gigabytes.
 **Implemented, with an important behavioural difference from the description
 above.**
 
-Content types are handled by an **allowlist, not a rejection**. `TEXTUAL` is
-`text/html`, `text/plain`, `application/xhtml+xml`, `application/json`,
+Content types are handled by an **allowlist**: `TEXTUAL` is `text/html`,
+`text/plain`, `application/xhtml+xml`, `application/json`,
 `application/ld+json`, `text/xml`, `application/xml`, and anything whose MIME type
-starts with `text/`. When the content type is not on that list, the fetcher does
-**not** throw `UNSUPPORTED_CONTENT`. It omits the body (`body: null`) and pushes a
-source warning:
+starts with `text/`. When the content type is not on that list, the fetcher omits
+the body (`body: null`) and pushes an `UNSUPPORTED_CONTENT_TYPE` warning; the
+`EvidenceService` then fails that source with the public code:
 
 ```json
 {
-  "code": "UNSUPPORTED_CONTENT_TYPE",
-  "message": "Content type application/octet-stream is not processed; body omitted."
+  "code": "UNSUPPORTED_CONTENT",
+  "message": "The source returned application/octet-stream, which this service does not process."
 }
 ```
 
-The result is that an unsupported content type is reported as **provenance on a
-surviving source**, not as a request failure. The public `UNSUPPORTED_CONTENT`
-error code (HTTP 415) exists in the vocabulary and is mapped, but the fetch path
-does not currently emit it. This is a deliberate-looking design choice — the
+An unsupported content type is therefore a **source-level failure**, not a
+request failure: the other sources still return, and the failed source keeps its
+real upstream status and content type on the record. This is a deliberate-looking design choice — the
 source is still recorded with its real status and content type — but it differs
 from the plain reading of SPEC §4/§18, so it is called out rather than smoothed
 over.
@@ -956,26 +955,22 @@ passing silently.
 
 Ordered by risk:
 
-1. **`ROBOTS_POLICY` is inert.** The variable is parsed and validated but never
-   consumed, so `ignore`, `warn`, and `enforce` all behave identically — as
-   `ignore`. This is a direct gap against SPEC §19.
-2. **Literal test wallet addresses are committed** in `apps/worker/wrangler.jsonc`
-   (both `env.dev` and `env.test`, the same value).
-3. **No x402 test suite exists**, so the payment boundary — the control that
-   makes the origin protection meaningful — is unverified by automation, and no
-   on-chain settlement has been demonstrated.
-4. **No DNS-rebinding-specific test**, despite the defence being implemented.
-5. **The SSRF and limit suites have not been run here**, so no pass/fail result
-   is known.
-6. **No explicit decompression-ratio cap and no content-encoding nesting cap.**
-   The absolute byte cap bounds the exposure; the ratio itself is unbounded.
-7. **`UNSUPPORTED_CONTENT` is never emitted.** An unsupported content type
-   produces a source warning (`UNSUPPORTED_CONTENT_TYPE`) and a body-less source
-   instead of an HTTP 415.
-8. **`metadata.goog` is not blocked by name**, unlike `metadata.google.internal`
-   (which the `.internal` suffix covers).
-9. **The port allowlist includes `8080` and `8443`**, which are also common
+1. **No on-chain x402 settlement test.** The 402 gate is covered by an automated
+   smoke test, but settlement needs a funded Base Sepolia wallet, which is an
+   external credential. Automation proves the gate, not the settlement path.
+2. **No DNS-rebinding-specific test.** Connect-time revalidation is implemented
+   and runs on every fetch, but a true rebinding test needs control of an
+   authoritative DNS server, which is not available in-process. Covered by
+   review rather than by a test.
+3. **`apps/worker/wrangler.jsonc` carries a throwaway Base Sepolia testnet
+   recipient** in `env.dev`/`env.test`. Documented as testnet-only, and
+   production keeps a zero placeholder — but a real deployment must set its own.
+4. **No rate limiting at the edge.** Limiting is enforced in the backend, keyed
+   on `CF-Connecting-IP`; a Worker-level limiter would need Durable Objects,
+   which SPEC §13 excludes from the first release.
+5. **The port allowlist includes `8080` and `8443`**, which are also common
    internal-interface ports. Narrow it if your deployment does not need them.
+6. **No independent security review** has been performed.
 10. **No rate limiting implementation exists.** `RATE_LIMIT` (HTTP 429) is defined
     as an error code but nothing produces it; the concurrency semaphore bounds
     resource use but does not rate-limit a caller.

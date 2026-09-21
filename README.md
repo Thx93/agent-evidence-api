@@ -590,10 +590,10 @@ configurable via `ROBOTS_POLICY`, and only publicly accessible resources are in
 scope. Submit only URLs you are permitted to access.
 
 > **These controls are implemented in `packages/fetcher` and unit-tested in
-> `tests/security/`**, but they have not been run here and no independent audit
-> has been performed. `ROBOTS_POLICY` is the one piece that is configured but
-> inert. See [`docs/security.md`](./docs/security.md) for the per-control status
-> table, what is enforced where, and the honest list of gaps.
+> `tests/security/`**, which passes locally (92 security cases). No independent
+> audit has been performed. `ROBOTS_POLICY` is enforced. See
+> [`docs/security.md`](./docs/security.md) for the per-control status table, what
+> is enforced where, and the honest list of gaps.
 
 ---
 
@@ -615,9 +615,9 @@ Stated plainly, because you should know these before you rely on the output.
 | **No source-change detection or trust scoring** | `SourceTrustProvider` is not implemented; the service reports what a page says, not how much to trust the publisher. |
 | **Cache hits are flagged, not hidden** | `from_cache: true` plus a `SERVED_FROM_CACHE` warning, and `retrieved_at` is always the real retrieval time. Evidence up to `CACHE_TTL_SECONDS` (default 24 h) old may be served. |
 | **One bad source does not fail the request** | Failures are reported per source in `warnings`, and a failure count is added to `limitations`. Read those arrays. |
-| **No rate limiting implemented yet** | `RATE_LIMIT` (429) is defined as a code; concurrency is bounded by `MAX_CONCURRENT_FETCHES`, but per-caller rate limiting is not implemented. |
+| **Rate limiting is per-backend-process** | A token bucket keyed on `CF-Connecting-IP` enforces `RATE_LIMIT` (429) with a bounded bucket map. It is in-process, so multiple backend replicas each hold their own budget; edge-level limiting would need Durable Objects. |
 | **Non-HTML content is not processed** | An unsupported content type yields a source with a `null` body and an `UNSUPPORTED_CONTENT_TYPE` warning rather than an error. HTML, plain text, XML, and JSON are the processed types. |
-| **`ROBOTS_POLICY` is inert** | The variable is read and validated, but nothing consumes it, so `ignore`, `warn`, and `enforce` all behave as `ignore`. A clearly identifiable `User-Agent` *is* sent on every request. |
+| **Robots matching is prefix/wildcard, not full RFC 9309** | `ROBOTS_POLICY=ignore\|warn\|enforce` is enforced, with a bounded per-origin cache. Ambiguous rules resolve to *allow* and are warned about rather than silently refused. A clearly identifiable `User-Agent` is sent on every request. |
 | **No on-chain payment has been demonstrated** | The x402 gate is implemented; a funded Base Sepolia or mainnet settlement has not been executed against a deployment. |
 | **No independent security review** | The SSRF controls are implemented and unit-tested in source; they have not been audited adversarially. |
 
@@ -634,16 +634,17 @@ drives the real backend over HTTP against the fixture server.
 | Gap | Detail |
 |---|---|
 | Literal test wallet addresses | `apps/worker/wrangler.jsonc` has the same literal recipient address in both `env.dev` and `env.test`. Replace with placeholders before deploying. |
-| `ROBOTS_POLICY` is inert | The variable is read and validated but never consumed, so `ignore`, `warn`, and `enforce` all behave as `ignore`. |
+| Robots matching is simplified | `ROBOTS_POLICY` is enforced; matching is prefix/wildcard rather than full RFC 9309, and ambiguity resolves to allow. |
 | No on-chain payment verification | The x402 gate is implemented and reviewed; no funded Base Sepolia or mainnet settlement has been executed. |
 | No automated x402 payment test | SPEC §26 asks for a `402` test and a valid-testnet-payment test. Neither exists. |
-| No rate limiting | `RATE_LIMIT` (429) is defined but never produced. |
+| Rate limiting is in-process | Enforced per backend replica, not globally at the edge. |
 | `server.json` handle unconfirmed | `name` and `repository.url` assert a GitHub namespace; confirm you own it, and replace the placeholder `remotes[].url`. |
 | No independent security review | The SSRF controls are implemented and unit-tested in source; nobody has audited them adversarially. |
 
-**Not verified here:** the test suites and `scripts/smoke.sh` have not been run in
-this environment. Run `pnpm validate` and `bash scripts/smoke.sh` and report the
-actual output rather than assuming a pass.
+**Verified locally:** `pnpm typecheck` exits 0, `pnpm test` reports 199 passing
+tests, and both `scripts/smoke.sh` and `scripts/worker-smoke.sh` pass against
+live sockets. Re-run them and report the actual output rather than assuming a
+pass — these results are from a single machine.
 
 ---
 
@@ -791,22 +792,22 @@ Snapshot taken while writing the documentation.
   `packages/mcp/src/mcp.test.ts` (15), `packages/extraction/src/extraction.test.ts`
   (46), `packages/cache/src/cache.test.ts` (22).
 
-**Not verified in this environment**
+**Verified locally, not independently reproduced**
 
-- `pnpm test` and `bash scripts/smoke.sh` have not been run here, so their
-  pass/fail results are unknown. A `data/smoke-cache.sqlite` artifact is present,
-  which indicates the smoke script has been run at some point — that is evidence,
-  not a current result.
-- No on-chain x402 payment has been demonstrated.
+- `pnpm typecheck` → exit 0; `pnpm test` → 199 passing; `scripts/smoke.sh` and
+  `scripts/worker-smoke.sh` → all checks passed. No third party has reproduced
+  these results.
+- No on-chain x402 payment has been demonstrated (the 402 gate is verified; the
+  settlement path needs a funded testnet wallet).
 
 **Open defects**
 
 | Defect | Detail |
 |---|---|
 | Literal test wallet addresses | `apps/worker/wrangler.jsonc` contains the same literal recipient address in both `env.dev` and `env.test`. SPEC §33 and AGENTS.md §6 forbid committing wallet configuration. |
-| `ROBOTS_POLICY` is inert | Parsed and validated, but no code consumes `config.fetch.robotsPolicy`, so all three values behave as `ignore`. |
-| `UNSUPPORTED_CONTENT` never emitted | An unsupported content type yields a body-less source with an `UNSUPPORTED_CONTENT_TYPE` warning instead of an HTTP 415. |
-| No x402 or rate-limit tests | SPEC §26 asks for a `402` test and a testnet-payment test; `RATE_LIMIT` is defined but never produced. |
+| Robots matching is simplified | `ROBOTS_POLICY` is enforced in `EvidenceService`; matching is prefix/wildcard, not full RFC 9309. |
+| — (fixed) | `UNSUPPORTED_CONTENT` (415) is now emitted per source. |
+| No on-chain settlement test | The `402` gate and the free/paid MCP split are covered by `scripts/worker-smoke.sh`; rate limiting is unit- and integration-tested. Actual USDC settlement needs a funded Base Sepolia wallet, which is an external credential. |
 | `server.json` namespace unconfirmed | `io.github.<handle>/agent-evidence-api` and the repository URL assert an account; confirm ownership and replace the placeholder remote URL. |
 | Port allowlist includes 8080/8443 | Convenient for tooling, but also common internal-interface ports. Narrow if unneeded. |
 

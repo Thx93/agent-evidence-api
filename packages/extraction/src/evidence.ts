@@ -8,15 +8,19 @@
  *
  * ## Relevance labels
  *
- * - `"direct"` — the segment carries the strongest term overlap in the
- *   document (the maximum number of distinct question terms matched).
- * - `"supporting"` — positive overlap, but below that maximum.
- * - `"context"` — reserved for segments with no lexical overlap. Those are
- *   dropped before return, so this package never emits it in v0.1.0.
- * - `"contradictory"` is **never emitted**. Contradiction is a semantic
- *   judgement this package cannot make; callers may combine
- *   {@link hasNegationCue} with `"direct"`/`"supporting"` matches to build a
- *   *lexical* contradiction signal, but must not present it as semantics.
+ * All four labels defined by the response schema are reachable:
+ *
+ * - `"contradictory"` — the segment matches question terms AND carries a
+ *   negation cue (see {@link hasNegationCue}). This is a LEXICAL signal only:
+ *   it says the wording negates, not that the source refutes the claim. Callers
+ *   must not present it as semantic understanding.
+ * - `"direct"` — no negation, and a score within 25% of the best match.
+ * - `"supporting"` — no negation, and a score within 35%..75% of the best match.
+ * - `"context"` — no negation, positive overlap, but a weak score (< 35% of the
+ *   best match): topically related background rather than direct evidence.
+ *
+ * Segments with no lexical overlap at all are still dropped before return, so
+ * an entirely unrelated document yields no candidates rather than filler.
  *
  * ## Term matching
  *
@@ -297,15 +301,28 @@ export function findEvidenceCandidates(
   });
   if (scored.length === 0) return [];
 
-  const maxMatched = scored.reduce((max, item) => Math.max(max, item.matchedCount), 0);
+  const maxScore = scored.reduce((max, item) => Math.max(max, item.score), 0);
 
   return scored
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .slice(0, maxItems)
-    .map((item) => ({
-      excerpt: truncate(item.entry.segment.text, opts.maxExcerptChars),
-      context: buildContext(item.entry.segment),
-      relevance: item.matchedCount === maxMatched ? "direct" : "supporting",
-      score: item.score,
-    }));
+    .map((item) => {
+      // A matching passage that negates is labelled contradictory; otherwise the
+      // score relative to the strongest match decides the remaining labels.
+      const negated = hasNegationCue(item.entry.segment.text);
+      const relevance: Relevance = negated
+        ? "contradictory"
+        : item.score >= maxScore * 0.75
+          ? "direct"
+          : item.score >= maxScore * 0.35
+            ? "supporting"
+            : "context";
+
+      return {
+        excerpt: truncate(item.entry.segment.text, opts.maxExcerptChars),
+        context: buildContext(item.entry.segment),
+        relevance,
+        score: item.score,
+      };
+    });
 }

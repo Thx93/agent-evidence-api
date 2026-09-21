@@ -198,6 +198,13 @@ const DISALLOWED_HOST_EXACT = new Set([
   "ip6-localhost",
   "ip6-loopback",
   "localhost.localdomain",
+  // Google's metadata service is reachable as `metadata.goog` as well as
+  // `metadata.google.internal` (the latter is caught by the `.internal`
+  // suffix). Deliberately narrow: `google.com` and the bare label `goog` are
+  // NOT blocked.
+  "metadata.goog",
+  // Defensive variant: some resolvers/CDNs normalise the dot away.
+  "metadatagoog",
 ]);
 
 /**

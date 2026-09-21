@@ -10,6 +10,7 @@
  */
 export {
   FetchError,
+  MAX_DECOMPRESSION_RATIO,
   fetchSource,
   isSupportedContentType,
   validateUrl,

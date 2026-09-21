@@ -485,8 +485,10 @@ variable list. Copy it to `.env` (gitignored) for local use.
 
 | Variable | Default | Notes |
 |---|---|---|
+| `RATE_LIMIT_PER_MINUTE` | `60` | Sustained requests per minute per client. `0` disables the limiter entirely. Returned as 429 + `Retry-After` when exceeded. |
+| `RATE_LIMIT_BURST` | `20` | Burst allowance above the sustained rate. |
 | `FETCH_USER_AGENT` | `AgentEvidenceAPI/0.1.0 (+https://example.invalid/bot)` | Clearly identifiable User-Agent (SPEC §19). Point the URL at a real page once you have a domain. |
-| `ROBOTS_POLICY` | `warn` | `ignore` \| `warn` \| `enforce`. Any other value makes startup fail. **Currently inert**: nothing reads it, so all three behave as `ignore`. |
+| `ROBOTS_POLICY` | `warn` | `ignore` \| `warn` \| `enforce`. Any other value makes startup fail. Enforced by `EvidenceService`: `ignore` never consults robots.txt, `warn` attaches a `ROBOTS_DISALLOWED` warning and proceeds, `enforce` refuses the source. |
 
 ### Docker env templates
 

@@ -407,13 +407,13 @@ workspace.
 **Known gaps**
 
 - `ROBOTS_POLICY` is parsed and validated but never consumed, so all three values
-  behave as `ignore`. See
+  is now honoured by `EvidenceService`. See
   [`security.md`](./security.md#robots_policy).
 - `apps/worker/wrangler.jsonc` contains literal test-recipient addresses in
   `env.dev` and `env.test`.
-- `UNSUPPORTED_CONTENT` is never emitted; an unsupported content type becomes a
-  source warning instead.
-- No rate limiting, and no automated x402 payment test.
+- `UNSUPPORTED_CONTENT` (HTTP 415) is emitted when a source's content type
+  cannot be processed. Rate limiting is enforced at the backend, and the
+  automated x402 smoke test covers the 402 gate (not on-chain settlement).
 - `server.json` points at a placeholder remote URL and an unconfirmed namespace.
 
 ---

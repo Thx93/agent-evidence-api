@@ -37,6 +37,8 @@ export const ERROR_CODES = [
   "RATE_LIMIT",
   /** Internal failure. Stack traces are never exposed. */
   "INTERNAL_ERROR",
+  /** No such endpoint. Both the Worker and the backend answer 404. */
+  "NOT_FOUND",
   /** Missing or incorrect server-to-server credential (backend only). */
   "UNAUTHORIZED",
   /** The backend origin could not be reached by the Worker. */
@@ -65,6 +67,7 @@ export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
   PAYMENT_EXPIRED: 402,
   RATE_LIMIT: 429,
   INTERNAL_ERROR: 500,
+  NOT_FOUND: 404,
   UNAUTHORIZED: 401,
   BACKEND_UNREACHABLE: 502,
   NOT_CONFIGURED: 503,
@@ -105,6 +108,7 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   PAYMENT_EXPIRED: "The supplied payment has expired.",
   RATE_LIMIT: "Too many requests. Please retry shortly.",
   INTERNAL_ERROR: "An internal error occurred.",
+  NOT_FOUND: "No such endpoint.",
   UNAUTHORIZED: "Authentication is required.",
   BACKEND_UNREACHABLE: "The evidence service is temporarily unavailable.",
   NOT_CONFIGURED: "The service is not fully configured.",

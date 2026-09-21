@@ -13,8 +13,9 @@ implementation of the feature — SPEC §39 requires both adapters to call the s
 > the tool definitions, and `tools/call` delegation in stateless streamable-HTTP
 > mode, with a 15-case test file.
 >
-> What has **not** been done: the suites have not been run here, and no x402
-> payment test exists. See [§8 Status](#8-status).
+> The suites pass locally (15 MCP cases within a 199-test run) and the live
+> free/paid split is covered by `scripts/worker-smoke.sh`. On-chain settlement is
+> not demonstrated. See [§8 Status](#8-status).
 
 ---
 

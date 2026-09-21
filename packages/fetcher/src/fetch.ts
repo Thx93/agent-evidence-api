@@ -2,7 +2,7 @@ import { request as httpRequest, type IncomingMessage } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { lookup as dnsLookup } from "node:dns";
 import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
-import type { Readable } from "node:stream";
+import type { Duplex, Readable } from "node:stream";
 import { DEFAULT_LIMITS, type ErrorCode, type ResourceLimits, type SourceWarning } from "@aee/schemas";
 import { classifyHostname, classifyIp, classifyPort } from "./ip.js";
 
@@ -65,18 +65,56 @@ function isLoopbackAddress(address: string): boolean {
   return false;
 }
 
+/**
+ * Maximum tolerated decompression ratio, expressed as decompressed bytes per
+ * byte read from the wire.
+ *
+ * This is a DEFENCE-IN-DEPTH measure that sits alongside the absolute
+ * `ResourceLimits.maxResponseBytes` cap. The absolute cap alone is not enough:
+ * a small "gzip bomb" can expand enormously before the decoded stream ever
+ * reaches that ceiling. The ratio therefore aborts the fetch as soon as the
+ * decoded output outgrows the compressed input by more than this factor.
+ *
+ * The guard only engages once the decoded body passes
+ * `DECOMPRESSION_RATIO_FLOOR_BYTES`, so tiny (and therefore statistically
+ * noisy) responses are never rejected on a technically-accurate but harmless
+ * ratio.
+ */
+export const MAX_DECOMPRESSION_RATIO = 200;
+
+/**
+ * Decoded-byte floor below which the ratio guard is not evaluated. Kept well
+ * above toy payload sizes so ordinary small documents cannot be falsely
+ * rejected; the absolute size cap still applies to them.
+ */
+const DECOMPRESSION_RATIO_FLOOR_BYTES = 64 * 1024;
+
 export interface FetchResult {
   requestedUrl: string;
   finalUrl: string;
   status: number;
   contentType: string | null;
+  /**
+   * The value of the `content-length` RESPONSE HEADER when it is present and
+   * parseable as a non-negative integer, otherwise null.
+   *
+   * This is the size the server declared for the body it sent ON THE WIRE. When
+   * the response is content-encoded (gzip/br/deflate) it is therefore the
+   * COMPRESSED size, not the decoded size. Use `bytes` for what was actually
+   * processed. It is `null` whenever the header is absent, malformed, or the
+   * response is chunked.
+   */
   contentLength: number | null;
   /** Decoded text body. Null for non-text content types. */
   body: string | null;
   redirectChain: string[];
   retrievedAt: string;
   warnings: SourceWarning[];
-  /** Decompressed byte count actually read. */
+  /**
+   * Actual DECOMPRESSED byte count read from the body, i.e. the amount of
+   * content this service really processed (after any content-encoding has been
+   * undone). Zero for an empty body.
+   */
   bytes: number;
 }
 
@@ -256,11 +294,55 @@ function makeGuardedLookup(allowLoopback: boolean) {
   };
 }
 
+/**
+ * Recognised `content-encoding` tokens mapped to decoder factories.
+ *
+ * A `Map` (not a plain object) so a hostile header token such as `constructor`
+ * cannot accidentally resolve through the prototype chain.
+ */
+const CONTENT_DECODERS = new Map<string, () => Duplex>([
+  ["gzip", createGunzip],
+  ["x-gzip", createGunzip],
+  ["deflate", createInflate],
+  ["br", createBrotliDecompress],
+]);
+
+interface ParsedContentEncoding {
+  /** Recognised tokens, in the order the server declared them. */
+  chain: string[];
+  /** Tokens present in the header that this build cannot decode. */
+  unsupported: string[];
+}
+
+/**
+ * Parse a `content-encoding` header into its comma-separated tokens.
+ *
+ * `identity` and empty entries are meaningless no-ops and are dropped silently.
+ * Any other token that is not recognised is reported as unsupported; the
+ * caller then leaves the body entirely UNDECODED rather than applying a partial
+ * chain, because undoing the wrong layer would silently corrupt the bytes.
+ */
+function parseContentEncoding(header: string | null): ParsedContentEncoding {
+  const tokens = (header ?? "")
+    .split(",")
+    .map((token) => token.trim().toLowerCase())
+    .filter((token) => token !== "" && token !== "identity");
+  return {
+    chain: tokens,
+    unsupported: tokens.filter((token) => !CONTENT_DECODERS.has(token)),
+  };
+}
+
 interface RawResponse {
   status: number;
   headers: Record<string, string | string[] | undefined>;
   body: Buffer | null;
+  /** Value of the `content-length` response header, when present and valid. */
+  contentLength: number | null;
+  /** Decompressed byte count actually read. */
   bytes: number;
+  /** Decoding warnings raised while handling this response. */
+  warnings: SourceWarning[];
 }
 
 /** Perform ONE request (no redirect following) with all limits applied. */
@@ -303,8 +385,7 @@ function requestOnce(
       },
       (res: IncomingMessage) => {
         const contentType = headerValue(res.headers["content-type"]);
-        const contentLengthRaw = headerValue(res.headers["content-length"]);
-        const contentLength = contentLengthRaw ? Number(contentLengthRaw) : null;
+        const contentLength = parseContentLength(headerValue(res.headers["content-length"]));
 
         if (contentLength !== null && contentLength > opts.limits.maxResponseBytes) {
           req.destroy();
@@ -314,11 +395,48 @@ function requestOnce(
           return;
         }
 
-        const encoding = (headerValue(res.headers["content-encoding"]) ?? "").toLowerCase();
+        const responseWarnings: SourceWarning[] = [];
+
+        // A failure anywhere in the response/decode chain ends the request. The
+        // socket is destroyed so no upstream connection is left dangling.
+        const onStreamError = (err: Error) => {
+          req.destroy();
+          finish(() => reject(new FetchError("UPSTREAM_HTTP_FAILURE", err.message)));
+        };
+
+        const { chain, unsupported } = parseContentEncoding(
+          headerValue(res.headers["content-encoding"]),
+        );
+
+        // Count the bytes actually read from the wire (i.e. still compressed)
+        // so the decompression-ratio guard has a denominator. Registered BEFORE
+        // the decode chain is built, so the counter never lags the body.
+        let compressedBytes = 0;
+        res.on("data", (chunk: Buffer) => {
+          compressedBytes += chunk.length;
+        });
+
         let stream: Readable = res;
-        if (encoding === "gzip" || encoding === "x-gzip") stream = res.pipe(createGunzip());
-        else if (encoding === "deflate") stream = res.pipe(createInflate());
-        else if (encoding === "br") stream = res.pipe(createBrotliDecompress());
+        if (unsupported.length > 0) {
+          // Leave the body undecoded: a partial chain would emit garbage.
+          responseWarnings.push({
+            code: "UNSUPPORTED_CONTENT_ENCODING",
+            message: `Content encoding ${unsupported.join(", ")} is not supported; the body was left undecoded.`,
+          });
+        } else {
+          // The server applied the declared encodings left to right (the first
+          // listed is the innermost), so they must be undone right to left.
+          for (const token of [...chain].reverse()) {
+            const decoder = CONTENT_DECODERS.get(token);
+            if (!decoder) continue;
+            const next = decoder();
+            // `pipe` does not forward errors, so a failure in ANY layer of the
+            // chain (not just the last) must fail the request fast instead of
+            // stalling it until the total timeout.
+            next.on("error", onStreamError);
+            stream = stream.pipe(next);
+          }
+        }
 
         const wantsBody = isTextual(contentType);
         const chunks: Buffer[] = [];
@@ -336,12 +454,29 @@ function requestOnce(
             );
             return;
           }
+          // Defence in depth alongside the absolute cap above: a small
+          // compressed body must not be allowed to expand without bound before
+          // the ceiling is reached. The floor keeps small responses from being
+          // rejected on a trivial but harmless ratio.
+          if (
+            bytes > DECOMPRESSION_RATIO_FLOOR_BYTES &&
+            bytes > compressedBytes * MAX_DECOMPRESSION_RATIO
+          ) {
+            req.destroy();
+            finish(() =>
+              reject(
+                new FetchError(
+                  "RESPONSE_TOO_LARGE",
+                  "response expanded beyond the maximum allowed decompression ratio",
+                ),
+              ),
+            );
+            return;
+          }
           if (wantsBody) chunks.push(chunk);
         });
 
-        stream.on("error", (err: Error) => {
-          finish(() => reject(new FetchError("UPSTREAM_HTTP_FAILURE", err.message)));
-        });
+        stream.on("error", onStreamError);
 
         stream.on("end", () => {
           finish(() =>
@@ -349,7 +484,9 @@ function requestOnce(
               status: res.statusCode ?? 0,
               headers: res.headers,
               body: wantsBody ? Buffer.concat(chunks) : null,
+              contentLength,
               bytes,
+              warnings: responseWarnings,
             }),
           );
         });
@@ -393,6 +530,21 @@ function requestOnce(
 function headerValue(value: string | string[] | undefined): string | null {
   if (value === undefined) return null;
   return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+/**
+ * Parse a `content-length` response header.
+ *
+ * Returns null when the header is absent, empty, or not a plain non-negative
+ * integer: an undeterminable length is reported honestly as `null` rather than
+ * guessed or coerced to `NaN`.
+ */
+function parseContentLength(raw: string | null): number | null {
+  if (raw === null) return null;
+  const trimmed = raw.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const value = Number(trimmed);
+  return Number.isSafeInteger(value) ? value : null;
 }
 
 /**
@@ -468,13 +620,16 @@ export async function fetchSource(opts: FetchOptions): Promise<FetchResult> {
         message: `The source returned HTTP ${raw.status}.`,
       });
     }
+    // Decoding warnings (e.g. UNSUPPORTED_CONTENT_ENCODING) belong to this
+    // response and must survive into the result.
+    warnings.push(...raw.warnings);
 
     return {
       requestedUrl: opts.url,
       finalUrl: validation.url.toString(),
       status: raw.status,
       contentType,
-      contentLength: raw.bytes,
+      contentLength: raw.contentLength,
       body: raw.body ? raw.body.toString("utf8") : null,
       redirectChain,
       retrievedAt: new Date().toISOString(),

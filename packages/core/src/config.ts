@@ -31,6 +31,16 @@ export interface AppConfig {
 
   limits: ResourceLimits;
 
+  /**
+   * Per-client request-rate limiting (SPEC section 23). `perMinute: 0` turns
+   * limiting off entirely; `burst` is the extra headroom above the sustained
+   * rate that one client may consume at once.
+   */
+  rateLimit: {
+    perMinute: number;
+    burst: number;
+  };
+
   cache: {
     enabled: boolean;
     path: string;
@@ -115,6 +125,11 @@ export function loadConfig(): AppConfig {
     },
 
     limits: loadLimits(),
+
+    rateLimit: {
+      perMinute: int("RATE_LIMIT_PER_MINUTE", 60),
+      burst: int("RATE_LIMIT_BURST", 20),
+    },
 
     cache: {
       enabled: bool("CACHE_ENABLED", true),

@@ -417,15 +417,28 @@ describe("findEvidenceCandidates", () => {
     assert.ok(!whole.excerpt.endsWith("\u2026"));
   });
 
-  test("never emits contradictory; only direct or supporting", () => {
+  test("emits only the four schema-defined labels", () => {
     const candidates = findEvidenceCandidates(doc, question, { maxItems: 5, maxExcerptChars: 600 });
     for (const candidate of candidates) {
-      assert.ok(["direct", "supporting", "context"].includes(candidate.relevance));
-      assert.notEqual(candidate.relevance, "contradictory");
+      assert.ok(["direct", "supporting", "context", "contradictory"].includes(candidate.relevance));
     }
   });
 
-  test("a weak secondary match is labelled supporting and ranked below direct", () => {
+  test("a negating match is labelled contradictory", () => {
+    const negating = extractDocument(
+      `<html><body><main>
+        <p>The company is not a manufacturer of centrifugal pumps.</p>
+      </main></body></html>`,
+      "https://example.com/a",
+    );
+    const candidates = findEvidenceCandidates(negating, "manufacturer of centrifugal pumps", {
+      maxItems: 5,
+      maxExcerptChars: 600,
+    });
+    assert.equal(candidates[0]?.relevance, "contradictory");
+  });
+
+  test("a weak secondary match is labelled context and ranked below direct", () => {
     const mixed = extractDocument(
       `<html><body><main>
         <p>The quantum computing research division published its findings.</p>
@@ -438,7 +451,8 @@ describe("findEvidenceCandidates", () => {
       maxExcerptChars: 600,
     });
     assert.equal(candidates[0]?.relevance, "direct");
-    assert.equal(candidates[1]?.relevance, "supporting");
+    // A single weak term overlap is background, not supporting evidence.
+    assert.equal(candidates[1]?.relevance, "context");
     assert.ok((candidates[0]?.score ?? 0) > (candidates[1]?.score ?? 0));
   });
 });

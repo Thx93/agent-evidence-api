@@ -374,7 +374,7 @@ app.delete("/mcp", (c) => proxyToBackend(c, "/mcp", { method: "DELETE" }));
 // ---------------------------------------------------------------------------
 
 app.notFound((c) =>
-  fail(c, "INVALID_REQUEST", newRequestId(), `No such endpoint: ${c.req.method} ${c.req.path}`),
+  fail(c, "NOT_FOUND", newRequestId(), `No such endpoint: ${c.req.method} ${c.req.path}`),
 );
 
 app.onError((err, c) => {

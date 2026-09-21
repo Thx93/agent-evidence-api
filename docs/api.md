@@ -282,10 +282,9 @@ Two behaviours worth noting, because they differ from a plain reading of the
 error table:
 
 - **An unsupported content type is not a request failure.** It produces a
-  surviving source with `status` set, `content_type` set, a `null` body, and an
-  `UNSUPPORTED_CONTENT_TYPE` warning. The public `UNSUPPORTED_CONTENT` code
-  (HTTP 415) is defined and mapped but is not currently emitted by the fetch
-  path.
+  source-level failure carrying the public `UNSUPPORTED_CONTENT` code (HTTP
+  415): `status` is `null`, and the warning names the content type that was
+  refused. The fetcher still reports the upstream status and content type.
 - **A 4xx/5xx upstream status is not a request failure either.** The status is
   recorded on the source and a warning is attached; the request still succeeds
   with HTTP 200. Only transport-level problems (timeout, blocked destination,
@@ -660,6 +659,7 @@ repurposed without an API version bump.
 | `PAYMENT_EXPIRED` | `402` | The supplied payment proof has expired. |
 | `RATE_LIMIT` | `429` | The caller exceeded the allowed request rate. |
 | `INTERNAL_ERROR` | `500` | An internal failure. A stack trace is never exposed. |
+| `NOT_FOUND` | `404` | No such endpoint. Both the Worker and the backend answer 404 with this code. |
 | `UNAUTHORIZED` | `401` | Missing or incorrect server-to-server credential. Backend/internal only — customers never see this. |
 | `BACKEND_UNREACHABLE` | `502` | The Worker could not reach the backend origin (including its own 30 s timeout). |
 | `NOT_CONFIGURED` | `503` | A required dependency — `BACKEND_ORIGIN_URL` or `BACKEND_AUTH_SECRET` — is not configured. |
@@ -729,6 +729,8 @@ in `packages/schemas/src/evidence.ts`; the environment variable names are read i
 | Environment variable | Default | Bounds |
 |---|---|---|
 | `MAX_CONCURRENT_FETCHES` | `4` | Simultaneous outbound fetches across the process. Enforced by a counting semaphore in `EvidenceService`. |
+| `RATE_LIMIT_PER_MINUTE` | `60` | Sustained requests per minute per caller. `0` disables limiting. Exceeding it returns `RATE_LIMIT` (429) with a `Retry-After` header. Keyed on `CF-Connecting-IP`, then the first `X-Forwarded-For` entry, then the socket address. |
+| `RATE_LIMIT_BURST` | `20` | Additional burst allowance above the sustained rate (bucket capacity = `RATE_LIMIT_PER_MINUTE + RATE_LIMIT_BURST`). |
 | `MAX_URLS_PER_REQUEST` | `5` | URLs accepted per evidence request. Exceeding it is `INVALID_REQUEST`. |
 | `MAX_RESPONSE_BYTES` | `2097152` (2 MiB) | Maximum response body size per source. |
 | `MAX_REDIRECTS` | `5` | Maximum redirect hops per source. Exceeding it is `REDIRECT_LIMIT`. |

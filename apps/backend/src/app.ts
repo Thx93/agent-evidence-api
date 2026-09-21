@@ -14,6 +14,7 @@ import {
 } from "@aee/core";
 import type { EvidenceMcpServer } from "@aee/mcp";
 import { extractCredential, isPublicPath, secretMatches } from "./auth.js";
+import { createRateLimiter } from "./rate-limit.js";
 
 export interface BuildAppDeps {
   config: AppConfig;
@@ -24,6 +25,39 @@ export interface BuildAppDeps {
 
 function newRequestId(): string {
   return `req_${globalThis.crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`;
+}
+
+/**
+ * Resolve the rate-limit key for a request.
+ *
+ * The backend sits behind the Cloudflare Worker, so `req.ip` is the Worker's
+ * socket address, not the end client's. The key is chosen in this order:
+ *
+ *   1. `cf-connecting-ip` — set by Cloudflare to the real client address.
+ *   2. the first entry of `x-forwarded-for` — the original client when a proxy
+ *      chain is present.
+ *   3. `req.ip` — the direct socket peer, i.e. the Worker. A coarse fallback.
+ *
+ * The Worker must forward `CF-Connecting-IP` for per-client limiting to be
+ * meaningful; without it every caller shares the Worker's bucket, which still
+ * bounds aggregate load but cannot isolate one noisy client. Because the
+ * internal API is authenticated, a caller cannot reach this hook while
+ * spoofing the header — only the Worker can.
+ */
+export function clientKey(req: FastifyRequest): string {
+  const cf = req.headers["cf-connecting-ip"];
+  if (typeof cf === "string") {
+    const value = cf.trim();
+    if (value.length > 0) return value;
+  }
+
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string") {
+    const first = forwarded.split(",")[0]?.trim();
+    if (first !== undefined && first.length > 0) return first;
+  }
+
+  return req.ip;
 }
 
 /**
@@ -61,6 +95,35 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
         .code(ERROR_HTTP_STATUS.UNAUTHORIZED)
         .send(errorResponse("UNAUTHORIZED", req.id));
     }
+  });
+
+  // ---------------------------------------------------------- rate limit ---
+  // Registered AFTER the auth hook, so an unauthenticated request is answered
+  // with 401 and never consumes a token. One bounded token bucket per client
+  // key; refill is lazy, so this adds no timers or background work.
+  const rateLimiter = createRateLimiter(config.rateLimit);
+  app.addHook("onRequest", async (req: FastifyRequest, reply: FastifyReply) => {
+    const path = req.url.split("?")[0] ?? req.url;
+    // The liveness probe must always answer, even for a throttled client.
+    if (path === "/health") return;
+
+    const key = clientKey(req);
+    const decision = rateLimiter.check(key);
+    if (decision.allowed) return;
+
+    logger.warn("request rate limit exceeded", {
+      request_id: req.id,
+      // Neutral field name, per AGENTS.md section 7: structured logs are
+      // sanitised and the logger redacts keys that look secret-bearing. The
+      // address is not logged under an `ip`-style key.
+      client: key,
+      retry_after_seconds: decision.retryAfterSeconds,
+    });
+
+    return reply
+      .code(ERROR_HTTP_STATUS.RATE_LIMIT)
+      .header("retry-after", String(decision.retryAfterSeconds))
+      .send(errorResponse("RATE_LIMIT", req.id));
   });
 
   // ------------------------------------------------------------ logging ----
@@ -133,7 +196,7 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
       .code(404)
       .send(
         errorResponse(
-          "INVALID_REQUEST",
+          "NOT_FOUND",
           String(req.id),
           `No such endpoint: ${req.method} ${req.url.split("?")[0]}`,
         ),

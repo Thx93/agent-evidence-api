@@ -22,8 +22,8 @@ Discovery here means three things in order of importance:
 > *"Do NOT automatically publish to the registry unless credentials and
 > authorization are explicitly available."* Prepare, validate, then publish by
 > hand. Read [§7 Before you publish](#7-before-you-publish) first — the endpoint is
-> not deployed, the suites have not been run here, and no on-chain payment has
-> been demonstrated.
+> not deployed and no on-chain payment has been demonstrated. The suites do pass
+> locally (199 tests plus two live smoke runs).
 
 ---
 
@@ -405,10 +405,10 @@ still be premature in specific, checkable ways:
   `https://mcp.example.invalid/mcp` and would be a dead endpoint.
 - The `name` and `repository.url` assert a GitHub namespace that has not been
   confirmed as genuinely owned.
-- The test suites and `scripts/smoke.sh` have not been run here, so there is no
-  recorded evidence that the end-to-end flow passes.
-- No on-chain x402 payment has been demonstrated, and there is no automated
-  payment test.
+- The suites pass locally (199 tests) and both smoke scripts pass against live
+  sockets, but no independent party has reproduced that.
+- No on-chain x402 payment has been demonstrated: `scripts/worker-smoke.sh`
+  covers the 402 gate, not settlement.
 - `apps/worker/wrangler.jsonc` still contains literal test-recipient addresses,
   which must not ship.
 

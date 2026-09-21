@@ -12,6 +12,7 @@
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import { brotliCompressSync, gzipSync } from "node:zlib";
 
 const COMPANY_HTML = `<!doctype html>
 <html lang="en">
@@ -72,6 +73,41 @@ const IRRELEVANT_HTML = `<!doctype html>
 const MALFORMED_HTML = `<html><head><title>Unclosed
 <body><main><p>Paragraph one<p>Paragraph two<h2>Heading without close
 <div><span>Nested without closing`;
+
+/**
+ * Content-encoding fixtures (issues: chained encoding, decompression ratio,
+ * unknown encoding, content-length semantics).
+ *
+ * Exported so tests can assert exact wire sizes and the expected decoded text
+ * without duplicating the payloads.
+ */
+export const ENCODED_FIXTURE_HTML = `<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Encoded fixture</title></head>
+<body><main><h1>Encoded fixture body</h1>
+<p>This body is served with a content-encoding header and must be decoded.</p>
+</main></body>
+</html>`;
+
+/** gzip(HTML) — the wire payload for the single-encoding route. */
+export const GZIP_FIXTURE_BODY = gzipSync(Buffer.from(ENCODED_FIXTURE_HTML, "utf8"));
+
+/** gzip(HTML) then brotli — the wire payload for the chained `gzip, br` route. */
+export const GZIP_BR_FIXTURE_BODY = brotliCompressSync(GZIP_FIXTURE_BODY);
+
+/**
+ * A small compressed body that expands enormously ("gzip bomb").
+ *
+ * 8 MiB of a repeated byte compresses to a few kilobytes. It is exactly the
+ * scenario the decompression-ratio guard exists for: an absolute
+ * `maxResponseBytes` cap of 8 MiB would never be crossed, yet the ratio is
+ * roughly 1000:1.
+ */
+export const DECOMPRESSED_BOMB_BYTES = 8 * 1024 * 1024;
+export const GZIP_BOMB_BODY = gzipSync(Buffer.alloc(DECOMPRESSED_BOMB_BYTES, 0x41));
+
+/** A body whose declared encoding this build does not implement. */
+export const UNKNOWN_ENCODING_BODY = "Served with an unsupported content-encoding.";
 
 /** Routes are matched by exact pathname. */
 function bodyFor(pathname: string): { status: number; type: string; body: string | null } | null {
@@ -186,6 +222,52 @@ export async function startFixtureServer(port = 0): Promise<FixtureServer> {
       return res.end("<html><body><h1>Server error</h1></body></html>");
     }
 
+    // --- content-encoding fixtures -----------------------------------------
+    if (pathname === "/gzip") {
+      res.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+        "content-encoding": "gzip",
+        "content-length": String(GZIP_FIXTURE_BODY.length),
+      });
+      return res.end(GZIP_FIXTURE_BODY);
+    }
+    if (pathname === "/gzip-br") {
+      // Chained: the server applied gzip first, then brotli. The fetcher must
+      // undo them in reverse order (br, then gunzip).
+      res.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+        "content-encoding": "gzip, br",
+        "content-length": String(GZIP_BR_FIXTURE_BODY.length),
+      });
+      return res.end(GZIP_BR_FIXTURE_BODY);
+    }
+    if (pathname === "/gzip-bomb") {
+      res.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+        "content-encoding": "gzip",
+        "content-length": String(GZIP_BOMB_BODY.length),
+      });
+      return res.end(GZIP_BOMB_BODY);
+    }
+    if (pathname === "/unknown-encoding") {
+      // Deliberately sent UNENCODED with a bogus header: the fetcher must not
+      // guess, must leave the bytes alone, and must warn.
+      res.writeHead(200, {
+        "content-type": "text/plain; charset=utf-8",
+        "content-encoding": "x-made-up",
+        "content-length": String(Buffer.byteLength(UNKNOWN_ENCODING_BODY)),
+      });
+      return res.end(UNKNOWN_ENCODING_BODY);
+    }
+    if (pathname === "/chunked") {
+      // No content-length header: Node falls back to chunked transfer, so the
+      // response length is genuinely unknown and must be reported as null.
+      res.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
+      res.write("chunked ");
+      res.end("body");
+      return;
+    }
+
     const hit = bodyFor(pathname);
     if (hit) {
       res.writeHead(hit.status, { "content-type": hit.type });
@@ -222,5 +304,6 @@ if (invokedDirectly) {
   console.log("[fixtures] routes: /company /negating /irrelevant /malformed /plain /json /binary");
   console.log("[fixtures] adversarial: /redirect-once /redirect-chain /redirect-loop");
   console.log("[fixtures]             /redirect-to-private /redirect-to-metadata /slow /huge");
+  console.log("[fixtures] encoding:    /gzip /gzip-br /gzip-bomb /unknown-encoding");
   console.log("[fixtures] status:      /404 /500");
 }
