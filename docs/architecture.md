@@ -330,7 +330,7 @@ seven of the eight have **no code in the repository**.
 | Extension point | Purpose | State |
 |---|---|---|
 | `CacheProvider` | Replace the storage backend for cached sources. | **Implemented.** The interface is in `packages/cache/src/types.ts` and the SQLite adapter in `sqlite-cache.ts`. |
-| `SearchProvider` | `search(query) → normalised source candidates`, so the service can find URLs instead of only accepting them. | **Interface only — not implemented.** No code. v0.1.0 works on agent-supplied URLs (SPEC §8). |
+| `SearchProvider` | `search(query) → normalised source candidates`, so the service can find URLs instead of only accepting them. | **Type declared** in `packages/core/src/providers.ts`; no implementation. v0.1.0 works on agent-supplied URLs (SPEC §8). |
 | `BrowserProvider` | Render JavaScript-heavy pages where static HTML is insufficient. | **Interface only — not implemented.** No code. Bounded browser use is a SPEC §2 requirement for any future work here. |
 | `ReasoningProvider` | Claim decomposition, relevance ranking, source comparison, structured synthesis behind a vendor-neutral, OpenAI-compatible interface. | **Interface only — not implemented.** No code. The service is fully useful without it; `assess()` is lexical only. |
 | `DocumentProvider` | PDF and other non-HTML document parsing for evidence. | **Interface only — not implemented.** No code. |

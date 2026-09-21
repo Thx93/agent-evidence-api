@@ -12,4 +12,5 @@ export * from "./logger.js";
 export * from "./assessment.js";
 export * from "./robots.js";
 export * from "./reasoning.js";
+export * from "./providers.js";
 export * from "./service.js";
