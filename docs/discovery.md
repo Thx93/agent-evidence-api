@@ -505,3 +505,36 @@ curl -sD - -o /dev/null -X POST https://agent-evidence-api.taher-h-alhaddad.work
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"research_evidence","arguments":{"question":"q","urls":["https://example.com"]}}}' \
 | grep -i '^payment-required:' | cut -d' ' -f2 | base64 -d | python3 -m json.tool | grep -A5 bazaar
 ```
+
+## What is actually on the MCP shelf
+
+All 33 MCP-typed entries, examined 2026-09-21:
+
+| | |
+|---|---|
+| Total MCP entries | **33** |
+| Resources whose path ends in `/mcp` | **31** — classification is by path, not by the extension |
+| Entries declaring a `toolName` (well-formed) | **11** |
+| …of which from a single operator ("Myncellium Paid MCP") | **11** |
+| Entries with a description but no tool metadata | **22** |
+| Well-formed entries declaring an output example | 5 of 11 |
+| Well-formed entries declaring an output schema | 0 |
+
+Three things follow.
+
+**Classification is by resource path.** A paid route whose URL ends in `/mcp`
+lands on this shelf. Ours does.
+
+**The shelf is far thinner than the count suggests.** Of 33 entries, 22 describe
+an MCP endpoint without saying what tool it offers or what arguments it takes, and
+the 11 that are complete all belong to one seller. A well-formed listing here is
+not competing with 33 services; it is competing with one operator's suite.
+
+**Our entry would be in the well-formed minority**, and more complete than most:
+`serviceName`, `tags`, a resource description, `toolName`, `transport`, an
+`inputSchema` with a real example, and an `output.example` showing the actual
+deliverable — where only 5 of the 11 complete entries show a buyer any output at
+all.
+
+Price calibration: MCP-shelf prices run $0.001–$0.46, mostly $0.002–$0.05. Ours
+is $0.03, mid-range.

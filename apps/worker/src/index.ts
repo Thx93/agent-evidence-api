@@ -197,6 +197,31 @@ const MCP_DISCOVERY = declareDiscoveryExtension({
     question: "Is Company X a manufacturer of centrifugal pumps?",
     urls: ["https://company.example/about"],
   },
+  // Only 5 of the 11 well-formed MCP entries in the live catalogue show a buyer
+  // what a call returns, and none declares an output schema. Reusing the HTTP
+  // route's example makes this listing show the actual deliverable - cited
+  // excerpts with a hash and an assessment - instead of a tool signature alone.
+  output: {
+    example: {
+      assessment: { status: "supported", basis: "1 source matched the question." },
+      sources: [
+        {
+          final_url: "https://company.example/about",
+          status: 200,
+          title: "Company X - About",
+          retrieved_at: "2026-01-01T00:00:00.000Z",
+          content_hash_sha256: "9f2c…",
+          evidence: [
+            {
+              relevance: "direct",
+              excerpt: "Company X manufactures centrifugal pumps at its facility.",
+            },
+          ],
+        },
+      ],
+      limitations: ["Assessment uses deterministic lexical matching, not semantic reasoning."],
+    },
+  },
 });
 
 let cachedKey: string | null = null;
