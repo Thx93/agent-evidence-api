@@ -31,6 +31,15 @@ export interface UsageEvent {
   processing_ms: number;
   outcome: "ok" | "error";
   error_code?: string;
+  /**
+   * True when the request carried an x402 payment proof.
+   *
+   * Without this the log cannot be read as revenue: a direct internal call (a
+   * health probe, a test, an operator debugging) looks identical to a sale. The
+   * Worker forwards `payment-signature` on paid requests, so its presence is the
+   * signal. Count `settled: true` lines for money, not total lines.
+   */
+  settled: boolean;
 }
 
 let ready: Promise<void> | null = null;

@@ -84,7 +84,11 @@ redeploys — unlike Docker logs.
 
 ```bash
 docker exec aee-live cat /app/data/usage.jsonl            # the raw record
-docker exec aee-live wc -l < /app/data/usage.jsonl        # payments received
+
+# Payments received. Filter on settled: it is true only when the request carried
+# an x402 payment proof, so operator and test calls are excluded. Total lines
+# would over-count.
+docker exec aee-live sh -c "grep -c '\"settled\":true' /app/data/usage.jsonl"
 ```
 
 Each line carries the timestamp, request id, a salted hash of the question

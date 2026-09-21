@@ -182,6 +182,9 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
     const started = Date.now();
     const body = (req.body ?? {}) as { question?: unknown; urls?: unknown };
     const question = typeof body.question === "string" ? body.question : "";
+    // The Worker forwards the x402 proof, so this distinguishes a real paid
+    // request from an operator or test call. See usage-log.ts.
+    const settled = Boolean(req.headers["payment-signature"]);
     const urlsRequested = Array.isArray(body.urls) ? body.urls.length : 0;
 
     try {
@@ -200,6 +203,7 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
         assessment: result.assessment.status,
         processing_ms: result.processing_ms,
         outcome: "ok",
+        settled,
       });
 
       return reply.code(200).send(result);
@@ -216,6 +220,7 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
         processing_ms: Date.now() - started,
         outcome: "error",
         error_code: err instanceof ServiceError ? err.code : "INTERNAL_ERROR",
+        settled,
       });
       return sendServiceError(reply, err, requestId, logger);
     }

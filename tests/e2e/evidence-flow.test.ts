@@ -142,6 +142,26 @@ describe("origin protection", () => {
 
     // Privacy: the question text must never be written.
     assert.ok(!raw.includes(secret), "the usage log must not contain the question text");
+
+    // A direct internal call carries no payment proof, so it must NOT be
+    // counted as revenue. Reading total lines as money would over-report.
+    assert.equal(last.settled, false, "an operator/test call is not a sale");
+  });
+
+  test("a request carrying a payment proof is recorded as settled", async () => {
+    // The Worker forwards `payment-signature` on paid requests; its presence is
+    // what makes a line count as revenue.
+    const res = await app.inject({
+      method: "POST",
+      url: "/internal/v1/evidence",
+      headers: { "x-backend-auth": SECRET, "payment-signature": "test-proof-not-a-real-payment" },
+      payload: { question: "manufacturer of centrifugal pumps?", urls: [`${fx.url}/company`] },
+    });
+    assert.equal(res.statusCode, 200);
+
+    const lines = (await readFile(USAGE_LOG, "utf8")).trim().split("\n").filter(Boolean);
+    const last = JSON.parse(lines[lines.length - 1] as string);
+    assert.equal(last.settled, true, "a request with a payment proof counts as revenue");
   });
 
   test("health is reachable without a credential and leaks nothing", async () => {
