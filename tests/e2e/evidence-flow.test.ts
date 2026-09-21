@@ -24,7 +24,11 @@ const SECRET = "test-secret-value-that-is-long-enough";
 // Configuration is read from the environment at loadConfig() time.
 process.env.BACKEND_AUTH_SECRET = SECRET;
 process.env.ALLOW_LOOPBACK_FOR_TESTS = "true";
-process.env.CACHE_ENABLED = "false"; // cache behaviour is covered in packages/cache
+process.env.CACHE_ENABLED = "false";
+// The x402 paywall now lives in the backend. These suites exercise the evidence
+// pipeline, not payment, so they bypass it - which requires BOTH this flag and a
+// non-mainnet network, so it cannot make a production deploy free.
+process.env.DEV_BYPASS_PAYMENT = "true"; // cache behaviour is covered in packages/cache
 // The usage log records served requests. A line means the request carried an x402
 // payment proof, NOT that a settlement completed - the facilitator settles after
 // the backend responds. Point it at a scratch file.

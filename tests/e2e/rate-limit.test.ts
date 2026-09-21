@@ -24,6 +24,10 @@ const SECRET = "test-secret-value-that-is-long-enough";
 process.env.BACKEND_AUTH_SECRET = SECRET;
 process.env.ALLOW_LOOPBACK_FOR_TESTS = "true";
 process.env.CACHE_ENABLED = "false";
+// The x402 paywall now lives in the backend. These suites exercise the evidence
+// pipeline, not payment, so they bypass it - which requires BOTH this flag and a
+// non-mainnet network, so it cannot make a production deploy free.
+process.env.DEV_BYPASS_PAYMENT = "true";
 process.env.LOG_LEVEL = "error";
 process.env.RATE_LIMIT_PER_MINUTE = "2";
 process.env.RATE_LIMIT_BURST = "0";

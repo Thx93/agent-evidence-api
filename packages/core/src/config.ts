@@ -33,6 +33,34 @@ export interface AppConfig {
     recipient: string;
     facilitatorUrl: string;
     priceUsd: string;
+    /**
+     * Coinbase CDP credentials. Present, settlement goes through the CDP
+     * Facilitator - the only route into the CDP Bazaar, the Bazaar MCP server,
+     * Amazon Bedrock AgentCore and agentic.market. Absent, the generic HTTP
+     * facilitator is used, exactly as before.
+     *
+     * These are read here rather than at the edge because the Cloudflare Workers
+     * runtime cannot run the CDP SDK at all: its JWT signing reaches an undefined
+     * `getRandomValues`, and the x402 library compiles its bazaar schema with
+     * `new Function`, which Workers forbids. Node has neither restriction.
+     */
+    cdpApiKeyId?: string;
+    cdpApiKeySecret?: string;
+    /**
+     * Development bypass, mirroring the Worker's: it needs the explicit flag AND a
+     * non-mainnet network, so a leaked variable cannot make the production service
+     * free. Tests set it; production never should.
+     */
+    devBypassPayment: boolean;
+    /**
+     * The PUBLIC url of the paid resource, advertised in the 402 challenge.
+     *
+     * Required once the paywall runs in the backend: the middleware derives the
+     * resource from the request it sees, which is the internal origin
+     * (http://127.0.0.1:8080/internal/v1/evidence). A buyer, a crawler and CDP's
+     * validator must all see the public address instead.
+     */
+    publicResourceUrl: string;
   };
 
   limits: ResourceLimits;
@@ -116,6 +144,12 @@ function str(name: string, fallback: string): string {
   return v === undefined || v === "" ? fallback : v;
 }
 
+/** An optional string: absent or empty yields undefined rather than a fallback. */
+function optStr(name: string): string | undefined {
+  const v = process.env[name];
+  return v === undefined || v === "" ? undefined : v;
+}
+
 function int(name: string, fallback: number): number {
   const raw = process.env[name];
   if (raw === undefined || raw === "") return fallback;
@@ -172,6 +206,10 @@ export function loadConfig(): AppConfig {
       recipient: str("X402_RECIPIENT", ""),
       facilitatorUrl: str("X402_FACILITATOR_URL", "https://x402.org/facilitator"),
       priceUsd: str("X402_PRICE_USD", "0.003"),
+      ...(optStr("CDP_API_KEY_ID") ? { cdpApiKeyId: optStr("CDP_API_KEY_ID") } : {}),
+      ...(optStr("CDP_API_KEY_SECRET") ? { cdpApiKeySecret: optStr("CDP_API_KEY_SECRET") } : {}),
+      devBypassPayment: str("DEV_BYPASS_PAYMENT", "") === "true",
+      publicResourceUrl: str("X402_RESOURCE_URL", ""),
     },
 
     limits: loadLimits(),

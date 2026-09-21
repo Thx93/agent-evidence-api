@@ -128,55 +128,8 @@ function newRequestId(): string {
  * `/discovery/resources` to agents that have never heard of us. The declared
  * input/output is what a prospective buyer sees BEFORE paying.
  */
-const HTTP_DISCOVERY = declareDiscoveryExtension({
-  bodyType: "json",
-  input: {
-    question: "Is Company X a manufacturer of centrifugal pumps?",
-    urls: ["https://company.example/about", "https://company.example/products"],
-    max_sources: 5,
-    language: "auto",
-    mode: "evidence",
-  },
-  output: {
-    example: {
-      request_id: "req_1f2e3d4c5b6a7988",
-      version: "1",
-      question: "Is Company X a manufacturer of centrifugal pumps?",
-      assessment: {
-        status: "supported",
-        basis:
-          "1 source(s) contained passages matching the question (company.example) with no contradicting passages found.",
-      },
-      sources: [
-        {
-          requested_url: "https://company.example/about",
-          final_url: "https://company.example/about",
-          status: 200,
-          content_type: "text/html; charset=utf-8",
-          title: "Company X - About",
-          canonical_url: "https://company.example/about",
-          publisher: "Company X",
-          language: "en",
-          retrieved_at: "2026-01-01T00:00:00.000Z",
-          word_count: 412,
-          content_hash_sha256: "9f2c…",
-          evidence: [
-            {
-              excerpt: "Company X manufactures centrifugal pumps at its facility.",
-              context: "h2:Products > p[1]",
-              relevance: "direct",
-            },
-          ],
-          warnings: [],
-        },
-      ],
-      limitations: [
-        "Assessment is derived from deterministic lexical matching, not semantic reasoning.",
-      ],
-      processing_ms: 812,
-    },
-  },
-});
+// HTTP_DISCOVERY moved to apps/backend/src/app.ts with the HTTP paywall.
+
 
 const MCP_DISCOVERY = declareDiscoveryExtension({
   toolName: "research_evidence",
@@ -343,7 +296,9 @@ function paymentGate(env: Env, routeKey: string): MiddlewareHandler {
         }),
         // Only advertise the discovery payload that matches the route being
         // priced: an HTTP body schema on the MCP route would be wrong.
-        extensions: routeKey === "POST /mcp" ? { ...MCP_DISCOVERY } : { ...HTTP_DISCOVERY },
+        // This gate now only ever guards POST /mcp - the HTTP paywall moved to the
+        // backend with its own discovery declaration.
+        extensions: { ...MCP_DISCOVERY },
       },
     },
     resourceServer,
@@ -412,7 +367,11 @@ async function proxyToBackend(
   outHeaders.set("content-type", upstream.headers.get("content-type") ?? "application/json");
   outHeaders.set("cache-control", "no-store");
   outHeaders.set("x-request-id", requestId);
-  for (const h of ["payment-response", "mcp-session-id"]) {
+  // `payment-required` is the 402 challenge itself. It only started arriving from
+  // upstream when enforcement moved to the backend; while the Worker gated, it
+  // generated this header itself and never needed to forward it. Dropping it made
+  // the endpoint return a bare 402 that CDP's validator could not read.
+  for (const h of ["payment-required", "payment-response", "mcp-session-id"]) {
     const v = upstream.headers.get(h);
     if (v) outHeaders.set(h, v);
   }
@@ -599,9 +558,13 @@ function basicRequestProblem(body: unknown): string | null {
   return null;
 }
 
+// NOTE: this route no longer applies the x402 gate. Enforcement moved to the
+// backend, because the CDP Facilitator - the only route into the CDP Bazaar - cannot
+// run in a Worker at all. See the paywall comment in apps/backend/src/app.ts for the
+// two Workers restrictions that made that necessary. The origin check stays: a 402
+// here would quote terms we cannot honour if the origin is down.
 app.use("/v1/evidence", async (c, next) => {
   if (c.req.method !== "POST") return next();
-  // Never charge for a request we cannot fulfil: check the origin first.
   if (!(await originHealthy(c.env))) {
     return fail(
       c,
@@ -610,8 +573,7 @@ app.use("/v1/evidence", async (c, next) => {
       "The evidence service is temporarily unavailable; no payment was taken.",
     );
   }
-  if (devBypassActive(c.env)) return next();
-  return paymentGate(c.env, "POST /v1/evidence")(c, next);
+  return next();
 });
 
 app.post("/v1/evidence", async (c) => {
@@ -624,9 +586,16 @@ app.post("/v1/evidence", async (c) => {
     return fail(c, "INVALID_REQUEST", requestId, "Request body must be valid JSON.");
   }
 
-  const problem = basicRequestProblem(parsed);
-  if (problem) return fail(c, "INVALID_REQUEST", requestId, problem);
-
+  // Shape validation deliberately does NOT happen here any more. The paywall now
+  // runs in the backend, so validating first would answer 400 to a caller who has
+  // not been shown the price - and CDP's validator probes with a generic body and
+  // reported "Endpoint returned HTTP 400 instead of 402" for exactly that reason.
+  //
+  // The HTTP semantics this service documents are paywall-then-validation: an
+  // unpayable request gets the challenge, and an invalid request that pays still
+  // fails validation downstream - where the middleware cancels settlement, so it is
+  // never charged. The backend validates every request through EvidenceService, so
+  // nothing is lost by removing the duplicate check.
   return proxyToBackend(c, "/internal/v1/evidence", {
     method: "POST",
     body: JSON.stringify(parsed),

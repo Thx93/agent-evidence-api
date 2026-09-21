@@ -5,6 +5,7 @@ import {
   SERVICE_VERSION,
   ERROR_HTTP_STATUS,
   errorResponse,
+  priceString,
   type ErrorCode,
 } from "@aee/schemas";
 import {
@@ -14,9 +15,71 @@ import {
   type Logger,
 } from "@aee/core";
 import type { EvidenceMcpServer } from "@aee/mcp";
+import { paymentMiddleware, x402ResourceServer } from "@x402/fastify";
+import { HTTPFacilitatorClient } from "@x402/core/server";
+import { ExactEvmScheme } from "@x402/evm/exact/server";
+import { createCdpFacilitatorClient } from "@coinbase/cdp-sdk/x402";
+import { declareDiscoveryExtension } from "@x402/extensions/bazaar";
+import type { Network } from "@x402/core/types";
 import { extractCredential, isPublicPath, secretMatches } from "./auth.js";
 import { createUsageLog } from "./usage-log.js";
 import { createRateLimiter } from "./rate-limit.js";
+
+/**
+ * What the CDP Bazaar advertises to agents that have never heard of us: the declared
+ * input and output is the entire pitch a prospective buyer sees BEFORE paying.
+ * Moved here with the paywall, because the discovery declaration and the payment
+ * gate have to describe the same route.
+ */
+const HTTP_DISCOVERY = declareDiscoveryExtension({
+  bodyType: "json",
+  input: {
+    question: "Is Company X a manufacturer of centrifugal pumps?",
+    urls: ["https://company.example/about", "https://company.example/products"],
+    max_sources: 5,
+    language: "auto",
+    mode: "evidence",
+  },
+  output: {
+    example: {
+      request_id: "req_1f2e3d4c5b6a7988",
+      version: "1",
+      question: "Is Company X a manufacturer of centrifugal pumps?",
+      assessment: {
+        status: "supported",
+        basis:
+          "1 source(s) contained passages matching the question (company.example) with no contradicting passages found.",
+      },
+      sources: [
+        {
+          requested_url: "https://company.example/about",
+          final_url: "https://company.example/about",
+          status: 200,
+          content_type: "text/html; charset=utf-8",
+          title: "Company X - About",
+          canonical_url: "https://company.example/about",
+          publisher: "Company X",
+          language: "en",
+          retrieved_at: "2026-01-01T00:00:00.000Z",
+          word_count: 412,
+          content_hash_sha256: "9f2c…",
+          evidence: [
+            {
+              excerpt: "Company X manufactures centrifugal pumps at its facility.",
+              context: "h2:Products > p[1]",
+              relevance: "direct",
+            },
+          ],
+          warnings: [],
+        },
+      ],
+      limitations: [
+        "Assessment is derived from deterministic lexical matching, not semantic reasoning.",
+      ],
+      processing_ms: 812,
+    },
+  },
+});
 
 export interface BuildAppDeps {
   config: AppConfig;
@@ -172,6 +235,83 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
   const recordSummary = (req: FastifyRequest, summary: RequestSummary): void => {
     summaries.set(req, summary);
   };
+
+  // ------------------------------------------------------- x402 paywall ---
+  //
+  // The payment boundary lives HERE rather than at the Cloudflare edge, and that
+  // move is the whole point of this block.
+  //
+  // The CDP Facilitator is the only route into the CDP Bazaar - which reaches tens
+  // of thousands of agents through the Bazaar MCP server, Amazon Bedrock AgentCore,
+  // and Coinbase's own agentic.market. Two Cloudflare Workers restrictions made it
+  // impossible there, neither of them a configuration problem:
+  //
+  //   1. The CDP SDK's JWT signing reaches an undefined `getRandomValues`, because
+  //      `nodejs_compat` selects the Node build of the `uncrypto` shim and workerd's
+  //      `node:crypto` has no usable `webcrypto`.
+  //   2. The x402 library compiles its bazaar schema with `new Function`, which
+  //      Workers forbids by design. No bundler setting changes that.
+  //
+  // Node has neither restriction. The Worker now forwards, and this enforces.
+  // eip155:8453 is Base mainnet. The bypass requires a non-mainnet network as well
+  // as the flag, so it cannot silently make the real service free.
+  const MAINNET = "eip155:8453";
+  const paywallActive = !(config.x402.devBypassPayment && config.x402.network !== MAINNET);
+
+  const useCdp = Boolean(config.x402.cdpApiKeyId && config.x402.cdpApiKeySecret);
+  const facilitator = useCdp
+    ? createCdpFacilitatorClient({
+        apiKeyId: config.x402.cdpApiKeyId,
+        apiKeySecret: config.x402.cdpApiKeySecret,
+      })
+    : new HTTPFacilitatorClient({ url: config.x402.facilitatorUrl });
+  const resourceServer = new x402ResourceServer(facilitator).register(
+    config.x402.network as Network,
+    new ExactEvmScheme(),
+  );
+
+  if (paywallActive) paymentMiddleware(
+    app,
+    {
+      "POST /internal/v1/evidence": {
+        // Advertise the PUBLIC url. Without this the challenge names the internal
+        // origin the middleware can see (http://127.0.0.1:8080/internal/...), which
+        // would confuse a buyer and fail CDP's validator.
+        ...(config.x402.publicResourceUrl
+          ? { resource: config.x402.publicResourceUrl }
+          : {}),
+        accepts: {
+          scheme: "exact",
+          price: priceString(config.x402.priceUsd),
+          network: config.x402.network as Network,
+          payTo: config.x402.recipient,
+        },
+        // Shown to buyers browsing the x402 catalogue, where one line is the whole
+        // pitch. The Bazaar's search is keyword based, not semantic, so a buyer
+        // searching "verify a claim" or "cited evidence" only finds this if those
+        // words appear. Each phrase states what the service does.
+        description:
+          "Verify a claim or fact check a statement against public web sources: send a " +
+          "question and up to 5 URLs, get cited evidence - passages that support, " +
+          "contradict or fail to settle it. Claim verification with a citation for every " +
+          "excerpt: source URL, retrieval time, content hash. Never charges when nothing " +
+          "is retrieved.",
+        serviceName: SERVICE_NAME,
+        tags: ["web-evidence", "claim-verification", "source-verification"],
+        // Without this the validator reports "No bazaar extension in top-level
+        // extensions object" and the route is not catalogued.
+        extensions: { ...HTTP_DISCOVERY },
+      },
+    },
+    resourceServer,
+  );
+
+  logger.info(paywallActive ? "x402 paywall active" : "x402 paywall BYPASSED", {
+    facilitator: useCdp ? "cdp" : "http",
+    network: config.x402.network,
+    price_usd: config.x402.priceUsd,
+    bypassed: !paywallActive,
+  });
 
   // ------------------------------------------------------------- routes ----
   /** Free liveness probe. Never reports secrets or infrastructure detail. */

@@ -32,6 +32,24 @@ importers:
       '@aee/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
+      '@coinbase/cdp-sdk':
+        specifier: ^1
+        version: 1.56.0(@x402/core@2.26.0)(@x402/evm@2.26.0(typescript@5.9.3))(@x402/extensions@2.26.0(typescript@5.9.3))(@x402/svm@2.26.0(@solana/kit@5.5.1(typescript@5.9.3))(@solana/sysvars@5.5.1(typescript@5.9.3)))(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
+      '@x402/core':
+        specifier: 2.26.0
+        version: 2.26.0
+      '@x402/evm':
+        specifier: 2.26.0
+        version: 2.26.0(typescript@5.9.3)
+      '@x402/extensions':
+        specifier: 2.26.0
+        version: 2.26.0(typescript@5.9.3)
+      '@x402/fastify':
+        specifier: 2.26.0
+        version: 2.26.0(fastify@5.12.5)(typescript@5.9.3)
+      '@x402/svm':
+        specifier: 2.26.0
+        version: 2.26.0(@solana/kit@5.5.1(typescript@5.9.3))(@solana/sysvars@5.5.1(typescript@5.9.3))
       fastify:
         specifier: ^5.12.5
         version: 5.12.5
@@ -772,10 +790,21 @@ packages:
     resolution: {integrity: sha512-P1Cz1dWaFfR4IR+U13mqqiGsLFf1KbayybWwdd2vfctdV6hDpUkgCY0nKOLLTMSoRd/jJNjtbqzf13K8DCCXQw==}
     engines: {node: '>=18'}
 
+  '@solana-program/compute-budget@0.11.0':
+    resolution: {integrity: sha512-7f1ePqB/eURkTwTOO9TNIdUXZcyrZoX3Uy2hNo7cXMfNhPFWp9AVgIyRNBc2jf15sdUa9gNpW+PfP2iV8AYAaw==}
+    peerDependencies:
+      '@solana/kit': ^5.0
+
   '@solana-program/system@0.10.0':
     resolution: {integrity: sha512-Go+LOEZmqmNlfr+Gjy5ZWAdY5HbYzk2RBewD9QinEU/bBSzpFfzqDRT55JjFRBGJUvMgf3C2vfXEGT4i8DSI4g==}
     peerDependencies:
       '@solana/kit': ^5.0
+
+  '@solana-program/token-2022@0.6.1':
+    resolution: {integrity: sha512-Ex02cruDMGfBMvZZCrggVR45vdQQSI/unHVpt/7HPt/IwFYB4eTlXtO8otYZyqV/ce5GqZ8S6uwyRf0zy6fdbA==}
+    peerDependencies:
+      '@solana/kit': ^5.0
+      '@solana/sysvars': ^5.0
 
   '@solana-program/token@0.9.0':
     resolution: {integrity: sha512-vnZxndd4ED4Fc56sw93cWZ2djEeeOFxtaPS8SPf5+a+JZjKA/EnKqzbE1y04FuMhIVrLERQ8uR8H2h72eZzlsA==}
@@ -1152,6 +1181,15 @@ packages:
   '@x402/extensions@2.26.0':
     resolution: {integrity: sha512-ItD85ryWsUa86TV8AjtY31SYqZhnnhoVKuVihtmv6r1cuLTgIxE21ugZmGswbLkS+rTvP0gy3M/6xp00i5S5lQ==}
 
+  '@x402/fastify@2.26.0':
+    resolution: {integrity: sha512-9UROqO5kqpZB+lZP+o4vQ9ps7H+zYZFDTB+ggMarGsdobhk3FDP06rzw0wFrPLo9AHTNBtVMiJZeFW7f1Pd6fQ==}
+    peerDependencies:
+      '@x402/paywall': ^2.26.0
+      fastify: ^5.0.0
+    peerDependenciesMeta:
+      '@x402/paywall':
+        optional: true
+
   '@x402/hono@2.26.0':
     resolution: {integrity: sha512-q/UKxcDs1LzM24ON0BGAoOecFeYl7TqV0Dgui+nJd64l+ef0XU2VLXW9/N4dY5t6gyNRe2EknvQ7DIiJ3WD+NA==}
     peerDependencies:
@@ -1160,6 +1198,11 @@ packages:
     peerDependenciesMeta:
       '@x402/paywall':
         optional: true
+
+  '@x402/svm@2.26.0':
+    resolution: {integrity: sha512-mQGqErpM9D0Z0CMH3JLiFlsFQymwwO8Y7ykCTujpI3jatO3d1Xp5RdO6m55gwoYkGqZb+xdr/hSQTb0sSa8PPQ==}
+    peerDependencies:
+      '@solana/kit': '>=5.1.0'
 
   abitype@1.0.6:
     resolution: {integrity: sha512-MMSqYh4+C/aVqI2RQaWqbvI4Kxo5cQV40WQ4QFtDnNzCkqChm8MuENhElmynZlO0qUy/ObkEUaXtKqYnx1Kp3A==}
@@ -2008,6 +2051,33 @@ snapshots:
 
   '@cloudflare/workers-types@4.20260702.1': {}
 
+  '@coinbase/cdp-sdk@1.56.0(@x402/core@2.26.0)(@x402/evm@2.26.0(typescript@5.9.3))(@x402/extensions@2.26.0(typescript@5.9.3))(@x402/svm@2.26.0(@solana/kit@5.5.1(typescript@5.9.3))(@solana/sysvars@5.5.1(typescript@5.9.3)))(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)':
+    dependencies:
+      '@solana-program/system': 0.10.0(@solana/kit@5.5.1(typescript@5.9.3))
+      '@solana-program/token': 0.9.0(@solana/kit@5.5.1(typescript@5.9.3))
+      '@solana/kit': 5.5.1(typescript@5.9.3)
+      abitype: 1.0.6(typescript@5.9.3)(zod@3.25.76)
+      axios: 1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
+      axios-retry: 4.5.0(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))
+      bs58: 6.0.0
+      jose: 6.2.12
+      md5: 2.3.0
+      uncrypto: 0.1.3
+      viem: 2.56.8(typescript@5.9.3)(zod@3.25.76)
+      zod: 3.25.76
+    optionalDependencies:
+      '@x402/core': 2.26.0
+      '@x402/evm': 2.26.0(typescript@5.9.3)
+      '@x402/extensions': 2.26.0(typescript@5.9.3)
+      '@x402/svm': 2.26.0(@solana/kit@5.5.1(typescript@5.9.3))(@solana/sysvars@5.5.1(typescript@5.9.3))
+    transitivePeerDependencies:
+      - bufferutil
+      - debug
+      - fastestsmallesttextencoderdecoder
+      - supports-color
+      - typescript
+      - utf-8-validate
+
   '@coinbase/cdp-sdk@1.56.0(@x402/core@2.26.0)(@x402/evm@2.26.0(typescript@5.9.3))(@x402/extensions@2.26.0(typescript@5.9.3))(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)':
     dependencies:
       '@solana-program/system': 0.10.0(@solana/kit@5.5.1(typescript@5.9.3))
@@ -2393,7 +2463,7 @@ snapshots:
 
   '@scure/bip32@1.7.0':
     dependencies:
-      '@noble/curves': 1.9.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.8.0
       '@scure/base': 1.2.6
 
@@ -2415,9 +2485,18 @@ snapshots:
 
   '@sindresorhus/is@7.2.0': {}
 
+  '@solana-program/compute-budget@0.11.0(@solana/kit@5.5.1(typescript@5.9.3))':
+    dependencies:
+      '@solana/kit': 5.5.1(typescript@5.9.3)
+
   '@solana-program/system@0.10.0(@solana/kit@5.5.1(typescript@5.9.3))':
     dependencies:
       '@solana/kit': 5.5.1(typescript@5.9.3)
+
+  '@solana-program/token-2022@0.6.1(@solana/kit@5.5.1(typescript@5.9.3))(@solana/sysvars@5.5.1(typescript@5.9.3))':
+    dependencies:
+      '@solana/kit': 5.5.1(typescript@5.9.3)
+      '@solana/sysvars': 5.5.1(typescript@5.9.3)
 
   '@solana-program/token@0.9.0(@solana/kit@5.5.1(typescript@5.9.3))':
     dependencies:
@@ -2884,6 +2963,17 @@ snapshots:
       - typescript
       - utf-8-validate
 
+  '@x402/fastify@2.26.0(fastify@5.12.5)(typescript@5.9.3)':
+    dependencies:
+      '@x402/core': 2.26.0
+      '@x402/extensions': 2.26.0(typescript@5.9.3)
+      fastify: 5.12.5
+    transitivePeerDependencies:
+      - bufferutil
+      - ethers
+      - typescript
+      - utf-8-validate
+
   '@x402/hono@2.26.0(hono@4.13.8)(typescript@5.9.3)':
     dependencies:
       '@x402/core': 2.26.0
@@ -2894,6 +2984,17 @@ snapshots:
       - ethers
       - typescript
       - utf-8-validate
+
+  '@x402/svm@2.26.0(@solana/kit@5.5.1(typescript@5.9.3))(@solana/sysvars@5.5.1(typescript@5.9.3))':
+    dependencies:
+      '@noble/hashes': 1.8.0
+      '@solana-program/compute-budget': 0.11.0(@solana/kit@5.5.1(typescript@5.9.3))
+      '@solana-program/token': 0.9.0(@solana/kit@5.5.1(typescript@5.9.3))
+      '@solana-program/token-2022': 0.6.1(@solana/kit@5.5.1(typescript@5.9.3))(@solana/sysvars@5.5.1(typescript@5.9.3))
+      '@solana/kit': 5.5.1(typescript@5.9.3)
+      '@x402/core': 2.26.0
+    transitivePeerDependencies:
+      - '@solana/sysvars'
 
   abitype@1.0.6(typescript@5.9.3)(zod@3.25.76):
     optionalDependencies:
