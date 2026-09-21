@@ -25,12 +25,12 @@ Current [`server.json`](../server.json):
 ```json
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.thx93/agent-evidence-api",
+  "name": "io.github.Thx93/agent-evidence-api",
   "title": "Agent Evidence API",
   "description": "MCP-native web evidence and claim verification: cited, source-grounded evidence for AI agents.",
   "version": "0.1.0",
   "repository": {
-    "url": "https://github.com/thx93/agent-evidence-api",
+    "url": "https://github.com/Thx93/agent-evidence-api",
     "source": "github"
   },
   "remotes": [
@@ -56,9 +56,12 @@ Current [`server.json`](../server.json):
 
 ## 2. Prerequisites
 
-1. **A GitHub account** that will own the namespace. This file assumes `thx93`
-   because `server.json` currently says `io.github.thx93/...`. **If your account
-   is different, you must change `name` (and `repository.url`) first** — see
+1. **A GitHub account** that owns the namespace. This is confirmed: the account
+   is `Thx93` and `server.json` says `io.github.Thx93/agent-evidence-api`, which
+   matches the publish permission the registry grants for that login
+   (`io.github.Thx93/*`). Note the capital `T` — the namespace is compared
+   case-sensitively, so a lowercase `thx93` would be rejected at publish time.
+   **If you ever publish under a different account, change `name` first** — see
    section 3.
 2. **A deployed, publicly reachable MCP endpoint.** For a remote server the
    registry expects the URL to serve the MCP streamable-HTTP transport. That
@@ -91,8 +94,8 @@ Run these from the repository root.
 | Placeholder | Where | Replace with |
 | --- | --- | --- |
 | `https://mcp.example.invalid/mcp` | [`server.json`](../server.json) → `remotes[0].url` | the deployed MCP URL, i.e. `MCP_PUBLIC_URL` from [`docker/env.production.example`](../docker/env.production.example) |
-| `https://github.com/thx93/agent-evidence-api` | `server.json` → `repository.url` | the real repository URL |
-| `io.github.thx93/...` | `server.json` → `name` | `io.github.<your-github-username>/agent-evidence-api` |
+| `https://github.com/Thx93/agent-evidence-api` | `server.json` → `repository.url` | the real repository URL |
+| `io.github.Thx93/...` | `server.json` → `name` | `io.github.<your-github-username>/agent-evidence-api` |
 
 Rules that the registry enforces:
 
@@ -159,7 +162,7 @@ mcp-publisher login github
 mcp-publisher publish
 #    -> Publishing to https://registry.modelcontextprotocol.io...
 #       ✓ Successfully published
-#       ✓ Server io.github.thx93/agent-evidence-api version 0.1.0
+#       ✓ Server io.github.Thx93/agent-evidence-api version 0.1.0
 ```
 
 Notes:
@@ -173,7 +176,7 @@ Notes:
 ### Verify the publication
 
 ```bash
-curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.thx93/agent-evidence-api"
+curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.Thx93/agent-evidence-api"
 ```
 
 The response is JSON containing the published server metadata. A subsequent

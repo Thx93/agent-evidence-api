@@ -34,7 +34,8 @@ stack. SPEC §31 and §36 forbid all of them.
 >
 > - `apps/worker/wrangler.jsonc` contains literal test-recipient addresses in
 >   `env.dev` and `env.test`.
-> - `server.json` points at a placeholder remote URL and an unconfirmed GitHub
+> - `server.json` points at a placeholder remote URL; the GitHub namespace is
+>   confirmed (`io.github.Thx93/`). The repository it references does not exist
 >   namespace.
 >
 > `scripts/smoke.sh` runs a live socket test against the built backend (health,

@@ -414,7 +414,8 @@ workspace.
 - `UNSUPPORTED_CONTENT` (HTTP 415) is emitted when a source's content type
   cannot be processed. Rate limiting is enforced at the backend, and the
   automated x402 smoke test covers the 402 gate (not on-chain settlement).
-- `server.json` points at a placeholder remote URL and an unconfirmed namespace.
+- `server.json` uses a confirmed namespace (`io.github.Thx93/`) but a placeholder
+  remote URL, and the repository it references does not exist yet.
 
 ---
 

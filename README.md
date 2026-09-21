@@ -638,7 +638,7 @@ drives the real backend over HTTP against the fixture server.
 | No on-chain payment verification | The x402 gate is implemented and reviewed; no funded Base Sepolia or mainnet settlement has been executed. |
 | No automated x402 payment test | SPEC §26 asks for a `402` test and a valid-testnet-payment test. Neither exists. |
 | Rate limiting is in-process | Enforced per backend replica, not globally at the edge. |
-| `server.json` handle unconfirmed | `name` and `repository.url` assert a GitHub namespace; confirm you own it, and replace the placeholder `remotes[].url`. |
+| `server.json` remote URL is a placeholder | The namespace is confirmed (`io.github.Thx93/`), but `remotes[].url` must be replaced, and `repository.url` references a repo that does not exist yet. |
 | No independent security review | The SSRF controls are implemented and unit-tested in source; nobody has audited them adversarially. |
 
 **Verified locally:** `pnpm typecheck` exits 0, `pnpm test` reports 199 passing
@@ -808,7 +808,7 @@ Snapshot taken while writing the documentation.
 | Robots matching is simplified | `ROBOTS_POLICY` is enforced in `EvidenceService`; matching is prefix/wildcard, not full RFC 9309. |
 | — (fixed) | `UNSUPPORTED_CONTENT` (415) is now emitted per source. |
 | No on-chain settlement test | The `402` gate and the free/paid MCP split are covered by `scripts/worker-smoke.sh`; rate limiting is unit- and integration-tested. Actual USDC settlement needs a funded Base Sepolia wallet, which is an external credential. |
-| `server.json` namespace unconfirmed | `io.github.<handle>/agent-evidence-api` and the repository URL assert an account; confirm ownership and replace the placeholder remote URL. |
+| `server.json` not yet publishable | The namespace is confirmed, but `remotes[].url` is a placeholder and the referenced repository does not exist. |
 | Port allowlist includes 8080/8443 | Convenient for tooling, but also common internal-interface ports. Narrow if unneeded. |
 
 ---
