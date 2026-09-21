@@ -75,6 +75,14 @@ Verified against the live deployment: a request whose sources all fail returns
 502 `NO_SOURCES_RETRIEVED`, and a request with one good source plus one dead one
 returns 200.
 
+## Market analysis
+
+**[docs/market-analysis.md](./docs/market-analysis.md)** — what the x402 economy
+actually pays for, measured from the only catalogue that publishes real usage data
+(30-day calls and unique payers per service). It is uncomfortable reading: the
+category this service sits in is 1% of search by volume, and its price band is the
+weakest of the five.
+
 ## Engineering report
 
 **[docs/ENGINEERING-REPORT.md](./docs/ENGINEERING-REPORT.md)** — the report required
