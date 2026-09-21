@@ -313,6 +313,20 @@ export function makeGuardedLookup(
             return;
           }
         }
+        // Node's happy-eyeballs path (autoSelectFamily, on by default since
+        // Node 20) calls lookup with `all: true` and expects the ARRAY form:
+        // callback(err, [{address, family}, ...]). Returning a bare string here
+        // made EVERY hostname lookup fail, which broke every real fetch while
+        // literal-IP fetches still worked - which is why the test suite, built
+        // entirely on 127.0.0.1 fixtures, never caught it.
+        if ((options as { all?: boolean }).all) {
+          (callback as unknown as (
+            err: Error | null,
+            addresses: Array<{ address: string; family: number }>,
+          ) => void)(null, addresses);
+          return;
+        }
+
         const wanted =
           options.family === 4 || options.family === 6
             ? addresses.find((a) => a.family === options.family) ?? addresses[0]

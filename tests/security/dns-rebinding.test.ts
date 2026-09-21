@@ -117,6 +117,62 @@ describe("connect-time revalidation (the rebinding control)", () => {
   });
 });
 
+describe("the lookup contract Node actually relies on", () => {
+  // Regression: Node's happy-eyeballs path (autoSelectFamily, on by default
+  // since Node 20) calls lookup with `all: true` and expects an ARRAY of
+  // {address, family}. Returning a single address made every DNS-based fetch
+  // fail with UPSTREAM_HTTP_FAILURE, while literal-IP fetches kept working -
+  // so a suite built on 127.0.0.1 fixtures never noticed. The service could not
+  // fetch a single real hostname.
+  const dualStack: Answer = [
+    { address: "93.184.216.34", family: 4 },
+    { address: "2606:4700:4700::1111", family: 6 },
+  ];
+
+  test("returns an ARRAY when Node asks for all: true", async () => {
+    const out = await new Promise<{ err: Error | null; value: unknown }>((resolve) => {
+      const lookup = makeGuardedLookup(false, scriptedResolver([dualStack]).resolver) as unknown as (
+        h: string,
+        o: Record<string, unknown>,
+        cb: (err: Error | null, value?: unknown, family?: number) => void,
+      ) => void;
+      lookup("dual.example", { all: true, family: 0 }, (err, value) => resolve({ err, value }));
+    });
+
+    assert.equal(out.err, null);
+    assert.ok(Array.isArray(out.value), "all:true must yield an array, not a single address");
+    assert.equal((out.value as unknown[]).length, 2);
+    const first = (out.value as Array<{ address: string; family: number }>)[0];
+    assert.equal(first?.address, "93.184.216.34");
+  });
+
+  test("still returns a single address when Node asks for one", async () => {
+    const out = await new Promise<{ err: Error | null; value: unknown; family?: number }>((resolve) => {
+      const lookup = makeGuardedLookup(false, scriptedResolver([dualStack]).resolver) as unknown as (
+        h: string,
+        o: Record<string, unknown>,
+        cb: (err: Error | null, value?: unknown, family?: number) => void,
+      ) => void;
+      lookup("dual.example", { family: 4 }, (err, value, family) => resolve({ err, value, family }));
+    });
+    assert.equal(out.err, null);
+    assert.equal(typeof out.value, "string");
+    assert.equal(out.family, 4);
+  });
+
+  test("a disallowed address is still rejected in the all:true form", async () => {
+    const out = await new Promise<{ err: Error | null }>((resolve) => {
+      const lookup = makeGuardedLookup(false, scriptedResolver([[PUBLIC[0]!, PRIVATE[0]!]]).resolver) as unknown as (
+        h: string,
+        o: Record<string, unknown>,
+        cb: (err: Error | null) => void,
+      ) => void;
+      lookup("dual.example", { all: true }, (err) => resolve({ err }));
+    });
+    assert.equal((out.err as FetchError | null)?.code, "SSRF_ATTEMPT");
+  });
+});
+
 describe("validation-time checks still apply", () => {
   test("a consistently private answer is rejected during validation", async () => {
     const result = await validateUrl("http://rebind.example/", {
