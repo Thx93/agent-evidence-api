@@ -491,6 +491,18 @@ variable list. Copy it to `.env` (gitignored) for local use.
 | `FETCH_USER_AGENT` | `AgentEvidenceAPI/0.1.0 (+https://example.invalid/bot)` | Clearly identifiable User-Agent (SPEC §19). Point the URL at a real page once you have a domain. |
 | `ROBOTS_POLICY` | `warn` | `ignore` \| `warn` \| `enforce`. Any other value makes startup fail. Enforced by `EvidenceService`: `ignore` never consults robots.txt, `warn` attaches a `ROBOTS_DISALLOWED` warning and proceeds, `enforce` refuses the source. |
 
+### Verify the payment path before trusting it
+
+```bash
+cd buyer && node verify-payment-path.mjs
+```
+
+Signs a real payment with a throwaway unfunded wallet and asks the facilitator
+to verify it. It simulates the transfer against the live USDC contract, so an
+`invalid_exact_evm_insufficient_balance` verdict proves the whole path works and
+only funds are missing. Run it after any change to the facilitator, network,
+price, or recipient.
+
 ### Docker env templates
 
 Two separate templates exist, and mixing them is the mistake to avoid:

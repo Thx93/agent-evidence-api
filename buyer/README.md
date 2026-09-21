@@ -87,6 +87,25 @@ before deciding to pay for one. Only an actual `research_evidence` call is charg
 }
 ```
 
+## Verify the payment path without spending anything
+
+```bash
+node verify-payment-path.mjs
+```
+
+This signs a real EIP-3009 `transferWithAuthorization` with a throwaway unfunded
+wallet and asks the facilitator to verify it. Because the facilitator *simulates*
+the transfer against the live USDC contract, the rejection reason tells you how
+far the path got. Expected:
+
+```
+invalidReason: "invalid_exact_evm_insufficient_balance"
+  → the plumbing is correct; the wallet merely has no USDC
+```
+
+Any other reason (format, scheme, network, signature) means a real defect.
+Exits non-zero only in that case, so it works as a pre-flight check.
+
 ## Options
 
 ```
