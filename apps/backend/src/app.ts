@@ -144,8 +144,13 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
 
   // ------------------------------------------------------------- routes ----
   /** Free liveness probe. Never reports secrets or infrastructure detail. */
+  // Report the CONFIGURED version, not the compiled constant. The MCP server
+  // reports `config.serviceVersion` (its serverInfo and its health tool), so
+  // using the constant here let the two interfaces disagree: with a stale
+  // SERVICE_VERSION in the environment, /health said 0.1.1 while the MCP
+  // handshake said 0.1.0. One runtime source removes that class of drift.
   app.get("/health", async (_req, reply) =>
-    reply.send({ status: "ok" as const, service: SERVICE_NAME, version: SERVICE_VERSION }),
+    reply.send({ status: "ok" as const, service: SERVICE_NAME, version: config.serviceVersion }),
   );
 
   /**

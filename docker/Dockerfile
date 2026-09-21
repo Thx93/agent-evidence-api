@@ -119,7 +119,10 @@ RUN apt-get update \
 
 ENV NODE_ENV=production
 ENV SERVICE_NAME=agent-evidence-api
-ENV SERVICE_VERSION=0.1.0
+# SERVICE_VERSION is intentionally NOT pinned here. The compiled constant is the
+# single source of truth and this ENV overrode it, so a version bump that missed
+# this line left the running service reporting the previous release over MCP
+# while /health reported the new one. Set it at runtime only to override.
 # The container must listen on 0.0.0.0: a published port reaches the container's
 # IP, not its loopback. What is actually exposed is controlled by the compose
 # port binding (127.0.0.1) and the Worker — never by this variable.

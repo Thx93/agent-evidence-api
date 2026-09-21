@@ -17,7 +17,7 @@ import { EvidenceService, createLogger, loadConfig } from "@aee/core";
 import type { EvidenceMcpServer } from "@aee/mcp";
 import { buildApp } from "../../apps/backend/src/app.js";
 import { startFixtureServer, type FixtureServer } from "../fixtures/server.js";
-import { ERROR_HTTP_STATUS } from "@aee/schemas";
+import { ERROR_HTTP_STATUS, SERVICE_VERSION } from "@aee/schemas";
 
 const SECRET = "test-secret-value-that-is-long-enough";
 
@@ -162,6 +162,38 @@ describe("origin protection", () => {
     const lines = (await readFile(USAGE_LOG, "utf8")).trim().split("\n").filter(Boolean);
     const last = JSON.parse(lines[lines.length - 1] as string);
     assert.equal(last.settled, true, "a request with a payment proof counts as revenue");
+  });
+
+  test("the reported version follows configuration, not a compiled constant", async () => {
+    // Regression: /health used the compiled SERVICE_VERSION constant while the
+    // MCP server used config.serviceVersion. The Docker image pinned
+    // SERVICE_VERSION=0.1.0, so the REST probe reported 0.1.1 while the MCP
+    // serverInfo and health tool reported 0.1.0 - three interfaces disagreeing
+    // about which release was running.
+    //
+    // The invariant: whatever version is configured is the version every
+    // interface reports. MCP is verified against the live deployment by
+    // buyer/mcp-client-test.mjs, because the MCP route hijacks the raw socket and
+    // cannot be driven through app.inject.
+    const configured = loadConfig().serviceVersion;
+    assert.equal(configured, SERVICE_VERSION, "with no override, config equals the constant");
+
+    const override = { ...loadConfig(), serviceVersion: "9.9.9-test" };
+    const overrideLogger = createLogger("error");
+    const configuredApp = buildApp({
+      config: override,
+      logger: overrideLogger,
+      service: new EvidenceService({ config: override, logger: overrideLogger }),
+      mcp: stubMcp(),
+    });
+    await configuredApp.ready();
+    const res = await configuredApp.inject({ method: "GET", url: "/health" });
+    assert.equal(
+      res.json().version,
+      "9.9.9-test",
+      "an operator override must be reflected, not silently replaced by the constant",
+    );
+    await configuredApp.close();
   });
 
   test("health is reachable without a credential and leaks nothing", async () => {
