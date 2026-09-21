@@ -419,3 +419,42 @@ error will not retry.
 
 Validate the metadata, deploy the endpoint, run the suites, and only then publish
 by hand — once the acceptance criteria in SPEC §42 are genuinely true.
+
+## The x402 catalogue is the channel that matters, and a payment is the only way in
+
+Measured directly against the live PayAI discovery API on 2026-09-21
+(`https://facilitator.payai.network/discovery/resources`):
+
+| | Value |
+|---|---|
+| Services listed | **6,600** |
+| On Base (`eip155:8453`) | ~66% of a 2,000-entry sample |
+| Self-hosted deployments (`*.workers.dev`, Vercel, Netlify, Fly, Render) | ~19% of sample |
+| Submission endpoint | **none** — every write path returns 404/405 |
+| Our service | **absent** |
+
+Entries are created when a payment settles through a facilitator that declares the
+bazaar extension. There is no manual submission, so **a settled payment is the
+only route into the catalogue.** It is not merely a test of the service: it is the
+distribution event. Until one settles, the service is invisible to the buyers who
+browse x402 listings.
+
+The same measurement confirmed our declared metadata is already at or above the
+quality of what is listed: `serviceName`, `tags`, the USDC `extra` domain fields,
+a full example request body, and a full example response — where a typical listing
+carries a placeholder like `{"data": [], "success": true}`.
+
+`resource.description` is the entire pitch in that list, and the catalogue median
+is 179 characters. It was 52 and described the product rather than the deliverable;
+it now leads with what the caller receives, names the input, and states the
+no-charge guarantee.
+
+Read the live list at any time:
+
+```bash
+curl -s "https://facilitator.payai.network/discovery/resources?limit=1000" \
+| python3 -c "import json,sys; d=json.load(sys.stdin); print(d['pagination']['total'], 'services listed')"
+```
+
+To check whether this service has been catalogued yet, search the pages for its
+resource URL. An entry appearing is proof a payment settled.

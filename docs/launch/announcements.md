@@ -195,3 +195,21 @@ Title:
 Do not inflate traction. The x402 and MCP communities are small, technical, and
 they will check. Being the person who shipped something real and said so honestly
 is worth more than a fake launch.
+
+---
+
+## Sequencing note: the first payment is a distribution step
+
+The x402 discovery catalogue holds ~6,600 services and has no submission endpoint -
+entries appear when a payment settles. So the first purchase is not only a test: it
+is what makes this service visible to buyers browsing x402 listings.
+
+That argues for doing the two actions in this order:
+
+1. Make the first (self-)purchase. It proves settlement and puts the service in the
+   catalogue. Keep the amount small; the point is the settled transaction.
+2. Then post the launch kit. Announcements now have a live catalogue entry behind
+   them instead of a URL a reader has to take on faith.
+
+Doing it the other way round sends traffic to a listing that cannot yet be found
+by browsing.

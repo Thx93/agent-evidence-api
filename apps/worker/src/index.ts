@@ -227,7 +227,13 @@ function paymentGate(env: Env, routeKey: string): MiddlewareHandler {
           network: env.X402_NETWORK as Network,
           payTo: env.X402_RECIPIENT,
         },
-        description: "Agent Evidence API — structured, cited web evidence",
+        // Shown to buyers browsing the x402 catalogue, where this one line is the
+        // entire pitch. Lead with what the caller GETS, name the input, and state
+        // the provenance guarantee. Modelled on the listings that rank well.
+        description:
+          "Source-grounded evidence for one claim or question. Send up to 5 public URLs; " +
+          "get back the passages that support, contradict or fail to settle it, each with " +
+          "its URL, retrieval timestamp and content hash. Never charges when nothing is retrieved.",
         serviceName: "Agent Evidence API",
         tags: ["web-evidence", "claim-verification", "source-verification"],
 
