@@ -301,6 +301,23 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
         // Without this the validator reports "No bazaar extension in top-level
         // extensions object" and the route is not catalogued.
         extensions: { ...HTTP_DISCOVERY },
+
+        // The default 402 body is literally `{}` - useless to a buyer debugging their
+        // payment. Distinguish "you sent nothing" from "what you sent was rejected".
+        // This was written at the edge and lost in the move; the live body (`{}`)
+        // is what showed it.
+        unpaidResponseBody: ({ paymentHeader }: { paymentHeader?: string }) => ({
+          contentType: "application/json",
+          body: JSON.stringify(
+            errorResponse(
+              paymentHeader ? "PAYMENT_INVALID" : "PAYMENT_REQUIRED",
+              newRequestId(),
+              paymentHeader
+                ? "The supplied payment could not be verified. It may be malformed, expired, for the wrong network, or for an amount below the quoted price."
+                : "This endpoint requires payment. See https://agent-evidence-api.thx93.workers.dev/ for the terms.",
+            ),
+          ),
+        }),
       },
     },
     resourceServer,
