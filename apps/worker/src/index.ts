@@ -405,6 +405,10 @@ explicit <code>supported</code> / <code>contradicted</code> / <code>mixed</code>
   -H 'content-type: application/json' \
   -d '{"question":"Is Rotamech a manufacturer of centrifugal pumps?","urls":["https://example.com"]}'</code></pre>
 <p>You get a <code>402</code> with the price and the payment address. Nothing is charged.</p>
+<p><strong>You are only charged when evidence is actually delivered.</strong> If every
+source you asked for turns out to be unreachable, blocked, or unsupported, the request
+fails and <em>no payment is taken</em> — x402 cancels settlement whenever the service
+returns an error. Partial success does bill, because you received real evidence.</p>
 
 <h2>Buy something (zero install)</h2>
 <pre><code>curl -fsSL ${"https://agent-evidence-api.taher-h-alhaddad.workers.dev"}/buy.mjs -o buy.mjs

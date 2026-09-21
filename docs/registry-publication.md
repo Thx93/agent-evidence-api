@@ -28,11 +28,7 @@ Current [`server.json`](../server.json):
   "name": "io.github.Thx93/agent-evidence-api",
   "title": "Agent Evidence API",
   "description": "MCP-native web evidence and claim verification: cited, source-grounded evidence for AI agents.",
-  "version": "0.1.0",
-  "repository": {
-    "url": "https://github.com/Thx93/agent-evidence-api",
-    "source": "github"
-  },
+  "version": "0.1.1",
   "remotes": [
     {
       "type": "streamable-http",
@@ -47,8 +43,8 @@ Current [`server.json`](../server.json):
 | `$schema` | Must be the **current** schema URI. The registry rejects or warns on non-current schemas. Current: `2025-12-11`. |
 | `name` | Reverse-DNS with **exactly one** `/`. `io.github.<username>/<server>` for GitHub auth. |
 | `description` | Max 100 characters, truthful, capability-focused. |
-| `version` | Product version, `0.1.0` (SPEC section 34). Must be a specific version — ranges are rejected. |
-| `repository` | Required for transparency; `source: "github"` plus a browsable/clonable URL. |
+| `version` | Product version (SPEC section 34). Must be a specific version — ranges are rejected. Keep it equal to the product version so `/health`, the MCP `serverInfo` and this listing agree. |
+| `repository` | **Optional.** Omit it unless the repository is publicly readable — a private one publishes a link that 404s. See below. |
 | `remotes[0].type` | `streamable-http` (the primary transport, SPEC section 10). SSE is deprecated. |
 | `remotes[0].url` | **Placeholder.** Must be the deployed public MCP URL (`MCP_PUBLIC_URL`). |
 
@@ -94,8 +90,27 @@ Run these from the repository root.
 | Placeholder | Where | Replace with |
 | --- | --- | --- |
 | `https://mcp.example.invalid/mcp` | [`server.json`](../server.json) → `remotes[0].url` | the deployed MCP URL, i.e. `MCP_PUBLIC_URL` from [`docker/env.production.example`](../docker/env.production.example) |
-| `https://github.com/Thx93/agent-evidence-api` | `server.json` → `repository.url` | the real repository URL |
+| *(none — see below)* | `server.json` → `repository` | **omit it unless the repository is public** |
 | `io.github.Thx93/...` | `server.json` → `name` | `io.github.<your-github-username>/agent-evidence-api` |
+
+### Why there is no `repository` field
+
+`repository.url` is optional, and it was removed deliberately. This project's
+source is private, so pointing at it published a link that returned **404** to
+everyone who clicked it — on the primary discovery channel, where it reads as an
+abandoned listing. A missing field is honest; a dead link is not.
+
+Add it only once the repository is publicly readable, and verify that an
+anonymous request returns 200 first:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://github.com/<owner>/<repo>   # must be 200
+```
+
+Correcting metadata requires a new version: `mcp-publisher publish` rejects a
+duplicate version, and `status` only changes active/deprecated/deleted. Bump
+`version` in `server.json` (and the product version, so `/health`, the MCP
+`serverInfo` and the listing agree — see the round-15 note in `docs/discovery.md`).
 
 Rules that the registry enforces:
 
@@ -215,9 +230,10 @@ Checklist — every box must be true before publishing:
       `<username>` is exactly the GitHub account that will run `login github`.
 - [ ] If publishing under an organisation, the authenticated account is an
       **Owner** of that organisation.
-- [ ] `repository.url` points at the real repository and `source` is `github`.
+- [ ] Either `repository` is omitted, or its URL returns 200 to an
+      anonymous request. A private repository must not be linked.
 - [ ] `description` is truthful and ≤ 100 characters.
-- [ ] `version` is `0.1.0` (or a newer specific version) and matches the product
+- [ ] `version` is a specific version and matches the product
       version.
 - [ ] `remotes[0].url` is the deployed `MCP_PUBLIC_URL` — no `.invalid` host left.
 - [ ] The public MCP endpoint answers `initialize` and `tools/list` without
