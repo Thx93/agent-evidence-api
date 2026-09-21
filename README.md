@@ -1,4 +1,23 @@
 # Agent Evidence API
+## Live deployment
+
+| | |
+|---|---|
+| **Endpoint** | https://agent-evidence-api.taher-h-alhaddad.workers.dev |
+| **MCP** | https://agent-evidence-api.taher-h-alhaddad.workers.dev/mcp |
+| **Health** | [`/health`](https://agent-evidence-api.taher-h-alhaddad.workers.dev/health) · deep: [`/health?deep=1`](https://agent-evidence-api.taher-h-alhaddad.workers.dev/health?deep=1) |
+| **Registry** | `io.github.Thx93/agent-evidence-api` — published, status active |
+| **Payment** | x402, `exact`, **0.03 USDC** on Base mainnet (`eip155:8453`) |
+| **Buy it** | `npx @thx93/x402-evidence "your question" https://source.example` |
+
+Try the paywall with no wallet at all — this returns a 402 and charges nothing:
+
+```bash
+curl -X POST https://agent-evidence-api.taher-h-alhaddad.workers.dev/v1/evidence \
+  -H 'content-type: application/json' \
+  -d '{"question":"Is Rotamech a manufacturer of centrifugal pumps?","urls":["https://example.com"]}'
+```
+
 
 **Evidence infrastructure for AI agents.** Give it a question or a claim plus the
 public web pages you want checked, and it returns structured, cited evidence:
