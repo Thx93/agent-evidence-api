@@ -70,9 +70,13 @@ async function main(): Promise<void> {
     log_level: config.logLevel,
     cache_enabled: cache !== null,
     usage_log: config.usageLogPath || "off",
-    x402_network: config.x402.network,
-    // Presence only — the value itself is never logged.
-    x402_recipient_configured: config.x402.recipient.length > 0,
+    // Payment is enforced at the Cloudflare Worker, which holds the x402
+    // configuration. This process never sees or verifies a payment, so logging
+    // the x402 fields here reported the unset LOCAL defaults - it printed
+    // eip155:84532 (Base Sepolia) and recipient_configured:false for a service
+    // running on mainnet with a live recipient, which reads as a misconfigured
+    // payment layer and invites someone to "fix" it.
+    payment_boundary: "cloudflare-worker",
     limits: config.limits,
   });
 

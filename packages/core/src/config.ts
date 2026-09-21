@@ -22,6 +22,12 @@ export interface AppConfig {
   /** Server-to-server shared secret. Never logged, never returned to callers. */
   backendAuthSecret: string;
 
+  /**
+   * Declared for the shared config contract. The BACKEND does not enforce
+   * payment: x402 is enforced at the Cloudflare Worker, which reads its own
+   * bindings. These values are the local defaults and must not be logged as if
+   * they described the deployed payment configuration.
+   */
   x402: {
     network: string;
     recipient: string;
