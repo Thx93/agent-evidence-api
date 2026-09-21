@@ -184,8 +184,8 @@ const MCP_DISCOVERY = declareDiscoveryExtension({
   // wording lacked verify, citation, support and contradict.
   description:
     "Verify a claim or answer a question against public web sources. Returns cited " +
-    "evidence, each excerpt carrying a citation with its source URL, retrieval time " +
-    "and content hash.",
+    "evidence for claim verification, with a citation for every excerpt: source URL, " +
+    "retrieval time and content hash.",
   inputSchema: {
     type: "object",
     properties: {
@@ -277,8 +277,8 @@ function paymentGate(env: Env, routeKey: string): MiddlewareHandler {
         description:
           "Verify a claim against public web sources: send a question and up to 5 URLs, " +
           "get cited evidence - passages that support, contradict or fail to settle it. " +
-          "Every excerpt carries a citation: source URL, retrieval time, content hash. " +
-          "Never charges when nothing is retrieved.",
+          "Claim verification with a citation for every excerpt: source URL, retrieval " +
+          "time, content hash. Never charges when nothing is retrieved.",
         serviceName: "Agent Evidence API",
         tags: ["web-evidence", "claim-verification", "source-verification"],
 

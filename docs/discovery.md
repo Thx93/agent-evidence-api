@@ -606,3 +606,50 @@ for q in "claim verification" "verify a company claim" "cited web evidence"; do
   | python3 -c 'import json,sys; d=json.load(sys.stdin); print(len(d.get("resources",[])), "result(s)")'
 done
 ```
+
+## The index does not stem, so every word form is its own key
+
+Verified against the live index by searching morphological variants of a phrase
+known to appear in exactly one description ("Perpetual swaps data — pay per
+request"):
+
+| Query | Results | Finds that service |
+|---|---:|---|
+| `perpetual` | 14 | yes |
+| `perpetuals` | 19 | yes |
+| `perpetually` | 0 | no |
+| `swaps` | 10 | yes |
+| `swap` | 20 | no |
+| `swapping` | 0 | no |
+
+And across the whole catalogue: `cite` returns 4 results while `citation` returns
+20. Different answers from the same stem means **no stemming and no substring
+matching** — each exact word form is a separate token.
+
+### Which fields are searched
+
+Each field was probed with a word that appears in exactly one of them:
+
+| Field | Indexed |
+|---|---|
+| `description` | yes |
+| `serviceName` | yes |
+| `tags` | yes |
+| `resource` path | yes |
+
+So all four are worth careful wording, and the resource path matters too — ours is
+`…/mcp` and `…/v1/evidence`, both descriptive.
+
+### What this means for the wording
+
+A buyer searching `verification` will not find an entry that says only `verify`.
+Both forms have to appear, and they have to read naturally.
+
+The published descriptions now cover 12 of the 13 forms a buyer is likely to type:
+
+`verify` `verification` `claim` `evidence` `cited` `citation` `source` `sources`
+`web` `question` `support` `contradict`
+
+The missing one is the bare verb `cite` — the least likely query form, and working
+it in would read as stuffing rather than description. Leaving it is a deliberate
+choice, not an oversight.
