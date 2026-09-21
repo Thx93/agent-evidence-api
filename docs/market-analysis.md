@@ -338,3 +338,63 @@ The lesson worth keeping: **the first thing a configuration change should do is
 prove the old value is gone.** I checked the manifest and the CDP validator after
 deploying; the manifest was correct and the challenge was not, and only looking at
 both found it.
+
+---
+
+# The CDP Facilitator does not work in a Cloudflare Worker
+
+Attempted 2026-09-21 with real CDP credentials. **It failed, and the paid route
+returned 500 until reverted.** Recorded here because earlier rounds described the
+integration as "deployed and dormant, one credential away", which was an untested
+claim: the code path had never run with credentials present.
+
+## What happened
+
+Setting `CDP_API_KEY_ID` and `CDP_API_KEY_SECRET` in the Worker and redeploying
+produced `500` on both paid routes. The deploy script's live verification caught it
+(the manifest still served, so a build-only check would have passed). A tail of the
+Worker gave the real cause:
+
+```
+Failed to fetch supported kinds from facilitator:
+  TypeError: getRandomValues is not a function
+
+x402: Route "POST /v1/evidence" has an invalid bazaar extension:
+  Schema validation failed: Code generation from strings disallowed for this context
+
+Error: Failed to initialize: no supported payment kinds loaded from any facilitator.
+```
+
+Two independent Workers restrictions, either of which is fatal:
+
+| failure | cause |
+|---|---|
+| `getRandomValues is not a function` | the CDP SDK's JWT signing (jose) does not find a usable crypto source in the Workers runtime, so the facilitator handshake cannot authenticate |
+| `Code generation from strings disallowed` | the x402 library validates the route's bazaar declaration with Ajv, which compiles schemas via `new Function` — **disallowed in Workers by design**, and not something `nodejs_compat` changes |
+
+`nodejs_compat` was already enabled and made no difference. The CDP SDK also pulls in
+`axios`, which is untested in this runtime.
+
+## Resolution
+
+Reverted by deleting both secrets, which the Worker reads to choose its facilitator;
+it fell back to PayAI with no code change. Re-verified end to end:
+**Bazaar rank #1, paywall 402 on both transports, manifest serving, CDP validator
+accepted, settlement simulated against the real USDC contract, price $0.003.**
+
+## What this means
+
+The CDP Bazaar, the Bazaar MCP server, Amazon Bedrock AgentCore and agentic.market
+are **not reachable from this architecture**, not because a credential is missing but
+because the payment gating runs at the edge where the required libraries cannot
+operate.
+
+The one real path is architectural: **move x402 payment gating from the Worker to the
+backend**, which is Node on the VPS and has working crypto and no eval restriction,
+leaving the Worker as a proxy. That is a significant change to the payment boundary —
+the component SPEC treats as security-sensitive — and it should be scoped and tested
+deliberately rather than attempted as a hotfix.
+
+Two smaller possibilities, both unverified: a Workers-compatible crypto shim for the
+JWT signing, and an Ajv build without runtime code generation. Neither is confirmed
+to be sufficient, and both would need real-credential testing to establish.
