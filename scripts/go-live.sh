@@ -49,8 +49,14 @@ printf 'health: '; curl -s -m 5 http://127.0.0.1:8080/health || echo "(not respo
 
 echo
 echo "=== tunnel ==="
-# Kill any previous tunnel so only one is live.
-pkill -f 'cloudflared tunnel --url http://127.0.0.1:8080' 2>/dev/null || true
+# Kill any previous tunnel so only one is live. Wait for it to actually exit:
+# racing a new tunnel against a dying one leaves orphans behind (observed).
+pkill -x cloudflared 2>/dev/null || true
+for _ in $(seq 1 15); do
+  pgrep -x cloudflared >/dev/null 2>&1 || break
+  sleep 1
+done
+pkill -9 -x cloudflared 2>/dev/null || true
 sleep 1
 rm -f /tmp/aee-tunnel.log
 nohup cloudflared tunnel --url http://127.0.0.1:8080 --no-autoupdate \

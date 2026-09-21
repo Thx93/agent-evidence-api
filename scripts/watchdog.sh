@@ -27,7 +27,7 @@ LOG() { printf '[%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 # itself and stays 200 even when the backend is dead - which would let a buyer
 # pay for nothing, and previously made this watchdog exit early on a broken
 # service.
-if curl -s -m 15 -o /dev/null "$PUBLIC_URL/health?deep=1" 2>/dev/null; then
+if curl -fsS -m 15 -o /dev/null "$PUBLIC_URL/health?deep=1" 2>/dev/null; then
   exit 0
 fi
 LOG "public health check failed; investigating"
@@ -40,7 +40,7 @@ fi
 
 # --- 3. is there a tunnel at all? ------------------------------------------
 ORIGIN="$(cat "$ROOT/.origin-url" 2>/dev/null || true)"
-if [ -z "$ORIGIN" ] || ! curl -s -m 15 -o /dev/null "$ORIGIN/health" 2>/dev/null; then
+if [ -z "$ORIGIN" ] || ! curl -fsS -m 15 -o /dev/null "$ORIGIN/health" 2>/dev/null; then
   LOG "tunnel unhealthy; starting a new one"
   bash "$ROOT/scripts/go-live.sh" >/dev/null 2>&1
   NEW_ORIGIN="$(cat "$ROOT/.origin-url" 2>/dev/null || true)"
@@ -57,9 +57,15 @@ if [ -z "$ORIGIN" ] || ! curl -s -m 15 -o /dev/null "$ORIGIN/health" 2>/dev/null
 fi
 
 # --- 4. final confirmation --------------------------------------------------
-if curl -s -m 15 -o /dev/null "$PUBLIC_URL/health?deep=1" 2>/dev/null; then
-  LOG "recovered; public service healthy"
-else
-  LOG "WARNING: public service still unhealthy after recovery attempt"
-  exit 1
-fi
+# A Worker redeploy takes a few seconds to propagate, so give it a window
+# rather than declaring failure on the first attempt.
+for attempt in $(seq 1 12); do
+  if curl -fsS -m 15 -o /dev/null "$PUBLIC_URL/health?deep=1" 2>/dev/null; then
+    LOG "recovered; public service healthy"
+    exit 0
+  fi
+  sleep 5
+done
+
+LOG "WARNING: public service still unhealthy after recovery attempt"
+exit 1

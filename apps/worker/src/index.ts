@@ -230,6 +230,31 @@ function paymentGate(env: Env, routeKey: string): MiddlewareHandler {
         description: "Agent Evidence API — structured, cited web evidence",
         serviceName: "Agent Evidence API",
         tags: ["web-evidence", "claim-verification", "source-verification"],
+
+        // The default 402 body is literally {} — useless to a buyer debugging
+        // their payment. Distinguish "you sent nothing" from "what you sent was
+        // rejected", and point at the docs either way.
+        unpaidResponseBody: ({ paymentHeader }: { paymentHeader?: string }) => ({
+          contentType: "application/json",
+          body: errorResponse(
+            paymentHeader ? "PAYMENT_INVALID" : "PAYMENT_REQUIRED",
+            newRequestId(),
+            paymentHeader
+              ? "The supplied payment could not be verified. It may be malformed, expired, for the wrong network, or for an amount below the quoted price."
+              : undefined,
+          ),
+        }),
+
+        // If verification succeeded but settlement failed, do not leave the
+        // buyer guessing why they were not served.
+        settlementFailedResponseBody: () => ({
+          contentType: "application/json",
+          body: errorResponse(
+            "PAYMENT_INVALID",
+            newRequestId(),
+            "The payment was verified but could not be settled on-chain, so the request was not served and you were not charged for a result.",
+          ),
+        }),
         // Only advertise the discovery payload that matches the route being
         // priced: an HTTP body schema on the MCP route would be wrong.
         extensions: routeKey === "POST /mcp" ? { ...MCP_DISCOVERY } : { ...HTTP_DISCOVERY },
