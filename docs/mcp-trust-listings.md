@@ -19,18 +19,25 @@ discovery surface with intent behind it.
 
 ## Where our two servers stand
 
+Updated 2026-09-24, after the repository was made public.
+
 | | weather MCP | paid service (agent-evidence-api) |
 |---|---|---|
-| M8ven | **74/100, grade C** (code sub-score **96**) | **listed but unscored** |
+| M8ven | **74/100, grade C** — code sub-score **96** | **74/100, yellow** — code sub-score **100** |
 | M8ven detail | `/mcp/thx93/mcp-weather-server` | `/mcp/thx93-agent-evidence-api-1id76y` |
 | claimed | no | no |
 | live monitored | not connected | not connected |
-| in the official MCP Registry | **no** — `server.json` validates but was never published | yes (0.1.0–0.1.3) |
+| in the official MCP Registry | **no** — `server.json` validates but was never published | yes, 0.1.0–0.1.3 (0.1.4 pending a re-login) |
 | on npm | **no** | **no** |
 
-The weather score is capped by *adoption*, not by code: 96 for code, but "Grades
-remain capped until the project builds reputation through adoption" — 0 stars, 1
-contributor. No amount of tidying moves it past C.
+**The paid service now scores higher on code than the weather server**: 100/100
+against 96. Both are held at 74 overall by the same cap — *"Grades remain capped
+until the project builds reputation through adoption."* Code quality is not what
+limits these listings.
+
+Until the repository was made public, the paid service could only be submitted by
+hand and came back `"verdict": "pending"` or `"unknown"` indefinitely, because the
+scanner had nothing to read. Making it public changed that in one step.
 
 ## The asymmetry that matters
 

@@ -137,3 +137,46 @@ taken first: `/root/dsh-workspace/.x-archive/leq6ah-posts.json` (JSON) and
 `twitter search` returns HTTP 404 (known upstream breakage). `user-posts`,
 `following`, `tweet` and `post` all work, so targets are found by walking accounts
 and reading reply threads rather than by searching.
+
+---
+
+## Rotation log
+
+### `BACKEND_AUTH_SECRET` — rotated 2026-09-24, before publication
+
+`.prod-secret` was committed in `d4471c2` and its value was byte-identical to the
+secret the live Worker and backend shared. Before this repository was made public,
+the secret was rotated and the file untracked and gitignored. The old value is still
+in the history — the repository was pushed after the rotation, so what is public is
+the **inert** value. Verified: the live secret appears **0** times in the pushed
+history.
+
+A full pass over the tree and all history found no other live credential. No private
+key, no CDP key, no Cloudflare token, no AgentMail key, and the seller wallet's
+private key appears zero times — the 26 matches for that file were the **public**
+recipient address, which is meant to be published.
+
+Both sides were redeployed together: the backend container first, then the Worker
+secret via `scripts/deploy-live.sh`. All nine readiness checks passed afterwards.
+
+**Note for any future rotation:** updating one side first breaks every paid route
+until the other catches up. With no customers that is harmless; with customers it is
+an outage, so rotate during a quiet window or add a dual-accept period.
+
+### The tunnel died silently — 2026-09-22 to 2026-09-24
+
+The `cloudflared` quick tunnel received a `SIGTERM` on 2026-09-22 and exited
+gracefully. Nothing restarted it, and nothing alerted: the Worker kept serving, the
+manifest kept serving, and only `health?deep=1` revealed `"backend":"unreachable"`.
+The service was effectively down for two days and the failure was invisible from the
+outside.
+
+Restored by starting a new tunnel, writing the new URL to `.origin-url`, and
+redeploying the Worker (a quick tunnel's hostname changes on every restart, which is
+why `deploy-live.sh` reads that file and passes `BACKEND_ORIGIN_URL` as a var).
+
+`scripts/supervise.sh` is now running again (300 s interval), so an unhealthy tunnel
+or backend is restarted automatically and the Worker is redeployed with the new
+origin. It lives outside cron and systemd because both are outside the
+sandbox-writable area; it dies on reboot, so after a reboot run
+`bash scripts/supervise.sh 300` once.
