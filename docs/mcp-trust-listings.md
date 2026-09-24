@@ -27,7 +27,7 @@ Updated 2026-09-24, after the repository was made public.
 | M8ven detail | `/mcp/thx93/mcp-weather-server` | `/mcp/thx93-agent-evidence-api-1id76y` |
 | claimed | no | no |
 | live monitored | not connected | not connected |
-| in the official MCP Registry | **no** — `server.json` validates but was never published | yes, 0.1.0–0.1.3 (0.1.4 pending a re-login) |
+| in the official MCP Registry | **no** — `server.json` validates but was never published | **yes — 0.1.4 active**, 0.1.0–0.1.2 deprecated |
 | on npm | **no** | **no** |
 
 **The paid service now scores higher on code than the weather server**: 100/100
