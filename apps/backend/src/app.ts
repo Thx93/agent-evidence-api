@@ -5,6 +5,7 @@ import {
   SERVICE_VERSION,
   ERROR_HTTP_STATUS,
   errorResponse,
+  priceAtomicUnits,
   priceString,
   type ErrorCode,
 } from "@aee/schemas";
@@ -586,6 +587,107 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
       .header("content-type", "text/javascript; charset=utf-8")
       .header("cache-control", "public, max-age=300")
       .send(cli);
+  });
+
+  /**
+   * The host's x402 capability manifest (`draft-hawkins-x402-dns-discovery`) —
+   * the machine-readable record of how to pay for this host, which crawlers and
+   * indexes fetch directly.
+   *
+   * Built HERE, from `config.x402`, so the manifest and the 402 challenge cannot
+   * disagree. It used to be assembled at the edge from the Worker's own
+   * `X402_*` variables: a second, display-only copy of the terms that drifted
+   * silently from what was actually charged. That copy also described both
+   * resources with one shared `accepts` entry, so the MCP resource advertised
+   * `resource: …/v1/evidence` and a crawler could not work out how to pay for
+   * `/mcp` at all.
+   *
+   * Payment terms MUST ride on each resource. A manifest that lists only a URL
+   * and a description leaves crawlers unable to learn the chain — Agent402 calls
+   * that outcome "listed and unroutable", row `chainless`, reason
+   * `network_unknown`. Each entry therefore carries its own `accepts`, in the
+   * same shape the live 402 returns, describing the resource it is attached to.
+   */
+  app.get("/.well-known/x402", async (req: FastifyRequest, reply: FastifyReply) => {
+    const httpResource = config.x402.publicResourceUrl;
+    const mcpResource = config.x402.publicMcpResourceUrl;
+
+    // The public origin for `docs`. Without an explicit public URL the best we
+    // have is the request as this process sees it, which behind the Worker is
+    // the internal origin — so prefer the configured one.
+    const base = (() => {
+      const known = httpResource || mcpResource;
+      if (known) {
+        try {
+          return new URL(known).origin;
+        } catch {
+          // A malformed setting falls through to the request rather than throwing.
+        }
+      }
+      return `${req.protocol}://${req.hostname}`;
+    })();
+
+    /**
+     * One `accepts` entry, describing how to pay for a single resource.
+     *
+     * `resource` is the resource this entry rides on — the same value as its
+     * container — so a reader can never pair a price with the wrong endpoint.
+     */
+    const accept = (resource: string) => ({
+      scheme: "exact",
+      network: config.x402.network,
+      // USDC on Base mainnet is the settlement asset (SPEC section 11).
+      asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      payTo: config.x402.recipient,
+      amount: priceAtomicUnits(config.x402.priceUsd),
+      maxTimeoutSeconds: 300,
+      resource,
+      extra: { name: "USD Coin", version: "2" },
+    });
+
+    return reply
+      .header("cache-control", "public, max-age=300")
+      // Read cross-origin by crawlers and indexes.
+      .header("access-control-allow-origin", "*")
+      .send({
+        x402Version: 2,
+        kind: "resource-server",
+        name: "Agent Evidence API",
+        description:
+          "Cited, source-grounded web evidence for AI agents. Send a question and up to " +
+          "5 public URLs; get back the passages that support, contradict or fail to settle " +
+          "it, each with its source URL, retrieval time and content hash. Never charges when " +
+          "nothing is retrieved.",
+        resources: [
+          {
+            url: httpResource,
+            method: "POST",
+            // The indexed description IS the search surface. Agent402 reads this into
+            // its own index and ranks on match score first, so say what the caller
+            // gets using the words a caller would type.
+            description:
+              "Verify a claim or fact check a statement against public web sources: send a " +
+              "question and up to 5 URLs, get cited evidence - the passages that support, " +
+              "contradict or fail to settle it, each with its source URL, retrieval time and " +
+              "content hash. Claim verification and evidence extraction for AI agents. Never " +
+              "charges when nothing is retrieved.",
+            accepts: [accept(httpResource)],
+          },
+          {
+            url: mcpResource,
+            method: "POST",
+            description:
+              "MCP tool research_evidence: verify a claim or answer a question against public " +
+              "web sources, returning cited evidence with a citation for every excerpt. " +
+              "Claim verification, evidence extraction and source-grounded research over MCP " +
+              "streamable HTTP. Free tools: health and tools/list.",
+            accepts: [accept(mcpResource)],
+          },
+        ],
+        attestation: { type: "none" },
+        docs: `${base}/`,
+        updated: new Date().toISOString(),
+      });
   });
 
   /**

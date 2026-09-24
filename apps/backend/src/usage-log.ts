@@ -49,8 +49,6 @@ export interface UsageEvent {
   payment_provided: boolean;
 }
 
-let ready: Promise<void> | null = null;
-
 export interface UsageLogOptions {
   /** File to append to. Empty or "off" disables logging entirely. */
   path: string;
@@ -58,6 +56,12 @@ export interface UsageLogOptions {
 
 export function createUsageLog(opts: UsageLogOptions) {
   const enabled = Boolean(opts.path) && opts.path !== "off";
+
+  // Per-instance, deliberately. This used to be a module-level `ready` promise,
+  // so the first log's `mkdir` stood in for every later one: a second log would
+  // skip creating its own directory and then silently lose its first writes. One
+  // log in production hid the defect; a test that makes several found it.
+  let ready: Promise<void> | null = null;
 
   async function ensureDir(): Promise<void> {
     if (!ready) {

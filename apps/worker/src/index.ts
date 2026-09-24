@@ -6,7 +6,6 @@ import {
   errorResponse,
   ERROR_HTTP_STATUS,
   priceString,
-  priceAtomicUnits,
   type ErrorCode,
 } from "@aee/schemas";
 
@@ -557,30 +556,14 @@ app.delete("/mcp", (c) => proxyToBackend(c, "/mcp", { method: "DELETE" }));
  *
  * `kind` is "resource-server": we consume a facilitator, we do not provide one,
  * so the `facilitator` block the draft requires of facilitators does not apply.
- */
-/**
- * One `accepts` entry describing how to pay for a resource.
  *
- * Built from the live bindings, not hard-coded, so the manifest and the 402
- * challenge cannot disagree.
+ * The body is built in the BACKEND and proxied here. It used to be assembled in
+ * this file from the Worker's own X402_* variables, which are display-only — a
+ * second copy of the terms that could drift from what the backend actually
+ * charges. Worse, both resources were described with one shared `accepts` entry
+ * hard-coded to `/v1/evidence`, so the MCP resource advertised the wrong
+ * `resource` and a crawler could not tell how to pay for `/mcp`.
  */
-function acceptsEntry(env: Env, base: string): Record<string, unknown> {
-  // Same source as the 402 challenge, so the two cannot disagree.
-  const amount = priceAtomicUnits(env.X402_PRICE_USD);
-  return {
-    scheme: "exact",
-    network: env.X402_NETWORK,
-    asset: USDC_BASE,
-    payTo: env.X402_RECIPIENT,
-    amount,
-    maxTimeoutSeconds: 300,
-    resource: `${base}/v1/evidence`,
-    extra: { name: "USD Coin", version: "2" },
-  };
-}
-
-/** USDC on Base mainnet - the settlement asset (SPEC section 11). */
-const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
 /**
  * Domain-ownership proof for 402 Index.
@@ -628,67 +611,25 @@ app.get("/.well-known/glama.json", (c) =>
   ),
 );
 
-app.get("/.well-known/x402", (c) => {
-  const base = new URL(c.req.url).origin;
-  return c.json(
-    {
-      x402Version: 2,
-      kind: "resource-server",
-      name: "Agent Evidence API",
-      description:
-        "Cited, source-grounded web evidence for AI agents. Send a question and up to " +
-        "5 public URLs; get back the passages that support, contradict or fail to settle " +
-        "it, each with its source URL, retrieval time and content hash. Never charges when " +
-        "nothing is retrieved.",
-      // Payment terms MUST ride on each resource. A manifest that lists only a
-      // URL and a description leaves crawlers unable to learn the chain, and
-      // Agent402 names that outcome exactly: "listed and unroutable", row
-      // "chainless", reason `network_unknown`. Their reader derives the terms
-      // from `resources[].accepts` (the same shape the live 402 returns) or from
-      // flat network/asset/payTo/amount fields.
-      //
-      // Taken from the same bindings the paywall uses, so the manifest cannot
-      // drift from the live challenge - the draft calls divergence between the
-      // two a misconfiguration.
-      resources: [
-        {
-          url: `${base}/v1/evidence`,
-          method: "POST",
-          // The indexed description IS the search surface. Agent402 reads this
-          // into its own index, and its search ranks on match score first - so a
-          // terse "HTTPS evidence endpoint" loses to sellers who say what the
-          // caller gets using the words a caller would type. Same lesson as the
-          // Bazaar listing, applied to the manifest.
-          description:
-            "Verify a claim or fact check a statement against public web sources: send a " +
-            "question and up to 5 URLs, get cited evidence - the passages that support, " +
-            "contradict or fail to settle it, each with its source URL, retrieval time and " +
-            "content hash. Claim verification and evidence extraction for AI agents. Never " +
-            "charges when nothing is retrieved.",
-          accepts: [acceptsEntry(c.env, base)],
-        },
-        {
-          url: `${base}/mcp`,
-          method: "POST",
-          description:
-            "MCP tool research_evidence: verify a claim or answer a question against public " +
-            "web sources, returning cited evidence with a citation for every excerpt. " +
-            "Claim verification, evidence extraction and source-grounded research over MCP " +
-            "streamable HTTP. Free tools: health and tools/list.",
-          accepts: [acceptsEntry(c.env, base)],
-        },
-      ],
-      attestation: { type: "none" },
-      docs: `${base}/`,
-      updated: new Date().toISOString(),
-    },
-    200,
-    {
-      // Public data, explicitly so: a crawler must be able to read it cross-origin.
-      "cache-control": "public, max-age=300",
-      "access-control-allow-origin": "*",
-    },
-  );
+/**
+ * The x402 capability manifest, proxied from the backend.
+ *
+ * The body is built where the paywall lives, from the same `config.x402` the 402
+ * challenge is built from, so the two cannot diverge. This route only decides how
+ * the manifest is *served*: public, cacheable, and readable cross-origin by the
+ * crawlers and indexes that fetch it.
+ */
+app.get("/.well-known/x402", async (c) => {
+  const res = await proxyToBackend(c, "/.well-known/x402", { method: "GET" });
+  // A crawler and any page may read this cross-origin.
+  res.headers.set("access-control-allow-origin", "*");
+  // proxyToBackend forces `no-store`, which is right for a paid response and
+  // wrong for a public manifest a crawler is expected to cache. Only a good
+  // response gets the cacheable policy - an upstream failure stays uncached.
+  if (res.ok) {
+    res.headers.set("cache-control", "public, max-age=300");
+  }
+  return res;
 });
 
 // ---------------------------------------------------------------------------

@@ -38,15 +38,20 @@ export function extractCredential(headers: Record<string, unknown>): string | un
 /**
  * Paths that are reachable without a credential.
  *
- * Kept deliberately tiny: liveness only. Everything else — including the MCP
- * endpoint — requires the shared secret, because it is the Worker that owns
- * payment enforcement.
+ * Kept deliberately tiny: liveness, the buyer CLI, and the capability manifest —
+ * all of which are public by design and hold no secret. Everything else,
+ * including the MCP endpoint, requires the shared secret, so a caller cannot
+ * reach a paid route by addressing the origin directly and skipping the gate in
+ * `app.ts`.
  */
 export const PUBLIC_PATHS = new Set([
   "/health",
   // The buyer CLI is meant to be downloaded by anyone; it contains no secrets
   // (it reads the payer's own key from their environment).
   "/buy.mjs",
+  // The x402 capability manifest is the record a crawler fetches to learn how to
+  // pay for this host. Being readable without a credential is the entire point.
+  "/.well-known/x402",
 ]);
 
 export function isPublicPath(path: string): boolean {
