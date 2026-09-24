@@ -67,10 +67,10 @@ servers, and the free one is not.**
 
 ## Two one-click actions for the operator
 
-1. **Claim both listings.** Your Gmail is already the commit author on the weather
-   repo (`Thx93 <taher.h.alhaddad@gmail.com>`), so the email in the git history is
-   one M8ven accepts. Claiming yields a verified publisher badge, the full audit
-   findings, and direct contact when they find something urgent.
+1. **Claim both listings.** Your commit-author email is already in the weather
+   repo's git history, and M8ven accepts an address taken from the git history, so
+   the claim will verify. Claiming yields a verified publisher badge, the full
+   audit findings, and direct contact when they find something urgent.
 2. **Connect Live** on the weather repo — a read-only GitHub App that re-scans on
    every push, so the annotation fix lands without waiting for a crawl:
    `https://github.com/apps/m8ven-verify/installations/new`
