@@ -1,0 +1,76 @@
+# Typecheck and test on every push and pull request.
+#
+# Why this exists: the repository is public and the suites are the claim that the
+# code works. Without CI the only proof is a claim in a README, and this project
+# has already shipped two broken builds that looked fine in the output. See
+# AGENTS.md §2 — a hosted workflow file is permitted and expected.
+#
+# Nothing here reaches for a secret: the suites run offline. The SSRF and fixture
+# tests bind to loopback on purpose, and every facilitator is a local stub, so the
+# job does not depend on a live endpoint or a wallet.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: typecheck + tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          # The workspace's wrapper is what CI should use too.
+          cache: pnpm
+
+      - name: Install pnpm
+        run: npm install --global pnpm@12
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+        env:
+          # The fetcher's SSRF suite needs this to reach the local fixture server.
+          ALLOW_LOOPBACK_FOR_TESTS: "true"
+          NODE_ENV: test
+
+  worker:
+    name: worker bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install pnpm
+        run: npm install --global pnpm@12
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      # `wrangler deploy --dry-run` builds the bundle without deploying. A Worker
+      # that compiles here is the one `scripts/deploy-live.sh` will ship; a bundle
+      # with unresolved imports fails this step rather than a live deploy.
+      - name: Build the Worker bundle
+        working-directory: apps/worker
+        run: npx wrangler deploy --dry-run --outdir=dist --env=""
