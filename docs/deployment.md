@@ -32,7 +32,7 @@ No Kubernetes, no Terraform, no Redis, no PostgreSQL, no full observability
 stack. SPEC §31 and §36 forbid all of them.
 
 > **Status.** Deployed and live at `https://agent-evidence-api.thx93.workers.dev`
-> (service version `0.1.4`), mainnet USDC on Base. The backend runs as the Docker
+> (service version `0.1.5`), mainnet USDC on Base. The backend runs as the Docker
 > container `aee-live`; the Worker is the public edge; a `cloudflared` quick tunnel
 > exposes the origin. `scripts/check-readiness.sh` verifies the buyer journey end to
 > end from outside, and `scripts/deploy-backend.sh` / `scripts/deploy-live.sh`
@@ -40,11 +40,12 @@ stack. SPEC §31 and §36 forbid all of them.
 >
 > Two things are true about the Worker's own payment configuration and are worth
 > stating plainly: the Worker **no longer enforces payment**, and its
-> `X402_PRICE_USD` / `X402_RECIPIENT` / `X402_NETWORK` values are now *display-only*
-> (they feed the landing page and `/.well-known/x402`). The authority is the
-> backend's environment. Because those are two separate configurations they can
-> drift, so `scripts/check-readiness.sh` compares the manifest against the live 402
-> challenge and fails if they disagree.
+> `X402_PRICE_USD` / `X402_RECIPIENT` / `X402_NETWORK` values are *display-only* —
+> they feed the landing page and nothing else. The authority is the backend's
+> environment, and `/.well-known/x402` is built there too, from the same values the
+> 402 challenge is built from, so the manifest cannot drift from what is charged.
+> `scripts/check-readiness.sh` still compares the two and fails on any difference:
+> cheap insurance against a later change reintroducing the duplication.
 >
 > `scripts/smoke.sh` runs a live socket test against the built backend (health,
 > origin-auth refusal, a real evidence request, cache reuse, and SQLite file

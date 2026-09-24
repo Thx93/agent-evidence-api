@@ -753,9 +753,10 @@ Score 4.3/5.0 across 2 tools
 ```
 
 Claiming the connector would unlock **usage reports**, which is the only way to
-learn whether anyone is finding us. It cannot be done from here: the GitHub method
-needs a public repository (ours is private) and the HTTP challenge needs a token
-from Glama's sign-in flow. Both are operator actions.
+learn whether anyone is finding us. Two of the three claim methods are now open:
+the HTTP challenge is already served at `/.well-known/glama.json`, and the GitHub
+method became available when the repository went public on 2026-09-24. Confirming
+the claim inside Glama's sign-in flow is the operator action that remains.
 
 The Tool Count score is left alone deliberately. The obvious way to raise it is to
 add a bare fetch or scrape tool, and SPEC section 1 says in as many words that this
@@ -783,11 +784,11 @@ origin, at a URL Glama fetches:
 
     https://agent-evidence-api.thx93.workers.dev/.well-known/glama.json
 
-Three methods exist; only one is available to this project:
+Three methods exist; two are now available to this project:
 
 | method | requirement | usable |
 |---|---|---|
-| GitHub repo file | `glama.json` in the repo root, **public** repo | no — ours is private |
+| GitHub repo file | `glama.json` in the repo root, **public** repo | **yes** — the repo is public since 2026-09-24 |
 | **HTTP challenge** | serve the token JSON at `/.well-known/glama.json` | **yes** |
 | DNS record | control of a DNS zone | no — `workers.dev` has none |
 

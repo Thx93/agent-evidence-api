@@ -593,9 +593,11 @@ app.get("/.well-known/402index-verify.txt", (c) =>
  *
  * The claim is proven by serving this exact JSON on the connector's own origin.
  * The token is NOT a secret: the whole scheme is that it is published at a public
- * URL so Glama can fetch it. The other two methods are unavailable to us - the
- * GitHub method needs a public repository (ours is private) and the DNS method needs
- * a DNS zone (a workers.dev subdomain has none).
+ * URL so Glama can fetch it. This is the method that needs no DNS zone, which
+ * matters because a workers.dev subdomain has none. The GitHub method is open now
+ * that the repository is public (since 2026-09-24), but it would mean a second
+ * copy of the token in the repo root kept in step with this route. One method is
+ * enough.
  *
  * DO NOT REMOVE THIS ROUTE. Glama re-checks periodically and ownership lapses if the
  * file stops being discoverable; when it lapses the usage reports go with it.

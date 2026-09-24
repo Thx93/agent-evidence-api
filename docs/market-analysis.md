@@ -760,8 +760,15 @@ built from the same bindings and could not disagree. Now the Worker's copy is
 display-only and the backend is the authority, so they *can*. A manifest that advertises
 a price the service does not charge is worse than no manifest.
 
-`scripts/check-readiness.sh` now compares every `accepts` entry in the manifest against
+`scripts/check-readiness.sh` compares every `accepts` entry in the manifest against
 the live 402 challenge (`scheme`, `network`, `amount`, `payTo`, `asset`) and fails on any
-difference. That is a correctness check, not a fix: the two values are still entered in
-two places. The durable fix is to serve the manifest from the backend, which is a
-follow-up rather than part of this change.
+difference.
+
+**Fixed on 2026-09-24 (0.1.5).** The manifest is now built in the backend from
+`config.x402` — the same values the challenge is built from — and the Worker only
+proxies it, so the two cannot diverge. Moving it also uncovered a second, live defect:
+both resources were described by one shared `accepts` entry hard-coded to
+`resource: …/v1/evidence`, so the MCP resource advertised the HTTP endpoint as what its
+price paid for, and a crawler could not tell how to pay for `/mcp` at all. Each entry
+now names the resource it is attached to, and `tests/e2e/manifest.test.ts` pins that
+shape. The readiness check above stays as a belt to that brace.

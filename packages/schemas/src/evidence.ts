@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /** Stable identifiers for this service. */
 export const SERVICE_NAME = "agent-evidence-api";
-export const SERVICE_VERSION = "0.1.4";
+export const SERVICE_VERSION = "0.1.5";
 /** Public API version prefix. */
 export const API_VERSION = "v1";
 /** Response schema version carried in every evidence response. */
