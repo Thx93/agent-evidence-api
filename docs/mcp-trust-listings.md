@@ -82,19 +82,39 @@ servers, and the free one is not.**
    every push, so the annotation fix lands without waiting for a crawl:
    `https://github.com/apps/m8ven-verify/installations/new`
 
-## The ordered fix for the paid service
+## The ordered fix for what remains
 
-Everything below is blocked on one thing: **a working npm token** (see
+Everything left is blocked on **a working npm token** (see
 [`access-and-credentials.md`](./access-and-credentials.md)).
 
 1. Publish the MCP server to npm. An npm package name is accepted by M8ven, and it
-   gives the listing a real install path instead of a private repo.
-2. *Then* publish to the official MCP Registry — `bin/mcp-publisher` is authenticated
-   and `server.json` already validates. Doing this first would point the registry
-   entry at a package that does not exist, which is the "dead endpoint" failure this
-   project has already written up once.
+   gives the listing a real install path instead of a repo.
+2. *Then* publish the weather server to the official MCP Registry — the paid one is
+   already published. Its `server.json` validates, but it declares a `packages`
+   entry for `@thx93/mcp-weather-server`, so publishing before step 1 would point
+   the registry entry at a package that does not exist.
 3. Re-submit and let the score attach.
 
 Until step 1, a paid MCP listing in any of these directories is a page that leads
 nowhere — which is worse than not being listed, because the one thing a trust index
 is for is checking that a server can actually be installed.
+
+### Registry state, 2026-09-24
+
+`io.github.Thx93/agent-evidence-api`: **0.1.4 active** with the correct remote URL.
+0.1.0, 0.1.1 and 0.1.2 are **deprecated** — they advertised
+`agent-evidence-api.taher-h-alhaddad.workers.dev` and
+`agent-evidence-api.thx93workersdev.workers.dev`, neither of which serves. An agent
+that resolved an old entry got a dead host, which is worse than no entry.
+
+**The login does not need a human.** `mcp-publisher login github` also accepts
+`-token`, so the device flow that appeared to require the operator is avoidable:
+
+```bash
+mcp-publisher login github -token "$(gh auth token)"
+```
+
+That worked against the workspace's existing GitHub credential and issued a registry
+JWT good for about five minutes — publish in the same breath. The interactive device
+code expires in roughly fifteen minutes and, once missed, has to be re-requested,
+which is exactly what happened the first time.
