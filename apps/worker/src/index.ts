@@ -494,34 +494,49 @@ app.post("/v1/evidence", async (c) => {
  * terms this service cannot honour. A free handshake is not blocked by it — the
  * origin is the thing that would serve it either way.
  */
-app.use("/mcp", async (c, next) => {
-  if (c.req.method !== "POST") return next();
+/**
+ * Both MCP services — `/mcp` for evidence, `/weather/mcp` for weather — share one
+ * gate at the edge: a body size cap and an origin health check. Which tools cost
+ * money is decided in the backend, per route, so this stays a pass-through.
+ */
+const MCP_PATHS = ["/mcp", "/weather/mcp"] as const;
 
-  const raw = await c.req.text();
-  if (raw.length > MAX_MCP_BODY_BYTES) {
-    return fail(c, "INVALID_REQUEST", newRequestId(), "Request body is too large.");
-  }
-  c.set("mcpBody" as never, raw as never);
+for (const path of MCP_PATHS) {
+  app.use(path, async (c, next) => {
+    if (c.req.method !== "POST") return next();
 
-  if (!(await originHealthy(c.env))) {
-    return fail(
-      c,
-      "BACKEND_UNREACHABLE",
-      newRequestId(),
-      "The evidence service is temporarily unavailable; no payment was taken.",
-    );
-  }
-  return next();
-});
+    const raw = await c.req.text();
+    if (raw.length > MAX_MCP_BODY_BYTES) {
+      return fail(c, "INVALID_REQUEST", newRequestId(), "Request body is too large.");
+    }
+    c.set("mcpBody" as never, raw as never);
 
-app.post("/mcp", async (c) => {
-  const raw = (c.get("mcpBody" as never) as string | undefined) ?? "";
-  return proxyToBackend(c, "/mcp", {
-    method: "POST",
-    body: raw,
-    contentType: "application/json",
+    if (!(await originHealthy(c.env))) {
+      return fail(
+        c,
+        "BACKEND_UNREACHABLE",
+        newRequestId(),
+        "The evidence service is temporarily unavailable; no payment was taken.",
+      );
+    }
+    return next();
   });
-});
+
+  app.post(path, async (c) => {
+    const raw = (c.get("mcpBody" as never) as string | undefined) ?? "";
+    return proxyToBackend(c, path, {
+      method: "POST",
+      body: raw,
+      contentType: "application/json",
+    });
+  });
+
+  /** SSE stream for server-initiated messages. Free. */
+  app.get(path, (c) => proxyToBackend(c, path, { method: "GET" }));
+
+  /** Session teardown. Free. */
+  app.delete(path, (c) => proxyToBackend(c, path, { method: "DELETE" }));
+}
 
 /**
  * The zero-install buyer CLI. Free, public, and proxied from the origin so the
@@ -529,12 +544,6 @@ app.post("/mcp", async (c) => {
  * every deploy for no benefit).
  */
 app.get("/buy.mjs", (c) => proxyToBackend(c, "/buy.mjs", { method: "GET" }));
-
-/** SSE stream for server-initiated messages. Free. */
-app.get("/mcp", (c) => proxyToBackend(c, "/mcp", { method: "GET" }));
-
-/** Session teardown. Free. */
-app.delete("/mcp", (c) => proxyToBackend(c, "/mcp", { method: "DELETE" }));
 
 // ---------------------------------------------------------------------------
 // x402 well-known manifest

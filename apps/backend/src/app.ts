@@ -15,7 +15,12 @@ import {
   type AppConfig,
   type Logger,
 } from "@aee/core";
-import type { EvidenceMcpServer } from "@aee/mcp";
+import {
+  createWeatherMcpServer,
+  EVIDENCE_PAID_TOOLS,
+  WEATHER_PAID_TOOLS,
+  type EvidenceMcpServer,
+} from "@aee/mcp";
 import {
   FastifyAdapter,
   paymentMiddlewareFromHTTPServer,
@@ -180,6 +185,58 @@ const CATALOGUE_DESCRIPTION =
   "is retrieved.";
 
 const CATALOGUE_TAGS = ["web-evidence", "claim-verification", "source-verification"];
+
+/**
+ * The discovery declaration for the weather route.
+ *
+ * `get-alerts` is the named tool because the Bazaar's `info.input.toolName` takes
+ * one name; `get-forecast` is named in the description so a search for either
+ * finds this entry. The `output.example` shows the actual deliverable — alert
+ * records with an instruction to act on — rather than a signature.
+ */
+const WEATHER_MCP_DISCOVERY = declareDiscoveryExtension({
+  toolName: "get-alerts",
+  transport: "streamable-http",
+  description:
+    "US weather lookup for AI agents. get-alerts returns every active National " +
+    "Weather Service alert for a two-letter state code - the event, the area it " +
+    "covers, its severity and the official instruction. get-forecast returns the " +
+    "next five forecast periods for a latitude and longitude: temperature, wind " +
+    "speed and direction, and a plain-language forecast. Read-only weather and " +
+    "alert lookup, US locations only.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      state: { type: "string", minLength: 2, maxLength: 2 },
+    },
+    required: ["state"],
+    additionalProperties: false,
+  },
+  example: { state: "CA" },
+  output: {
+    example: {
+      result: [
+        {
+          event: "Winter Storm Warning",
+          area: "Central Virginia",
+          severity: "Severe",
+          description: "Heavy snow expected.",
+          instructions: "Avoid travel.",
+        },
+      ],
+    },
+  },
+});
+
+/** One line shown to buyers browsing the x402 catalogue for the weather route. */
+const WEATHER_CATALOGUE_DESCRIPTION =
+  "US weather for AI agents: get-alerts returns every active National Weather " +
+  "Service alert for a state code - the event, the area it covers, its severity " +
+  "and the official instruction. get-forecast returns the next five forecast " +
+  "periods for a latitude and longitude. Read-only weather lookup, US locations " +
+  "only.";
+
+const WEATHER_CATALOGUE_TAGS = ["weather", "weather-alerts", "forecast"];
 
 /**
  * The x402 context for one verified but not yet settled MCP call.
@@ -432,9 +489,51 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
     },
   };
 
-  const MCP_ROUTE_KEY = "POST /mcp";
+  /**
+   * The public URL of the weather MCP route.
+   *
+   * Derived from the same public origin as the other resources rather than read
+   * from a fourth environment variable: one origin, one path, and one less value
+   * to keep in step across the challenge, the manifest and the deploy.
+   */
+  const weatherResourceUrl = (() => {
+    const known = config.x402.publicMcpResourceUrl || config.x402.publicResourceUrl;
+    if (!known) return "";
+    try {
+      return `${new URL(known).origin}/weather/mcp`;
+    } catch {
+      return "";
+    }
+  })();
+
+  /** Shared by both MCP routes so the two cannot drift on terms or error text. */
+  const sharedMcpRoute = {
+    accepts: paymentOption,
+    serviceName: SERVICE_NAME,
+    unpaidResponseBody,
+    // Verification can succeed while settlement fails (for example the buyer's
+    // balance moved between the two). Do not leave them guessing.
+    settlementFailedResponseBody: () => ({
+      contentType: "application/json",
+      body: JSON.stringify(
+        errorResponse(
+          "PAYMENT_INVALID",
+          newRequestId(),
+          "The payment was verified but could not be settled on-chain, so the request was not served and you were not charged for a result.",
+        ),
+      ),
+    }),
+  };
+
+  /**
+   * BOTH MCP services are declared here, and this is not paperwork.
+   * `processHTTPRequest` only enforces a route it knows about, so an undeclared
+   * path is not charged at all — which is exactly how the weather tools were
+   * briefly given away for free before this entry existed.
+   */
   const MCP_ROUTES = {
-    [MCP_ROUTE_KEY]: {
+    "POST /mcp": {
+      ...sharedMcpRoute,
       // Same reasoning as the HTTP route: the request the backend sees is the
       // internal origin, so a buyer or catalogue must be shown the public address.
       // The value is derived from X402_RESOURCE_URL when it is not set explicitly
@@ -442,24 +541,16 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
       ...(config.x402.publicMcpResourceUrl
         ? { resource: config.x402.publicMcpResourceUrl }
         : {}),
-      accepts: paymentOption,
       description: CATALOGUE_DESCRIPTION,
-      serviceName: SERVICE_NAME,
       tags: CATALOGUE_TAGS,
       extensions: { ...MCP_DISCOVERY },
-      unpaidResponseBody,
-      // Verification can succeed while settlement fails (for example the buyer's
-      // balance moved between the two). Do not leave them guessing.
-      settlementFailedResponseBody: () => ({
-        contentType: "application/json",
-        body: JSON.stringify(
-          errorResponse(
-            "PAYMENT_INVALID",
-            newRequestId(),
-            "The payment was verified but could not be settled on-chain, so the request was not served and you were not charged for a result.",
-          ),
-        ),
-      }),
+    },
+    "POST /weather/mcp": {
+      ...sharedMcpRoute,
+      ...(weatherResourceUrl ? { resource: weatherResourceUrl } : {}),
+      description: WEATHER_CATALOGUE_DESCRIPTION,
+      tags: WEATHER_CATALOGUE_TAGS,
+      extensions: { ...WEATHER_MCP_DISCOVERY },
     },
   };
 
@@ -627,6 +718,10 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
       return `${req.protocol}://${req.hostname}`;
     })();
 
+    // The same value the x402 route declaration uses, so the manifest and the
+    // live challenge cannot name different weather endpoints.
+    const weatherResource = weatherResourceUrl || `${base}/weather/mcp`;
+
     /**
      * One `accepts` entry, describing how to pay for a single resource.
      *
@@ -682,6 +777,17 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
               "Claim verification, evidence extraction and source-grounded research over MCP " +
               "streamable HTTP. Free tools: health and tools/list.",
             accepts: [accept(mcpResource)],
+          },
+          {
+            url: weatherResource,
+            method: "POST",
+            description:
+              "US weather over MCP: get-alerts returns every active National Weather Service " +
+              "alert for a two-letter state code - the event, the area it covers, its severity " +
+              "and the official instruction. get-forecast returns the next five forecast " +
+              "periods for a latitude and longitude. Read-only weather lookup for AI agents, " +
+              "US locations only. Free tools: health and tools/list.",
+            accepts: [accept(weatherResource)],
           },
         ],
         attestation: { type: "none" },
@@ -775,6 +881,30 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
   // not parsed yet at `onRequest`, so `tools/list` could not be told from
   // `tools/call`), and why it moved off the edge at all (the CDP Bazaar's MCP
   // server enumerates only routes that settle through the CDP Facilitator).
+  //
+  // Two MCP services share this gate and this settlement path:
+  //
+  //   POST /mcp          research_evidence                (free: health, tools/list)
+  //   POST /weather/mcp  get-alerts, get-forecast         (free: health, tools/list)
+  //
+  // They stay separate so each can be listed as its own MCP: a registry entry
+  // should name a server whose tool list matches it, and a buyer who came for
+  // weather should not land on a claim-verification tool.
+
+  /**
+   * The weather tools, their own paid MCP service.
+   *
+   * Built here rather than injected: unlike the evidence tools they depend on no
+   * `EvidenceService`, only a logger, so there is nothing for a caller to supply.
+   * Their only I/O is one fetch to the NWS, which the tests stub.
+   */
+  const weatherMcp = createWeatherMcpServer({
+    logger,
+    serviceVersion: config.serviceVersion,
+  });
+  app.addHook("onClose", async () => {
+    await weatherMcp.close();
+  });
 
   /**
    * Verified-but-unsettled payments, keyed by request. A WeakMap rather than a
@@ -782,14 +912,22 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
    */
   const mcpPayments = new WeakMap<object, VerifiedMcpCall>();
 
+  /** Each MCP route's transport, and the tools that cost money on it. */
+  type McpTransport = Pick<EvidenceMcpServer, "handleNodeRequest">;
+  const mcpRoutes = new Map<string, { server: McpTransport; paidTools: ReadonlySet<string> }>([
+    ["/mcp", { server: mcp, paidTools: EVIDENCE_PAID_TOOLS }],
+    ["/weather/mcp", { server: weatherMcp, paidTools: WEATHER_PAID_TOOLS }],
+  ]);
+
   if (paywallActive) {
     app.addHook("preHandler", async (req: FastifyRequest, reply: FastifyReply) => {
       if (req.method !== "POST") return;
       const path = req.url.split("?")[0] ?? req.url;
-      if (path !== "/mcp") return;
+      const route = mcpRoutes.get(path);
+      if (!route) return;
       // The free discovery surface — initialize, tools/list, ping, the free
       // `health` tool — passes without touching the facilitator or the wallet.
-      if (!needsMcpPayment(req.body)) return;
+      if (!needsMcpPayment(req.body, route.paidTools)) return;
 
       try {
         await ensurePaidRoutesReady();
@@ -943,41 +1081,44 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
   }
 
   const mcpVerbs = ["POST", "GET", "DELETE"] as const;
-  for (const verb of mcpVerbs) {
-    app.route({
-      method: verb,
-      url: "/mcp",
-      handler: async (req: FastifyRequest, reply: FastifyReply) => {
-        // Hand the raw sockets to the MCP transport; Fastify must not try to
-        // serialise the response itself.
-        reply.hijack();
+  for (const [url, route] of mcpRoutes) {
+    for (const verb of mcpVerbs) {
+      app.route({
+        method: verb,
+        url,
+        handler: async (req: FastifyRequest, reply: FastifyReply) => {
+          // Hand the raw sockets to the MCP transport; Fastify must not try to
+          // serialise the response itself.
+          reply.hijack();
 
-        // A paid call's response is buffered so settlement can see both the status
-        // and the body. Free calls are written straight through.
-        const payment = mcpPayments.get(req);
-        const captured = payment ? captureResponse(reply.raw) : null;
-        let handlerThrew = false;
+          // A paid call's response is buffered so settlement can see both the status
+          // and the body. Free calls are written straight through.
+          const payment = mcpPayments.get(req);
+          const captured = payment ? captureResponse(reply.raw) : null;
+          let handlerThrew = false;
 
-        try {
-          await mcp.handleNodeRequest(req.raw, reply.raw, req.body);
-        } catch (err) {
-          handlerThrew = true;
-          logger.error("mcp handler failed", {
-            request_id: req.id,
-            error: err instanceof Error ? err.message : String(err),
-          });
-          if (!captured && !reply.raw.headersSent) {
-            reply.raw.writeHead(500, { "content-type": "application/json" });
-            reply.raw.end(JSON.stringify(errorResponse("INTERNAL_ERROR", String(req.id))));
+          try {
+            await route.server.handleNodeRequest(req.raw, reply.raw, req.body);
+          } catch (err) {
+            handlerThrew = true;
+            logger.error("mcp handler failed", {
+              request_id: req.id,
+              route: url,
+              error: err instanceof Error ? err.message : String(err),
+            });
+            if (!captured && !reply.raw.headersSent) {
+              reply.raw.writeHead(500, { "content-type": "application/json" });
+              reply.raw.end(JSON.stringify(errorResponse("INTERNAL_ERROR", String(req.id))));
+            }
           }
-        }
 
-        if (payment && captured) {
-          await settleOrCancelMcpCall(payment, captured, handlerThrew, String(req.id));
-        }
-        captured?.flush();
-      },
-    });
+          if (payment && captured) {
+            await settleOrCancelMcpCall(payment, captured, handlerThrew, String(req.id));
+          }
+          captured?.flush();
+        },
+      });
+    }
   }
 
   // ------------------------------------------------------------- errors ----

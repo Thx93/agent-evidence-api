@@ -41,16 +41,33 @@ import {
 } from "@aee/schemas";
 import { ServiceError, type EvidenceService, type Logger } from "@aee/core";
 
+import { FREE_TOOL_NAME, PAID_TOOL_NAME, type McpToolDefinition } from "./tools.js";
+
 // ---------------------------------------------------------------------------
 // Public surface
 // ---------------------------------------------------------------------------
 
-/** One MCP tool as advertised to clients and asserted by tests. */
-export interface McpToolDefinition {
-  name: string;
-  description: string;
-  inputSchema: unknown; // JSON Schema object
-}
+// Re-exported so callers keep one import site. `McpToolDefinition` and the tool
+// names live in `tools.js` rather than here because `weather.js` also needs them,
+// and an import back into this module would be a cycle that reads a `const` during
+// module initialisation.
+export * from "./tools.js";
+
+// The weather MCP server: a second, separately listable and separately payable
+// service, mounted at `/weather/mcp`. It lives in its own module so this one
+// stays about the evidence tools.
+export {
+  createWeatherMcpServer,
+  formatAlert,
+  formatPeriod,
+  makeNWSRequest,
+  NWS_API_BASE,
+  NWS_USER_AGENT,
+  runAlerts,
+  runForecast,
+  type WeatherMcpServer,
+  type WeatherMcpServerOptions,
+} from "./weather.js";
 
 /**
  * What the server reports after each paid tool call.
@@ -92,10 +109,6 @@ export interface EvidenceMcpServer {
   /** Release any transport state. */
   close(): Promise<void>;
 }
-
-/** The exact tool names, exported so tests and docs cannot drift. */
-export const PAID_TOOL_NAME = "research_evidence";
-export const FREE_TOOL_NAME = "health";
 
 // ---------------------------------------------------------------------------
 // Tool descriptions

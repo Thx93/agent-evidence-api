@@ -1,4 +1,24 @@
 # Agent Evidence API
+
+[![CI](https://github.com/Thx93/agent-evidence-api/actions/workflows/ci.yml/badge.svg)](https://github.com/Thx93/agent-evidence-api/actions/workflows/ci.yml)
+[![M8ven Score](https://m8ven.ai/badge/mcp/thx93/agent-evidence-api)](https://m8ven.ai/mcp/thx93/agent-evidence-api)
+
+Cited, source-grounded web evidence and claim verification for AI agents, over
+both HTTP and MCP. Paid per call in USDC on Base over x402 — $0.003 a call, and
+nothing at all when nothing is retrieved.
+
+| What | Where |
+|---|---|
+| HTTP evidence endpoint | `POST https://agent-evidence-api.thx93.workers.dev/v1/evidence` |
+| MCP service (`research_evidence`) | `POST https://agent-evidence-api.thx93.workers.dev/mcp` |
+| MCP service (`get-alerts`, `get-forecast`) | `POST https://agent-evidence-api.thx93.workers.dev/weather/mcp` |
+| Zero-install buyer CLI | `curl -fsSL https://agent-evidence-api.thx93.workers.dev/buy.mjs -o buy.mjs` |
+| x402 capability manifest | `https://agent-evidence-api.thx93.workers.dev/.well-known/x402` |
+
+Discovery is free on every MCP route (`tools/list`, `initialize`, `ping`, and a
+`health` tool), so an agent can read the schemas and probe for liveness before
+paying for anything.
+
 ## Optional: semantic ranking
 
 Ranking is deterministic lexical matching by default, and it has a measured

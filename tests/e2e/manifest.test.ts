@@ -88,13 +88,14 @@ describe("the manifest is public", () => {
 });
 
 describe("the manifest describes both resources", () => {
-  test("lists exactly the HTTP and MCP endpoints", () => {
-    assert.equal(manifest.resources.length, 2);
+  test("lists exactly the HTTP, MCP and weather endpoints", () => {
+    assert.equal(manifest.resources.length, 3);
     assert.deepEqual(
       manifest.resources.map((r) => r.url).sort(),
       [
         "https://agent-evidence-api.example.invalid/mcp",
         "https://agent-evidence-api.example.invalid/v1/evidence",
+        "https://agent-evidence-api.example.invalid/weather/mcp",
       ],
     );
   });
@@ -174,9 +175,20 @@ describe("descriptions are the search surface", () => {
 
   test("each description names the caller's outcome, not the protocol", () => {
     // A crawler ranks on match score against the words a buyer would type, so
-    // "HTTPS evidence endpoint" loses to text that says what the caller gets.
+    // "HTTPS evidence endpoint" loses to text that says what the caller gets. Each
+    // resource must name its OWN outcome, not merely some outcome.
+    const vocabulary: Record<string, RegExp> = {
+      "/v1/evidence": /evidence/i,
+      "/mcp": /evidence/i,
+      "/weather/mcp": /(weather|alert|forecast)/i,
+    };
     for (const resource of manifest.resources) {
-      assert.match(resource.description ?? "", /[Ee]vidence/);
+      const path = new URL(resource.url).pathname;
+      assert.match(
+        resource.description ?? "",
+        vocabulary[path] ?? /(evidence|weather)/i,
+        `${path} description must name its own outcome`,
+      );
     }
   });
 });

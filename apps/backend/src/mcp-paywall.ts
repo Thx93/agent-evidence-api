@@ -23,7 +23,11 @@
  * HTTP resource server is driven directly.
  */
 import type { ServerResponse } from "node:http";
-import { FREE_TOOL_NAME, PAID_TOOL_NAME } from "@aee/mcp";
+import {
+  EVIDENCE_PAID_TOOLS,
+  FREE_TOOL_NAME,
+  PAID_TOOL_NAME,
+} from "@aee/mcp";
 
 /**
  * MCP methods an agent may call without paying, so it can look before it buys.
@@ -44,25 +48,33 @@ export const FREE_MCP_METHODS: ReadonlySet<string> = new Set([
   "ping",
 ]);
 
-/** The only tool that is not free. Re-exported so callers name it once. */
+/** The paid tool on `/mcp`. Re-exported so callers name it once. */
 export const PAID_MCP_TOOL = PAID_TOOL_NAME;
 
-/** The free liveness tool, callable without payment. */
+/** The free liveness tool, callable without payment on every route. */
 export const FREE_MCP_TOOL = FREE_TOOL_NAME;
 
 /**
  * Decide whether a parsed JSON-RPC payload must be paid for.
  *
+ * `paidTools` is per route — `/mcp` charges for `research_evidence`, `/weather/mcp`
+ * for `get-alerts` and `get-forecast` — so a `tools/call` is paid exactly when its
+ * name is in the set for its own route. A tool a route does not publish can never
+ * be charged for, and a name outside every set is free.
+ *
  * A batch is charged if ANY element is not a recognised free operation. An
  * unparseable or absent body is charged, because "not recognised as free" must
  * fail closed.
  */
-export function needsMcpPayment(body: unknown): boolean {
-  if (Array.isArray(body)) return !body.every(isFreeMessage);
-  return !isFreeMessage(body);
+export function needsMcpPayment(
+  body: unknown,
+  paidTools: ReadonlySet<string> = EVIDENCE_PAID_TOOLS,
+): boolean {
+  if (Array.isArray(body)) return !body.every((m) => isFreeMessage(m, paidTools));
+  return !isFreeMessage(body, paidTools);
 }
 
-function isFreeMessage(message: unknown): boolean {
+function isFreeMessage(message: unknown, paidTools: ReadonlySet<string>): boolean {
   if (message === null || typeof message !== "object" || Array.isArray(message)) return false;
   const m = message as { method?: unknown; params?: unknown };
   if (typeof m.method !== "string") return false;
@@ -70,8 +82,8 @@ function isFreeMessage(message: unknown): boolean {
   if (m.method !== "tools/call") return false;
   const params = m.params;
   if (params === null || typeof params !== "object") return false;
-  // Only the paid tool requires payment; `health` and any future free tool pass.
-  return (params as { name?: unknown }).name !== PAID_MCP_TOOL;
+  // `health` and any future free tool pass; only names in `paidTools` cost money.
+  return !paidTools.has(String((params as { name?: unknown }).name));
 }
 
 /**

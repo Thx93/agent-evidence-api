@@ -40,7 +40,12 @@ search engine. Do not position or build it as one.
    apps, browser extension, admin panel, job marketplace, NFT/token, or a
    proprietary autonomous agent.
 2. **Do not introduce**: Kubernetes, Terraform, Redis, PostgreSQL, Elasticsearch,
-   a vector database, Kafka, a complex CI platform, or a full observability stack.
+   a vector database, Kafka, a full observability stack, or self-hosted CI. A
+   hosted workflow file (GitHub Actions) is not what "a complex CI platform"
+   meant here: it is a committed YAML file and no infrastructure to run. Both
+   projects ship one and are expected to keep their suites green in it — a
+   public repository with no CI reads as unmaintained. (Amended 2026-09-24 at the
+   operator's explicit instruction.)
 3. **Do not** install large unnecessary system packages.
 4. **Do not** modify unrelated DSH, Kilo Code, SSH, or repository configuration.
 5. Keep the architecture **model/harness/vendor agnostic**. Never hard-code
