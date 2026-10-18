@@ -67,7 +67,21 @@ if ! pnpm build >"$BUILD_OUT" 2>&1; then
   exit 1
 fi
 rm -f "$BUILD_OUT"
-echo "  ok"
+
+# Prove the build actually refreshed the artifact the Worker will bundle.
+# `wrangler` resolves @aee/schemas to its `dist`, and a stale dist has twice shipped
+# a wrong SERVICE_VERSION to production - once three days old, and again when a
+# 0.1.6 source shipped as 0.1.5. `pnpm build` is supposed to prevent that; this
+# checks it did, because "the build ran" and "the artifact changed" are different
+# claims.
+SRC_VERSION="$(sed -n 's/.*SERVICE_VERSION = "\([^"]*\)".*/\1/p' packages/schemas/src/evidence.ts)"
+DIST_VERSION="$(sed -n 's/.*SERVICE_VERSION = "\([^"]*\)".*/\1/p' packages/schemas/dist/evidence.js)"
+if [ -z "$DIST_VERSION" ] || [ "$DIST_VERSION" != "$SRC_VERSION" ]; then
+  echo "  ✖ the built @aee/schemas is stale: src=$SRC_VERSION dist=${DIST_VERSION:-missing}"
+  echo "    The Worker would bundle the dist copy. Refusing to deploy."
+  exit 1
+fi
+echo "  ok (schemas dist matches src: $SRC_VERSION)"
 
 echo
 echo "=== deploy (production / mainnet) ==="
