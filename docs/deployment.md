@@ -674,6 +674,56 @@ and is sufficient.
 Cloudflare Workers need no restart policy: the platform manages the lifecycle,
 and `wrangler deploy` performs an atomic replacement.
 
+### Keeping the origin reachable (`scripts/watchdog.sh`)
+
+A `cloudflared` **quick tunnel** is handed a fresh random hostname every time it
+restarts, and the Worker reaches the origin through the plain-text binding
+`BACKEND_ORIGIN_URL`. So a tunnel restart silently strands the Worker on a dead
+host: every request returns 502, `/health` on the Worker still answers 200, and
+nothing looks broken from the inside. That is the failure that produced both
+outages — roughly two days in September and about three weeks into October, during
+which a third party measured this origin at **18.9% uptime over 28 days** and
+ranked the listing below healthy ones.
+
+`scripts/watchdog.sh` closes it. Each cycle it:
+
+1. restarts the `aee-tunnel` container if it is not running;
+2. reads the tunnel's **current** hostname from `docker logs` (last match wins,
+   because after a restart the newest announcement is the live one);
+3. if that hostname differs from `.origin-url`, writes the new value and runs
+   `scripts/deploy-live.sh` — the only deploy path used, so a watchdog repair is
+   identical to an operator deploy;
+4. independently probes `GET /health?deep=1` and counts it healthy **only** if the
+   body contains `"backend":"ok"` — not merely HTTP 200, which is the whole point
+   since the Worker answers 200 while the origin is unreachable;
+5. rate-limits deploys to one per 5 minutes, backing off 10 → 20 → 30 minutes
+   while deploys keep failing, so a genuinely broken backend cannot become a
+   deploy storm;
+6. appends exactly one line per cycle to `data/watchdog.log` (gitignored), with
+   the full deploy output going to `data/watchdog-deploy.log`.
+
+It runs in a container because **Docker is what survived**: in both outages the
+Docker-managed backend stayed up while every session-started process died.
+
+```bash
+docker build -t aee-watchdog:latest docker/watchdog
+docker run -d --name aee-watchdog --restart unless-stopped --network host \
+  --env-file /root/dsh-workspace/.cloudflare-credentials \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /root/dsh-workspace:/root/dsh-workspace \
+  aee-watchdog:latest
+```
+
+The script is read from the bind mount, not baked into the image, so editing it
+needs only a container restart. `bash scripts/watchdog.sh --once` runs a single
+cycle and exits non-zero if the service is not healthy — useful from a shell.
+
+Two things this deliberately does **not** do. It never touches the Worker's
+`BACKEND_AUTH_SECRET`: patching Worker settings over the raw API would drop that
+`secret_text` binding, which is unrecoverable, so origin changes always go through
+`wrangler`. And it does not try to fix a backend that is down locally — a redeploy
+cannot help there, and it says so in the log instead of looping.
+
 ---
 
 ## 8. Origin protection
