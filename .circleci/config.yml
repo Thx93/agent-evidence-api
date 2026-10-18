@@ -1,0 +1,90 @@
+version: 2.1
+
+# CircleCI is the CI for this repository.
+#
+# Why CircleCI as well as (rather than instead of) the GitHub Actions workflow:
+# `.circleci/config.yml` is an ordinary file, so it can be pushed with a normal
+# token. Anything under `.github/workflows/` cannot be pushed by an OAuth App
+# token that lacks the `workflow` scope — that restriction is why the Actions
+# workflow had to be uploaded through the GitHub Contents API, which is easy to
+# get wrong and gives no feedback when it is. CircleCI has no such trap.
+#
+# These steps mirror the Actions workflow exactly, including the two traps it
+# encodes, each of which cost a red build:
+#
+#   1. pnpm is installed BEFORE anything consults its store. `actions/setup-node`
+#      with `cache: pnpm` shells out to pnpm, and fails with "Unable to locate
+#      executable file: pnpm" if it is not already on PATH.
+#   2. The workspace packages are built BEFORE the Worker is bundled. The Worker
+#      imports @aee/schemas, which resolves to that package's `dist`, not its
+#      `src` — and `dist/` is gitignored, so a fresh checkout has nothing to
+#      resolve. Skipping this fails with 'Could not resolve "@aee/schemas"'.
+#
+# Nothing here needs a secret: the suites run offline, the SSRF and fixture tests
+# bind to loopback deliberately, and every facilitator is a local stub. So this
+# config is safe on a public repository and on forks.
+
+jobs:
+  test:
+    docker:
+      - image: cimg/node:24.21
+    steps:
+      - checkout
+      - run:
+          name: Install pnpm
+          command: npm install --global pnpm@12
+      - restore_cache:
+          keys:
+            - pnpm-store-v1-{{ checksum "pnpm-lock.yaml" }}
+            - pnpm-store-v1-
+      - run:
+          name: Install workspace dependencies
+          command: pnpm install --frozen-lockfile
+      - save_cache:
+          key: pnpm-store-v1-{{ checksum "pnpm-lock.yaml" }}
+          paths:
+            - ~/.local/share/pnpm/store
+      - run:
+          name: Typecheck
+          command: pnpm typecheck
+      - run:
+          name: Test
+          command: pnpm test
+          environment:
+            # The fetcher's SSRF suite needs this to reach the local fixture server.
+            ALLOW_LOOPBACK_FOR_TESTS: "true"
+            NODE_ENV: test
+
+  worker:
+    docker:
+      - image: cimg/node:24.21
+    steps:
+      - checkout
+      - run:
+          name: Install pnpm
+          command: npm install --global pnpm@12
+      - restore_cache:
+          keys:
+            - pnpm-store-v1-{{ checksum "pnpm-lock.yaml" }}
+            - pnpm-store-v1-
+      - run:
+          name: Install workspace dependencies
+          command: pnpm install --frozen-lockfile
+      - save_cache:
+          key: pnpm-store-v1-{{ checksum "pnpm-lock.yaml" }}
+          paths:
+            - ~/.local/share/pnpm/store
+      - run:
+          name: Build the workspace packages
+          command: pnpm build
+      # `wrangler deploy --dry-run` builds the bundle without deploying, so a
+      # bundle with unresolved imports fails here rather than on a live deploy.
+      - run:
+          name: Build the Worker bundle
+          command: cd apps/worker && npx wrangler deploy --dry-run --outdir=dist --env=""
+
+workflows:
+  ci:
+    jobs:
+      - test
+      - worker
