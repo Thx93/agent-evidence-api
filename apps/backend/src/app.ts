@@ -184,7 +184,27 @@ const CATALOGUE_DESCRIPTION =
   "excerpt: source URL, retrieval time, content hash. Never charges when nothing " +
   "is retrieved.";
 
-const CATALOGUE_TAGS = ["web-evidence", "claim-verification", "source-verification"];
+/**
+ * Tags are a discovery surface, not decoration.
+ *
+ * The x402 catalogue matches on these and on the description, and a buyer agent
+ * only finds a seller whose vocabulary overlaps the words it typed. The original
+ * three described the mechanism ("source-verification") but missed the words a
+ * buyer uses for the job. Every tag below names something this service genuinely
+ * does - it retrieves named pages, extracts the passages, compares them and
+ * returns each with a citation - so broadening the surface is honest rather than
+ * keyword stuffing.
+ */
+const CATALOGUE_TAGS = [
+  "web-evidence",
+  "claim-verification",
+  "source-verification",
+  "fact-checking",
+  "citations",
+  "provenance",
+  "content-extraction",
+  "research",
+];
 
 /**
  * The discovery declaration for the weather route.
@@ -236,7 +256,16 @@ const WEATHER_CATALOGUE_DESCRIPTION =
   "periods for a latitude and longitude. Read-only weather lookup, US locations " +
   "only.";
 
-const WEATHER_CATALOGUE_TAGS = ["weather", "weather-alerts", "forecast"];
+const WEATHER_CATALOGUE_TAGS = [
+  "weather",
+  "weather-alerts",
+  "forecast",
+  // The words a buyer types. Each is a thing these tools actually return.
+  "national-weather-service",
+  "temperature",
+  "wind",
+  "us-weather",
+];
 
 /**
  * The x402 context for one verified but not yet settled MCP call.
