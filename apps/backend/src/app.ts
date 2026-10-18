@@ -186,25 +186,25 @@ const CATALOGUE_DESCRIPTION =
   "no cost, so you can judge the output before paying for your own question.";
 
 /**
- * Tags are a discovery surface, not decoration.
+ * Tags are a discovery surface, and the catalogue keeps exactly FIVE.
  *
- * The x402 catalogue matches on these and on the description, and a buyer agent
- * only finds a seller whose vocabulary overlaps the words it typed. The original
- * three described the mechanism ("source-verification") but missed the words a
- * buyer uses for the job. Every tag below names something this service genuinely
- * does - it retrieves named pages, extracts the passages, compares them and
- * returns each with a citation - so broadening the surface is honest rather than
- * keyword stuffing.
+ * Measured, not assumed: our 402 advertised ten tags and the stored entry kept the
+ * first five, and every other seller on a sampled page showed 4-5 with a maximum of
+ * five. Anything beyond five is silently dropped, so declaring more is
+ * configuration that lies about itself.
+ *
+ * These five are the ones that demonstrably place: "fact checking" and "claim
+ * verification" both rank #1 for their query. Generic words are deliberately not
+ * here - we are absent for "research" no matter what we tag, because that query is
+ * won on volume by long-established sellers, and a tag that does not place is not
+ * worth one of five slots.
  */
 const CATALOGUE_TAGS = [
-  "web-evidence",
   "claim-verification",
-  "source-verification",
   "fact-checking",
+  "web-evidence",
+  "source-verification",
   "citations",
-  "provenance",
-  "content-extraction",
-  "research",
 ];
 
 /**
@@ -261,11 +261,8 @@ const WEATHER_CATALOGUE_TAGS = [
   "weather",
   "weather-alerts",
   "forecast",
-  // The words a buyer types. Each is a thing these tools actually return.
   "national-weather-service",
   "temperature",
-  "wind",
-  "us-weather",
 ];
 
 /**
