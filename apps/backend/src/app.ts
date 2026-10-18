@@ -121,6 +121,35 @@ const HTTP_DISCOVERY = declareDiscoveryExtension({
  * buyer what a call returns, so the `output.example` is deliberate: it shows the
  * actual deliverable (a cited excerpt plus an assessment) instead of a signature.
  */
+/**
+ * Declare `bazaar.info.input.method` on a discovery declaration, schema included.
+ *
+ * This was added to satisfy one required check in CDP's validator, which reports
+ *
+ *   bazaar.info.input.method | passed: false | "Skipped: input type is not http"
+ *
+ * for every MCP route, making `valid` false. It does not fix that: with the method
+ * now declared - and the shipped schema extended to allow it - the validator reports
+ * exactly the same message, because the check short-circuits on input type rather
+ * than on the field. So no MCP resource can pass CDP's preflight, and that is a
+ * limitation of their validator, not of this declaration.
+ *
+ * It is kept because it is true and costs nothing: an MCP call to this route is a
+ * POST, the route says so, and a reader of the declaration should not have to infer
+ * it. Do not mistake it for a fix.
+ */
+function withDeclaredMethod<T>(extension: T, method: string): T {
+  const clone = structuredClone(extension) as {
+    bazaar?: { info?: { input?: Record<string, unknown> }; schema?: { properties?: { input?: { properties?: Record<string, unknown> } } } };
+  };
+  const bazaar = clone.bazaar;
+  if (!bazaar) return extension;
+  if (bazaar.info?.input) bazaar.info.input.method = method;
+  const inputProps = bazaar.schema?.properties?.input?.properties;
+  if (inputProps && !inputProps.method) inputProps.method = { type: "string" };
+  return clone as T;
+}
+
 const MCP_DISCOVERY = declareDiscoveryExtension({
   toolName: "research_evidence",
   transport: "streamable-http",
@@ -570,14 +599,14 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
         : {}),
       description: CATALOGUE_DESCRIPTION,
       tags: CATALOGUE_TAGS,
-      extensions: { ...MCP_DISCOVERY },
+      extensions: withDeclaredMethod({ ...MCP_DISCOVERY }, "POST"),
     },
     "POST /weather/mcp": {
       ...sharedMcpRoute,
       ...(weatherResourceUrl ? { resource: weatherResourceUrl } : {}),
       description: WEATHER_CATALOGUE_DESCRIPTION,
       tags: WEATHER_CATALOGUE_TAGS,
-      extensions: { ...WEATHER_MCP_DISCOVERY },
+      extensions: withDeclaredMethod({ ...WEATHER_MCP_DISCOVERY }, "POST"),
     },
   };
 

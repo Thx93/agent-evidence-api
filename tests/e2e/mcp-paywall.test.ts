@@ -226,11 +226,13 @@ describe("the paid MCP tool", () => {
     assert.equal(input["type"], "mcp");
     assert.equal(input["toolName"], "research_evidence");
     assert.equal(input["transport"], "streamable-http");
-    // The library's internal validator injects a synthetic `method` for MCP
-    // patterns that carry an HTTP verb and then warns that the declaration has an
-    // extra property. That copy is for validation only: if it ever leaked into the
-    // served declaration, CDP's validator would reject it.
-    assert.equal(input["method"], undefined);
+    // The served declaration states the method explicitly. It used to be absent -
+    // the library's schema has no such field for MCP input, and a synthetic copy
+    // injected by the validator was something that must never leak into the wire.
+    // It is declared now because CDP's preflight lists it as a required check, and
+    // a truthful declaration of the actual verb costs nothing. (It does not satisfy
+    // that check - see docs/evidence-quality.md - but the metadata is correct.)
+    assert.equal(input["method"], "POST");
   });
 
   test("a verified payment is served and settled", async () => {

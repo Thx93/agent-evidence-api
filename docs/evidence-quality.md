@@ -61,3 +61,30 @@ over.
 
 The service is honest about its provenance and its limitations, and it is not yet
 reliable enough to be worth $0.003 to a buyer who checks.
+
+## A platform limitation found while trying to get catalogued
+
+CDP's catalogue (`api.cdp.coinbase.com/.../discovery/resources`, ~26,800 entries) is
+one of the two large x402 discovery surfaces, and this service is not in it. Their
+preflight endpoint explains part of why:
+
+```
+POST /platform/v2/x402/validate  {"resource": ".../mcp", "method": "POST"}
+
+url_valid, url_https, endpoint_reachable, returns_402, valid_json, x402_version,
+payment_required_header, has_accepts, scheme, network, asset, amount, payTo,
+maxTimeoutSeconds, has_resource, has_bazaar_extension, bazaar.info, bazaar.schema,
+parse                                    ... all pass
+
+bazaar.info.input.method   FAIL (required)   "Skipped: input type is not http"
+```
+
+That single required failure makes `valid: false` for **every MCP route**. It is not
+about the declaration: the 402 now states `input.method: "POST"` and the shipped
+schema allows the field, and the validator answers with the same message. The check
+short-circuits on `input.type` rather than on the field, so an MCP resource cannot
+pass CDP's preflight at all.
+
+The HTTP route passes all 25 checks, so this is specific to MCP input type. Whether
+their catalogue requires `valid: true` to index a resource is not documented; the
+HTTP route is valid and still absent, so something else gates it too.
