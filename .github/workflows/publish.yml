@@ -1,0 +1,58 @@
+# Publish @thx93/x402-evidence via Trusted Publishing (OIDC, no long-lived token).
+#
+# The account has 2FA enabled and the personal access tokens available to us cannot
+# bypass it, so a token publish fails with
+#   "Two-factor authentication or granular access token with bypass 2fa enabled is
+#    required to publish packages."
+#
+# Trusted publishing sidesteps that entirely: GitHub Actions mints a short-lived
+# OIDC token proving this workflow in this repository is running, npm verifies it
+# against the trusted-publisher relationship configured for the package, and the
+# publish is authorised - with a provenance attestation attached.
+#
+# The trusted publisher must name THIS filename, exactly: publish.yml.
+#
+# `buyer/` is deliberately standalone (its own package-lock.json, not a pnpm
+# workspace member), because it is the artifact a customer installs and it should
+# not inherit the monorepo's dependency tree.
+name: Publish to npm
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  # The mechanism: lets the job request the OIDC token npm exchanges.
+  id-token: write
+
+jobs:
+  publish:
+    name: publish @thx93/x402-evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        working-directory: buyer
+        run: npm ci
+
+      # The CLI must at least start and print its usage before it is worth
+      # publishing; a package whose entrypoint throws is worse than no package.
+      - name: The CLI runs
+        working-directory: buyer
+        run: node cli.mjs --help
+
+      - name: Publish
+        working-directory: buyer
+        run: |
+          echo "npm $(npm --version), node $(node --version)"
+          npm publish --provenance --access public
