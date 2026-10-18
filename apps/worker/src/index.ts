@@ -9,6 +9,25 @@ import {
   type ErrorCode,
 } from "@aee/schemas";
 
+import { DEMO_SAMPLE } from "./demo-sample.js";
+
+/**
+ * Escape text before it goes into an HTML page.
+ *
+ * The demo page interpolates content fetched from a third-party page, so this is
+ * load-bearing rather than decorative: without it, a page we happen to retrieve
+ * could inject markup into our own origin. Everything interpolated into an HTML
+ * response goes through here.
+ */
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 /**
  * Cloudflare Worker — the public edge (SPEC section 13).
  *
@@ -269,6 +288,10 @@ never sent to us. No ETH is needed — the facilitator submits the transaction.<
 never invents a fact and never emits a confidence score. You supply the URLs —
 there is no web search. Excerpts are short by design. Evidence, not truth.</p>
 
+<p><strong><a href="/demo">See a real sample first</a></strong> — an unedited
+response from an actual paid call, with every source URL, retrieval time and
+content hash. No wallet needed to look.</p>
+
 <p><a href="/health?deep=1">status</a> ·
 <a href="https://facilitator.payai.network/discovery/resources?limit=1000">listed in the x402 catalogue</a> ·
 <a href="/buy.mjs">buyer client</a></p>
@@ -356,6 +379,107 @@ app.get("/x402-market", (c) =>
   c.html(marketReportHtml(), 200, { "cache-control": "public, max-age=600" }),
 );
 
+/**
+ * A free sample of real output (`/demo` for a human, `/demo.json` for an agent).
+ *
+ * Every other route here asks a visitor to take the service on faith: to judge
+ * whether the evidence is any good you had to fund a wallet, install a client and
+ * pay, then look. That is a lot of friction to evaluate a three-tenths-of-a-cent
+ * call, and it is the friction that matters — the listings are already in place
+ * and nobody has converted.
+ *
+ * So this serves one genuinely-produced package, verbatim, with the pipeline it
+ * came from. It is a sample, not a live call, and the page says so plainly.
+ */
+function demoHtml(): string {
+  const sources = DEMO_SAMPLE.sources
+    .map((source) => {
+      const excerpts = source.evidence
+        .map(
+          (item) =>
+            `<blockquote><p>${escapeHtml(item.excerpt)}</p><cite>${escapeHtml(item.relevance)} · <code>${escapeHtml(item.context)}</code></cite></blockquote>`,
+        )
+        .join("\n");
+      return `<section>
+  <h3>${escapeHtml(source.title || "(untitled)")}</h3>
+  <p class="meta"><a href="${escapeHtml(source.final_url)}" rel="noreferrer nofollow">${escapeHtml(source.final_url)}</a></p>
+  <p class="meta">retrieved ${escapeHtml(source.retrieved_at)} · sha256 <code>${escapeHtml(source.content_hash_sha256.slice(0, 16))}…</code> · HTTP ${source.status}</p>
+  ${excerpts}
+</section>`;
+    })
+    .join("\n");
+
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agent Evidence API — a real sample</title>
+<style>
+:root{color-scheme:light dark}
+body{font:16px/1.6 ui-sans-serif,system-ui,sans-serif;max-width:44rem;margin:2.5rem auto;padding:0 1.25rem}
+h1{font-size:1.6rem;margin-bottom:.25rem}
+h2{font-size:1.15rem;margin-top:2.25rem}
+h3{font-size:1rem;margin-bottom:.2rem}
+.meta{color:#666;font-size:.85rem;margin:.15rem 0}
+.verdict{display:inline-block;padding:.15rem .6rem;border-radius:999px;background:#0a7d33;color:#fff;font-size:.85rem;font-weight:600}
+blockquote{margin:.6rem 0;padding:.6rem .9rem;border-left:3px solid #8884;background:#8881}
+blockquote p{margin:0}
+cite{display:block;color:#666;font-size:.8rem;font-style:normal;margin-top:.35rem}
+section{border-top:1px solid #8883;padding-top:1rem;margin-top:1rem}
+code{font-size:.85em}
+pre{background:#8881;padding:.85rem;border-radius:8px;overflow-x:auto;font-size:.82rem}
+footer{margin-top:2.5rem;border-top:1px solid #8883;padding-top:1rem;color:#666;font-size:.85rem}
+</style></head><body>
+<h1>A real sample, unedited</h1>
+<p class="meta">Produced by an actual paid call on 2026-10-18. Not a mock-up — this is the
+exact response body, which is why every excerpt carries the URL, retrieval time and content hash it came from.</p>
+
+<h2>The question</h2>
+<p><strong>${escapeHtml(DEMO_SAMPLE.question)}</strong></p>
+<p class="meta">Retrieved from <a href="${escapeHtml(DEMO_SAMPLE.sources[0]?.requested_url ?? "")}" rel="noreferrer nofollow">${escapeHtml(DEMO_SAMPLE.sources[0]?.requested_url ?? "")}</a></p>
+
+<h2>The verdict</h2>
+<p><span class="verdict">${escapeHtml(DEMO_SAMPLE.assessment.status)}</span></p>
+<p>${escapeHtml(DEMO_SAMPLE.assessment.basis)}</p>
+
+<h2>The cited evidence</h2>
+${sources}
+
+<h2>What it does not claim</h2>
+<ul>${DEMO_SAMPLE.limitations.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul>
+
+<h2>Get this for your own question</h2>
+<p>Discovery is free. You pay $0.003 in USDC on Base only when a call returns
+something, and never when nothing is retrieved.</p>
+<pre>curl -s -X POST https://agent-evidence-api.thx93.workers.dev/mcp \\
+  -H 'content-type: application/json' \\
+  -H 'accept: application/json, text/event-stream' \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'</pre>
+<p class="meta">That call is free and lists the tools. The paid tool is
+<code>research_evidence</code>. Raw JSON of this sample: <a href="/demo.json">/demo.json</a></p>
+
+<footer>
+<p><a href="/">Agent Evidence API</a> ·
+<a href="/x402-market">market notes</a> ·
+<a href="https://github.com/Thx93/agent-evidence-api">source</a> ·
+<a href="/health?deep=1">status</a></p>
+<p>No customer data appears on this page: the question was asked by the operator,
+and every excerpt is public page content that the source already publishes.</p>
+</footer>
+</body></html>`;
+}
+
+app.get("/demo", (c) =>
+  c.html(demoHtml(), 200, { "cache-control": "public, max-age=600" }),
+);
+
+/** The same sample as raw JSON, for an agent that would rather parse than read. */
+app.get("/demo.json", (c) =>
+  c.json(DEMO_SAMPLE, 200, {
+    "cache-control": "public, max-age=600",
+    "access-control-allow-origin": "*",
+  }),
+);
+
 /** Capability description, so an agent can discover what this offers for free. */
 app.get("/", (c) => {
   // Content negotiation: browsers get a page a human can act on; agents (which
@@ -372,6 +496,8 @@ app.get("/", (c) => {
       "evidence from public web pages so an agent can verify claims and ground answers in sources.",
     endpoints: {
       health: "GET /health (free)",
+      /** A real response, served free so it can be judged before paying. */
+      demo: "GET /demo (free HTML) and GET /demo.json (free JSON)",
       evidence: "POST /v1/evidence (paid, x402)",
       mcp: "POST /mcp (MCP streamable HTTP; initialize and tools/list are free)",
     },

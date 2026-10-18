@@ -12,6 +12,7 @@ nothing at all when nothing is retrieved.
 | HTTP evidence endpoint | `POST https://agent-evidence-api.thx93.workers.dev/v1/evidence` |
 | MCP service (`research_evidence`) | `POST https://agent-evidence-api.thx93.workers.dev/mcp` |
 | MCP service (`get-alerts`, `get-forecast`) | `POST https://agent-evidence-api.thx93.workers.dev/weather/mcp` |
+| **Free sample of real output** | `GET https://agent-evidence-api.thx93.workers.dev/demo` — an unedited response from an actual paid call, no wallet needed |
 | Zero-install buyer CLI | `curl -fsSL https://agent-evidence-api.thx93.workers.dev/buy.mjs -o buy.mjs` |
 | x402 capability manifest | `https://agent-evidence-api.thx93.workers.dev/.well-known/x402` |
 
