@@ -118,8 +118,8 @@ describe("runAlerts", () => {
 
     assert.equal(result.isError, undefined);
     assert.ok(result.structuredContent, "a successful call must return structured content");
-    assert.equal(result.structuredContent.length, 2);
-    assert.equal(result.structuredContent[0]?.event, "Winter Storm Warning");
+    assert.equal(result.structuredContent.alerts.length, 2);
+    assert.equal(result.structuredContent.alerts[0]?.event, "Winter Storm Warning");
     assert.match(text(result), /Active alerts for CA/);
   });
 
@@ -133,7 +133,7 @@ describe("runAlerts", () => {
     routes.set(ALERTS_CA, { body: ALERT_FEATURES });
     const result = await runAlerts("CA");
     assert.ok(result.structuredContent);
-    assert.deepEqual(result.structuredContent[1], {
+    assert.deepEqual(result.structuredContent.alerts[1], {
       event: "Unknown",
       area: "Unknown",
       severity: "Unknown",
@@ -146,7 +146,8 @@ describe("runAlerts", () => {
     routes.set(ALERTS_CA, { body: { features: [] } });
     const result = await runAlerts("CA");
     assert.equal(result.isError, undefined);
-    assert.deepEqual(result.structuredContent, []);
+    assert.ok(result.structuredContent);
+    assert.deepEqual(result.structuredContent.alerts, []);
     assert.equal(text(result), "No active alerts for CA");
   });
 

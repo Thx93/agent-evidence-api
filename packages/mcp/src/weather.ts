@@ -98,19 +98,31 @@ interface ForecastResponse {
 }
 
 /**
- * `get-alerts` output: a top-level array, which protocol revision 2026-07-28 is
- * the first to allow. The SDK projects it onto `{ result: [...] }` for
- * `2025-11-25` clients.
+ * `get-alerts` output: alert records under an `alerts` key.
+ *
+ * This deliberately wraps the array in an object. Protocol revision 2026-07-28
+ * allows a top-level array output schema, and this used to declare one - but a
+ * client built on the widely-deployed MCP SDK rejects the whole `tools/list`
+ * response with `invalid_value: expected "object"` when it meets one. That made
+ * the entire weather endpoint impossible to connect to: a client could not even
+ * list the tools, let alone call them, which is a far worse failure than being
+ * unknown. Verified against @modelcontextprotocol/sdk: `/mcp` listed fine,
+ * `/weather/mcp` failed at the handshake.
+ *
+ * Wrapping is therefore an interoperability requirement, not a style choice. The
+ * textual summary the model reads is unaffected.
  */
-export const alertsOutputSchema = z.array(
-  z.object({
-    event: z.string().describe("The kind of weather event"),
-    area: z.string().describe("The area the alert covers"),
-    severity: z.string().describe("How severe the event is"),
-    description: z.string().describe("What is happening"),
-    instructions: z.string().describe("What people in the area should do"),
-  }),
-);
+export const alertsOutputSchema = z.object({
+  alerts: z.array(
+    z.object({
+      event: z.string().describe("The kind of weather event"),
+      area: z.string().describe("The area the alert covers"),
+      severity: z.string().describe("How severe the event is"),
+      description: z.string().describe("What is happening"),
+      instructions: z.string().describe("What people in the area should do"),
+    }),
+  ),
+});
 
 export const forecastOutputSchema = z.object({
   latitude: z.number().describe("Latitude the forecast is for"),
@@ -129,7 +141,7 @@ export const forecastOutputSchema = z.object({
     .describe("The forecast periods, soonest first"),
 });
 
-export type Alert = z.infer<typeof alertsOutputSchema>[number];
+export type Alert = z.infer<typeof alertsOutputSchema>["alerts"][number];
 export type Forecast = z.infer<typeof forecastOutputSchema>;
 
 export function formatAlert(alert: Alert): string {
@@ -189,27 +201,36 @@ const ALERTS_TOOL: Tool = {
     required: ["state"],
     additionalProperties: false,
   },
-  // A top-level ARRAY, which protocol revision 2026-07-28 is the first to allow.
-  // The double cast is deliberate and is the one place this repository narrows
-  // the SDK's types: `Tool["outputSchema"]` is still declared `{ type: "object" }`,
-  // the pre-2026-07-28 rule. The runtime passes this shape through, and the suite
-  // asserts the array survives the wire. The standalone stdio server in the
-  // `mcp-weather-server` repository returns the same shape for the same tool.
+  // An OBJECT with the records under `alerts`.
+  //
+  // This used to be a top-level array, which protocol revision 2026-07-28 permits
+  // and which the SDK's `Tool["outputSchema"]` type does not describe - hence a
+  // cast. The cast silenced the type checker but not the clients: a client on the
+  // widely-deployed SDK rejects the ENTIRE tools/list response when it meets an
+  // array schema ("invalid_value: expected \"object\""), so the endpoint could not
+  // be connected to at all. No cast can make that true.
   outputSchema: {
-    type: "array",
-    items: {
-      type: "object",
-      properties: {
-        event: { type: "string" },
-        area: { type: "string" },
-        severity: { type: "string" },
-        description: { type: "string" },
-        instructions: { type: "string" },
+    type: "object",
+    properties: {
+      alerts: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            event: { type: "string" },
+            area: { type: "string" },
+            severity: { type: "string" },
+            description: { type: "string" },
+            instructions: { type: "string" },
+          },
+          required: ["event", "area", "severity", "description", "instructions"],
+          additionalProperties: false,
+        },
       },
-      required: ["event", "area", "severity", "description", "instructions"],
-      additionalProperties: false,
     },
-  } as unknown as Tool["outputSchema"],
+    required: ["alerts"],
+    additionalProperties: false,
+  },
   annotations: { ...READ_ONLY_ANNOTATIONS, title: "Get Weather Alerts" },
 };
 
@@ -326,7 +347,9 @@ const forecastInput = z.object({
 });
 
 /** Exported for tests: the tool body, with the NWS behind `fetch`. */
-export async function runAlerts(state: string): Promise<ToolOutcome<Alert[]>> {
+export async function runAlerts(
+  state: string,
+): Promise<ToolOutcome<{ alerts: Alert[] }>> {
   try {
     const stateCode = state.toUpperCase();
     const data = await makeNWSRequest<AlertsResponse>(
@@ -348,7 +371,7 @@ export async function runAlerts(state: string): Promise<ToolOutcome<Alert[]>> {
       alerts.length === 0
         ? `No active alerts for ${stateCode}`
         : `Active alerts for ${stateCode}:\n\n${alerts.map(formatAlert).join("\n")}`;
-    return toolOk(text, alerts);
+    return toolOk(text, { alerts });
   } catch (error) {
     return toolError(
       `Failed to retrieve alerts: ${error instanceof Error ? error.message : String(error)}`,

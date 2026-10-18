@@ -101,14 +101,29 @@ console.log("\n  ── 2. tools/list (free) ──");
 const { tools } = await client.listTools();
 for (const t of tools) console.log(`     • ${t.name}`);
 
-console.log("\n  ── 3. tools/call research_evidence (PAID) ──");
+// `--tool` lets this exercise any paid tool, not just research_evidence: the
+// weather service charges for get-alerts and get-forecast, and a route is only
+// catalogued in the x402 discovery layers once it has settled a payment, so
+// being able to pay them from here is what makes them discoverable.
+const toolName = flag("--tool", "research_evidence");
+const toolArgs = flag("--args")
+  ? JSON.parse(flag("--args"))
+  : toolName === "research_evidence"
+    ? { question, urls: [sourceUrl], max_sources: 1 }
+    : toolName === "get-alerts"
+      ? { state: flag("--state", "CA") }
+      : toolName === "get-forecast"
+        ? {
+            latitude: Number(flag("--lat", "38.9")),
+            longitude: Number(flag("--lon", "-77")),
+          }
+        : {};
+
+console.log(`\n  ── 3. tools/call ${toolName} (PAID) ──`);
 const started = Date.now();
 let result;
 try {
-  result = await client.callTool({
-    name: "research_evidence",
-    arguments: { question, urls: [sourceUrl], max_sources: 1 },
-  });
+  result = await client.callTool({ name: toolName, arguments: toolArgs });
 } catch (err) {
   console.error("     ✖ the paid call failed:", String(err.message ?? err).slice(0, 300));
   await client.close().catch(() => {});
