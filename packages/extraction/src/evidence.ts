@@ -142,16 +142,24 @@ function variants(token: string): string[] {
 }
 
 /** Significant question terms: tokenised, stopword-filtered, variant-expanded. */
-function deriveQuestionTerms(question: string): Set<string> {
+function deriveQuestionTerms(question: string): {
+  terms: Set<string>;
+  /** base token -> its variants, so coverage can be measured per WORD, not per variant. */
+  groups: Map<string, Set<string>>;
+} {
   const terms = new Set<string>();
+  const groups = new Map<string, Set<string>>();
   for (const token of tokenize(question)) {
     if (token.length < MIN_TERM_LENGTH || STOPWORDS.has(token)) continue;
+    const group = new Set<string>();
     for (const variant of variants(token)) {
       if (variant.length < MIN_TERM_LENGTH || STOPWORDS.has(variant)) continue;
       terms.add(variant);
+      group.add(variant);
     }
+    if (group.size > 0) groups.set(token, group);
   }
-  return terms;
+  return { terms, groups };
 }
 
 /** Question term matched by a document token, or null. */
@@ -255,7 +263,7 @@ export function findEvidenceCandidates(
   const maxItems = Math.max(0, Math.trunc(opts.maxItems));
   if (maxItems === 0) return [];
 
-  const terms = deriveQuestionTerms(question);
+  const { terms, groups } = deriveQuestionTerms(question);
   if (terms.size === 0) return [];
 
   const segments = buildSegments(doc);
@@ -291,6 +299,41 @@ export function findEvidenceCandidates(
     idf.set(term, Math.log(1 + segmentCount / (1 + df)));
   }
 
+  /**
+   * The IDF mass of the whole question, used as an ABSOLUTE floor.
+   *
+   * Labels used to be relative to the best passage in the document, so a document
+   * whose best passage was a weak match still produced a "direct" one - and the
+   * assessment then reported the claim "supported". Observed on a real call:
+   * "Who won the 2024 UEFA Euro final and what was the score?" returned "supported"
+   * with excerpts about England's semi-final win and nothing carrying the winner or
+   * the score. Confident and wrong is worse than "inconclusive" for a service whose
+   * whole claim is sourced evidence.
+   *
+   * A passage now has to carry at least half the question's distinctive term weight
+   * to earn a stance at all. Below that it is background, and a source with no
+   * stance-bearing passage contributes nothing to the verdict.
+   */
+  // One question WORD has several surface variants and a passage typically matches
+  // just one of them, so measuring coverage over variant mass halves it
+  // artificially. Credit a word as covered if any of its variants matched, and
+  // weight it by its strongest variant.
+  const wordWeight = new Map<string, number>();
+  for (const [base, group] of groups) {
+    let weight = 0;
+    for (const variant of group) weight = Math.max(weight, idf.get(variant) ?? 0);
+    wordWeight.set(base, weight);
+  }
+  let totalMass = 0;
+  for (const weight of wordWeight.values()) totalMass += weight;
+  // 0.75, not 0.5: at half, a passage about a DIFFERENT match still qualified,
+  // because lexical matching cannot tell "England won ... to score ... in the
+  // final" from an answer when the question happens to share those words. Measured
+  // on the real case - the coverage of the off-target passage cleared half the
+  // question's mass. Requiring three quarters means a passage has to speak to most
+  // of what was asked, not merely echo several of its words.
+  const MIN_COVERAGE = 0.75;
+
   const scored = perSegment.flatMap((entry, index) => {
     if (entry.matched.size === 0) return [];
     let score = 0;
@@ -309,14 +352,29 @@ export function findEvidenceCandidates(
     .map((item) => {
       // A matching passage that negates is labelled contradictory; otherwise the
       // score relative to the strongest match decides the remaining labels.
+      let matchedMass = 0;
+      for (const [base, group] of groups) {
+        let hit = false;
+        for (const variant of group) {
+          if (item.entry.matched.has(variant)) { hit = true; break; }
+        }
+        if (hit) matchedMass += wordWeight.get(base) ?? 0;
+      }
+      const coverage = totalMass > 0 ? matchedMass / totalMass : 0;
       const negated = hasNegationCue(item.entry.segment.text);
-      const relevance: Relevance = negated
-        ? "contradictory"
-        : item.score >= maxScore * 0.75
-          ? "direct"
-          : item.score >= maxScore * 0.35
-            ? "supporting"
-            : "context";
+
+      // Coverage gates the stance labels. A negated passage that only half-touched
+      // the question must not claim to contradict it either.
+      const relevance: Relevance =
+        coverage < MIN_COVERAGE
+          ? "context"
+          : negated
+            ? "contradictory"
+            : item.score >= maxScore * 0.75
+              ? "direct"
+              : item.score >= maxScore * 0.35
+                ? "supporting"
+                : "context";
 
       return {
         excerpt: truncate(item.entry.segment.text, opts.maxExcerptChars),

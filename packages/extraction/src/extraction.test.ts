@@ -369,6 +369,41 @@ describe("findEvidenceCandidates", () => {
     assert.ok(first.score > 0);
   });
 
+  /**
+   * The defect this guards against, observed on a real paid call.
+   *
+   * Asked "Who won the 2024 UEFA Euro final and what was the score?", the service
+   * answered "supported" while returning excerpts about England's semi-final win and
+   * a passage about tournament finals generally - neither carrying the winner or the
+   * score. Labels were relative to the best passage in the document, so a document
+   * whose best passage was itself a weak match still yielded a "direct" one and the
+   * claim was called supported. Confident and wrong is worse than inconclusive for a
+   * service whose entire claim is sourced evidence.
+   *
+   * A passage now has to cover at least half of the question's distinctive word
+   * weight to earn a stance. This document shares the words "won", "final" and
+   * "England" but says nothing about the score or the Euro, so it must not be
+   * treated as evidence.
+   */
+  test("a passage that shares keywords but does not answer the question gets no stance", () => {
+    const offTopic = extractDocument(
+      `<html><body><main>
+        <p>England then won the game very late on when Palmer assisted Ollie Watkins to score in the 90th minute, sending them to the final.</p>
+        <p>Across men's and women's football it is the fourth England-Spain tournament final in just over a year.</p>
+      </main></body></html>`,
+      "https://example.com/semi",
+    );
+    const candidates = findEvidenceCandidates(
+      offTopic,
+      "Who won the 2024 UEFA Euro final and what was the score?",
+      { maxItems: 5, maxExcerptChars: 600 },
+    );
+    assert.ok(
+      candidates.every((c) => c.relevance === "context"),
+      `expected no stance-bearing passage, got: ${candidates.map((c) => c.relevance).join(", ")}`,
+    );
+  });
+
   test("returns an empty array when nothing matches", () => {
     const candidates = findEvidenceCandidates(doc, "antarctic penguin migration", {
       maxItems: 5,
