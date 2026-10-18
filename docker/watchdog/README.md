@@ -77,14 +77,16 @@ tunnel *and* repointing the Worker at its new hostname is one such cycle:
 
 "Deploy succeeded" is judged by the **outcome**, not only by
 `deploy-live.sh`'s exit status. That script verifies the Worker from the outside
-immediately after deploying, and its checks are genuinely flaky for a few seconds
-after an origin change: Cloudflare propagates a new version gradually, so some of
-its probes can still reach the previous (broken) version and fail — observed in
-practice as `502` on the paywall and `530` on the manifest while deep health
-already answered `"backend":"ok"`. When that happens the watchdog re-probes the
-live service itself, and if it is healthy it records the deploy as successful
-with `note="deploy-script-verify-flaky-but-live-healthy"` instead of starting a
-10-minute back-off over a service that is already healed.
+immediately after deploying, and its checks were genuinely flaky for a few
+seconds after an origin change: Cloudflare propagates a new version gradually, so
+some of its probes could still reach the previous (broken) version and fail —
+observed on 2026-10-18 as `502` on the paywall and `530` on the manifest while
+deep health already answered `"backend":"ok"`. `scripts/deploy-live.sh` has since
+been hardened to wait for the edge to settle (`d10d05d`), and the watchdog keeps
+judging by outcome anyway, as defence in depth: if the script exits non-zero the
+watchdog re-probes the live service, and when it is healthy records the deploy as
+successful with `note="deploy-script-verify-flaky-but-live-healthy"` instead of
+starting a 10-minute back-off over a service that is already healed.
 
 ---
 
@@ -214,8 +216,18 @@ curl -s "https://agent-evidence-api.thx93.workers.dev/health?deep=1"   # "backen
 
 - The log has one line per cycle **plus** a single `action=started ...` line when
   the container boots; that line is what makes a restart visible.
-- Recovery takes one cycle plus one deploy (~1–3 min: `deploy-live.sh` runs
-  `pnpm build` and then verifies the live Worker from the outside).
+- Recovery takes one or two cycles plus one deploy: `deploy-live.sh` runs
+  `pnpm build` and then verifies the live Worker from the outside. Observed in
+  practice while deleting `aee-tunnel` outright (the 2026-09 failure): the first
+  cycle recreated the container but ran out of its 30 s window before cloudflared
+  announced the new hostname (`origin_file=tunnel-url-unavailable … note="tunnel
+  is not announcing a URL yet"`), and the next cycle picked the URL up and
+  repointed the Worker (`action=tunnel-started(missing)+deployed(origin-changed)`).
+  Whole outage to healthy: ~2 min.
+- The rate-limit and back-off counters are **in-memory** by design (that is what
+  makes them meaningful across cycles). Restarting the container therefore clears
+  them; with `--restart unless-stopped` that only happens on a manual restart or
+  a reboot, and the 5-minute floor still applies to the first deploy after that.
 - The watchdog deliberately does **not** try to repair the backend itself. If
   `aee-live` is down (`docker ps`), the log line says *"backend aee-live is not
   answering … a Worker redeploy cannot fix that"* and no deploy is queued.

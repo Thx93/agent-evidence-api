@@ -26,6 +26,17 @@ export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-/root/dsh-workspace/.config}"
 PUBLIC_URL="https://agent-evidence-api.thx93.workers.dev"
 VERSION_FILE="$ROOT/data/last-worker-version"
 
+# A quick tunnel is handed a new hostname on every restart, so .origin-url is
+# machine-local runtime state and is deliberately NOT tracked in git: tracking it
+# left the tree permanently dirty and risked committing a hostname that had since
+# died. Refuse to deploy with an empty origin instead of silently shipping
+# `BACKEND_ORIGIN_URL=""`, which would break every paid route.
+if [ ! -s "$ROOT/.origin-url" ]; then
+  echo "  ✖ $ROOT/.origin-url is missing or empty."
+  echo "    It holds the current tunnel hostname. Run scripts/watchdog.sh once to"
+  echo "    discover it and start the tunnel:  bash scripts/watchdog.sh --once"
+  exit 1
+fi
 ORIGIN="$(cat "$ROOT/.origin-url")"
 SECRET="$(cat "$ROOT/.prod-secret")"
 
