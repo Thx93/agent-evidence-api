@@ -27,14 +27,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # pnpm first, THEN setup-node. `cache: pnpm` makes setup-node shell out to
+      # pnpm to find the store, and it errors with "Unable to locate executable
+      # file: pnpm" when pnpm is not yet on PATH. The original order installed
+      # pnpm afterwards, and every run failed here in about ten seconds.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          # The workspace's wrapper is what CI should use too.
           cache: pnpm
-
-      - name: Install pnpm
-        run: npm install --global pnpm@12
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
@@ -57,13 +61,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
-
-      - name: Install pnpm
-        run: npm install --global pnpm@12
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
