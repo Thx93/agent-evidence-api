@@ -57,10 +57,37 @@ passages with a typed-decision model instead of term overlap. It is not required
 run the service, which is why this limitation is recorded here rather than papered
 over.
 
+## Resolution, 2026-10-19: the engine now abstains on this class
+
+`assess` was claiming a verdict it could not support. It now abstains - but only in
+the narrow case where abstaining is demonstrably better than guessing:
+
+- the question asks **more than one thing** (two or more wh-words), **and**
+- exactly **one** source contributed a stance-bearing passage.
+
+Verified on the live service, same question, same source:
+
+```
+verdict: inconclusive
+basis:   "The question asks more than one thing and only one source contributed a
+          matching passage, so the passages cannot be shown to answer the part they
+          appear to match. No verdict is claimed."
+```
+
+And the counter-case still answers, so the abstention is not a way of answering
+nothing: "Is the National Weather Service part of NOAA?" against one page still
+returns `supported`. Two tests pin both behaviours.
+
+With two agreeing sources the overlap is corroborated and the verdict stands; with a
+single-part question the clause ambiguity never arises. This does not make matching
+semantic - that is still the Laya sidecar - but it stops the service being
+confidently wrong, which is the part that made it unsellable.
+
 ## The honest one-line summary
 
-The service is honest about its provenance and its limitations, and it is not yet
-reliable enough to be worth $0.003 to a buyer who checks.
+The service is honest about its provenance and its limitations. It no longer claims a
+verdict it cannot support; whether it is worth $0.003 to a buyer who checks is the
+open question, and nobody has paid to find out.
 
 ## A platform limitation found while trying to get catalogued
 

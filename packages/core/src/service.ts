@@ -18,7 +18,7 @@ import {
   type ExtractedDocument,
 } from "@aee/extraction";
 import { cacheKey, type CacheProvider, type CacheRecord } from "@aee/cache";
-import { assess, type SourceEvidence } from "./assessment.js";
+import { assess, type AssessmentOutcome, type SourceEvidence } from "./assessment.js";
 import { checkRobots, robotsWarning } from "./robots.js";
 import { createLayaProvider, noReasoning, type ReasoningProvider } from "./reasoning.js";
 import type { AppConfig } from "./config.js";
@@ -122,6 +122,65 @@ function uniqueUrls(urls: readonly string[]): string[] {
  * against, and over-estimating only costs candidates, never correctness.
  */
 const MS_PER_CANDIDATE = 800;
+
+/**
+ * Refuse to answer a multi-part question from a single contributing source.
+ *
+ * Measured failure, 2026-10-19: asked "Who won the 2024 UEFA Euro final and what
+ * was the score?", the engine answered `supported` while returning passages about
+ * England's semi-final win. The passages shared the words "won", "score" and
+ * "final" - so strongly overlapping and about a different match. Lexical matching
+ * cannot tell which clause of a two-clause question a passage is answering.
+ *
+ * The engine therefore abstains, but only in the narrow case where abstaining is
+ * clearly better than guessing:
+ *
+ *   - the question asks more than one thing (two or more wh-words), AND
+ *   - exactly one source contributed a stance-bearing passage.
+ *
+ * With two agreeing sources the overlap is corroborated; with a single-part question
+ * the clause ambiguity does not arise. Both keep their verdict. Confident and wrong
+ * is worse than "inconclusive" for a service whose whole claim is sourced evidence.
+ */
+function countWhWords(question: string): number {
+  const wh = new Set(["who", "what", "when", "where", "why", "how", "which"]);
+  let count = 0;
+  for (const token of question.toLowerCase().split(/[^a-z]+/)) {
+    if (wh.has(token)) count += 1;
+  }
+  return count;
+}
+
+function abstainOnMultiPartQuestion(
+  question: string,
+  sources: SourceEvidence[],
+  outcome: AssessmentOutcome,
+): AssessmentOutcome {
+  if (outcome.status === "inconclusive") return outcome;
+  if (countWhWords(question) < 2) return outcome;
+
+  const contributing = sources.filter((source) =>
+    source.candidates.some(
+      (candidate) =>
+        candidate.relevance === "direct" ||
+        candidate.relevance === "supporting" ||
+        candidate.relevance === "contradictory",
+    ),
+  );
+  if (contributing.length !== 1) return outcome;
+
+  return {
+    status: "inconclusive",
+    basis:
+      "The question asks more than one thing and only one source contributed a " +
+      "matching passage, so the passages cannot be shown to answer the part they " +
+      "appear to match. No verdict is claimed.",
+    limitations: [
+      ...outcome.limitations,
+      "A multi-part question was answered from a single source, which deterministic lexical matching cannot verify.",
+    ],
+  };
+}
 
 export class EvidenceService {
   private readonly config: AppConfig;
@@ -229,7 +288,8 @@ export class EvidenceService {
       candidates: r.candidates,
     }));
 
-    const outcome = assess(evidenceInput);
+    const assessede = assess(evidenceInput);
+    const outcome = abstainOnMultiPartQuestion(request.question, evidenceInput, assessede);
 
     const limitations = [...outcome.limitations];
     const failed = sources.filter((s) => s.status === null).length;

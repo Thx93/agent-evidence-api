@@ -413,6 +413,32 @@ describe("evidence pipeline", () => {
     assert.equal(body.assessment.status, "mixed");
   });
 
+  /**
+   * The measured failure this guards: "Who won the 2024 UEFA Euro final and what was
+   * the score?" returned "supported" from a single page whose passages were about a
+   * semi-final. Lexical matching cannot tell which clause of a two-clause question a
+   * passage answers, so with one contributing source it now abstains.
+   */
+  test("a multi-part question answered by one source abstains rather than guessing", async () => {
+    const res = await post({
+      question: "Who manufactures centrifugal pumps and where are they made?",
+      urls: [url("/company")],
+    });
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.json().assessment.status, "inconclusive");
+  });
+
+  // The same source and question shape, but single-part: it must still reach a
+  // verdict, or the abstention is just a way of answering nothing.
+  test("a single-part question from one source still reaches a verdict", async () => {
+    const res = await post({
+      question: "Is Rotamech Industries a manufacturer of centrifugal pumps?",
+      urls: [url("/company")],
+    });
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.json().assessment.status, "supported");
+  });
+
   test("an irrelevant source yields inconclusive, never a fabricated claim", async () => {
     const res = await post({
       question: "Is Rotamech Industries a manufacturer of centrifugal pumps?",
