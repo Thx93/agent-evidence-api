@@ -97,7 +97,28 @@ rm -f "$OUT"
 
 echo
 echo "=== verify the LIVE Worker (from the outside) ==="
-sleep 6
+# Wait for the edge to actually settle rather than guessing with a fixed sleep.
+# This used to be `sleep 6`, and on 2026-10-18 that produced a FALSE FAILURE: the
+# deploy had succeeded, but the verification ran while the version swap was still
+# propagating and saw 502 from the origin and 530 (Cloudflare) on the manifest.
+# The watchdog reading that output logged "deploy-failed" and backed off from a
+# deploy that had in fact worked - so a guard that cries wolf is worse than none.
+# Poll the two endpoints that prove the swap landed; only if they never come good
+# do the checks below get to fail.
+SETTLE_DEADLINE=$((SECONDS + 75))
+while :; do
+  health_code="$(curl -s -m 10 -o /dev/null -w '%{http_code}' "$PUBLIC_URL/health" 2>/dev/null || echo 000)"
+  pay_code="$(curl -s -m 10 -o /dev/null -w '%{http_code}' -X POST "$PUBLIC_URL/v1/evidence" \
+    -H 'content-type: application/json' -d '{"question":"settle-probe"}' 2>/dev/null || echo 000)"
+  if [ "$health_code" = "200" ] && [ "$pay_code" = "402" ]; then
+    break
+  fi
+  if [ "$SECONDS" -ge "$SETTLE_DEADLINE" ]; then
+    echo "  (edge did not settle within the deadline: health=$health_code paywall=$pay_code; checking anyway)"
+    break
+  fi
+  sleep 3
+done
 FAILED=0
 
 check() {
