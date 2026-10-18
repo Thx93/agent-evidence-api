@@ -38,6 +38,27 @@ stack. SPEC §31 and §36 forbid all of them.
 > end from outside, and `scripts/deploy-backend.sh` / `scripts/deploy-live.sh`
 > build, deploy and re-verify each half.
 >
+> **The tunnel must run under Docker.** This is not a preference, it is what the
+> 2026-09/10 outages taught. A `cloudflared` started as a session process (even
+> `setsid`/`nohup`) and a shell supervisor both disappeared while the Docker
+> container `aee-live` stayed up for three weeks; the service silently served 502
+> from 2026-09-22 (~2 days) and again to 2026-10-18 (~3 weeks). Glama's hourly
+> check caught the second one before we did. It now runs as
+> `docker run -d --name aee-tunnel --restart unless-stopped --network host
+> cloudflare/cloudflared:latest tunnel --url http://127.0.0.1:8080`, so the same
+> restart policy that kept the backend alive keeps the origin reachable.
+>
+> A quick tunnel's hostname changes on every restart, so `BACKEND_ORIGIN_URL` must
+> be refreshed whenever the tunnel comes back — otherwise the Worker points at a
+> dead host and returns 502 while everything looks healthy from the inside. That
+> is what `scripts/watchdog.sh` is for; see "Keeping the origin reachable" below.
+>
+> **`deploy-live.sh` builds before it deploys.** Wrangler resolves the Worker's
+> `@aee/schemas` import to that package's `dist`, not its `src`. On 2026-10-18 the
+> edge was found bundling a three-day-old artifact and reporting `SERVICE_VERSION`
+> 0.1.4 while `src` said 0.1.5 — typecheck reads `src`, so nothing caught it. The
+> script now runs `pnpm build` and refuses to deploy if the build fails.
+>
 > Two things are true about the Worker's own payment configuration and are worth
 > stating plainly: the Worker **no longer enforces payment**, and its
 > `X402_PRICE_USD` / `X402_RECIPIENT` / `X402_NETWORK` values are *display-only* —
