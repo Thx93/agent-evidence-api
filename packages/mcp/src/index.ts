@@ -186,13 +186,35 @@ function buildToolDefinitions(): McpToolDefinition[] {
   return [
     {
       name: PAID_TOOL_NAME,
+      title: "Research Evidence",
       description: PAID_TOOL_DESCRIPTION,
       inputSchema: z.toJSONSchema(ResearchEvidenceInput),
+      // Read-only with respect to the caller's system: it fetches the pages the
+      // caller names and returns what they say. It reaches the open web, and the
+      // caller is charged per call, so it is not idempotent in the sense of being
+      // free to repeat - but repeating it produces the same evidence, and the
+      // result is cached, so `idempotentHint` is honest.
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
     },
     {
       name: FREE_TOOL_NAME,
+      title: "Health",
       description: FREE_TOOL_DESCRIPTION,
       inputSchema: z.toJSONSchema(HealthInput),
+      // Purely local: it reports this process's own status and touches nothing
+      // external, so `openWorldHint` is false. It is free, which is what makes it
+      // usable as a liveness probe by a directory or a monitor.
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
   ];
 }
@@ -215,6 +237,10 @@ function wireTools(): Tool[] {
     // Produced by `z.toJSONSchema` from a Zod object schema, so this is always
     // a JSON Schema object with `type: "object"`.
     inputSchema: tool.inputSchema as Tool["inputSchema"],
+    // Carried through so a host (and a directory that scores tool definitions)
+    // sees the same title and annotations the definition declares.
+    ...(tool.title ? { title: tool.title } : {}),
+    ...(tool.annotations ? { annotations: tool.annotations } : {}),
   }));
 }
 

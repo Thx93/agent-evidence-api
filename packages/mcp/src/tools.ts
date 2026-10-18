@@ -17,6 +17,22 @@ export interface McpToolDefinition {
   name: string;
   description: string;
   inputSchema: unknown; // JSON Schema object
+  /** Human-readable name a host shows instead of the machine name. */
+  title?: string;
+  /**
+   * MCP tool annotations.
+   *
+   * Hosts use these to decide whether to prompt before invoking, and trust
+   * directories score on them. Leaving them off is not neutral: a tool that only
+   * reads but declares nothing looks potentially destructive, which is why the
+   * weather tools have declared theirs since they were written.
+   */
+  annotations?: {
+    readOnlyHint?: boolean;
+    destructiveHint?: boolean;
+    idempotentHint?: boolean;
+    openWorldHint?: boolean;
+  };
 }
 
 /** The exact tool names, exported so tests and docs cannot drift. */

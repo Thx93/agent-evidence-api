@@ -416,6 +416,59 @@ test("tools/list over the transport advertises the same two tools", async () => 
   }
 });
 
+/**
+ * Both tools must carry a `title` and read-only annotations on the wire.
+ *
+ * This is not cosmetic. A host reads `annotations` to decide whether to ask the
+ * user before invoking, and a tool that only reads but declares nothing is treated
+ * as potentially destructive. Trust directories score on the same field, so an
+ * omission here shows up as a worse listing rather than as a bug.
+ */
+test("tools/list advertises a title and read-only annotations for both tools", async () => {
+  const harness = await startHarness(stubService(async () => sampleResponse("req_ignored", "q")));
+  try {
+    const { json } = await rpc(harness.url, {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/list",
+      params: {},
+    });
+    const result = requireRecord(requireRecord(json, "body")["result"], "result");
+    const tools = result["tools"] as unknown[];
+    assert.ok(Array.isArray(tools));
+
+    for (const raw of tools) {
+      const tool = requireRecord(raw, "tool");
+      const name = String(tool["name"]);
+      assert.equal(typeof tool["title"], "string", `${name} must declare a title`);
+      assert.ok((tool["title"] as string).length > 0, `${name} title must not be empty`);
+
+      const annotations = requireRecord(tool["annotations"], `${name} annotations`);
+      assert.equal(annotations["readOnlyHint"], true, `${name} must be read-only`);
+      assert.equal(annotations["destructiveHint"], false, `${name} must not be destructive`);
+      assert.equal(annotations["idempotentHint"], true, `${name} must be idempotent`);
+    }
+
+    // Only the paid tool reaches the open web; `health` reports this process.
+    const byName = new Map(
+      tools.map((raw) => {
+        const tool = requireRecord(raw, "tool");
+        return [String(tool["name"]), tool];
+      }),
+    );
+    assert.equal(
+      requireRecord(byName.get(PAID_TOOL_NAME)?.["annotations"], "paid annotations")["openWorldHint"],
+      true,
+    );
+    assert.equal(
+      requireRecord(byName.get(FREE_TOOL_NAME)?.["annotations"], "free annotations")["openWorldHint"],
+      false,
+    );
+  } finally {
+    await harness.close();
+  }
+});
+
 test("health invocation succeeds and returns the minimal health shape", async () => {
   const harness = await startHarness(stubService(async () => sampleResponse("req_ignored", "q")));
   try {
