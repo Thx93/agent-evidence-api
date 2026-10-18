@@ -575,6 +575,31 @@ app.get("/buy.mjs", (c) => proxyToBackend(c, "/buy.mjs", { method: "GET" }));
  */
 
 /**
+ * mcprush.com domain-ownership proof.
+ *
+ * mcprush lists MCP servers and groups a publisher's listings by what proves
+ * ownership. The GitHub proof already verified (@Thx93 owns both repositories),
+ * which is what filed the Weather MCP claim (CLM-9988). This host is a second
+ * listing under a *domain* proof, and mcprush asks for a token file at this path
+ * on the connector's own origin before it will accept that claim:
+ *
+ *   "There is no file at that address yet. Your server has to answer it over
+ *    HTTPS with the token in the body."
+ *
+ * The token is not a secret in the usual sense - the entire scheme is that it is
+ * published at a public URL so mcprush can fetch it and confirm the file is on the
+ * origin it is claiming. Deleting this route unfiles the listing.
+ *
+ * One token per line, plain text, exactly as they ask.
+ */
+app.get("/.well-known/mcprush.com-claim.txt", (c) =>
+  c.text("mcprush.com-bb0130b229fe1d48a31fbb1c\n", 200, {
+    "content-type": "text/plain; charset=utf-8",
+    "cache-control": "public, max-age=300",
+  }),
+);
+
+/**
  * Domain-ownership proof for 402 Index.
  *
  * They verify a domain by asking for a SHA-256 hash at this path - an HTTP

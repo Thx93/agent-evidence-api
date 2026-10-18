@@ -41,6 +41,24 @@ fi
 echo "  ok"
 
 echo
+echo "=== build the workspace packages the Worker imports ==="
+# Why this is here: the Worker imports @aee/schemas, and wrangler resolves that to
+# the package's `dist`, not its `src`. This script used to go straight to
+# `wrangler deploy`, so a stale `dist` was bundled silently - on 2026-10-18 the
+# deployed Worker was found still reporting SERVICE_VERSION 0.1.4 from a dist
+# built three days earlier, while src said 0.1.5. Typecheck reads src, so nothing
+# caught it. Build first, and fail loudly rather than shipping an old artifact.
+BUILD_OUT="$(mktemp)"
+if ! pnpm build >"$BUILD_OUT" 2>&1; then
+  echo "  ✖ BUILD FAILED. Full output:"
+  sed 's/^/    /' "$BUILD_OUT"
+  rm -f "$BUILD_OUT"
+  exit 1
+fi
+rm -f "$BUILD_OUT"
+echo "  ok"
+
+echo
 echo "=== deploy (production / mainnet) ==="
 OUT="$(mktemp)"
 # NOT piped: the exit status must be wrangler's, not a filter's.
