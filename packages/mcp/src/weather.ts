@@ -179,15 +179,28 @@ const READ_ONLY_ANNOTATIONS = {
 // Tools
 // ---------------------------------------------------------------------------
 
+/**
+ * What a caller needs before choosing this tool, stated where it is read.
+ *
+ * The tool description is the highest-intent moment in the funnel: an agent has
+ * already listed the tools and is deciding whether to call one. It used to say only
+ * that discovery was free, leaving the two questions that actually decide it
+ * unanswered - what a call costs, and whether credentials are needed first.
+ */
+const PAYMENT_TAIL =
+  "No API key and no account: discovery is free, a call costs $0.003 in USDC on Base " +
+  "via x402, and nothing is charged when the request returns no data. Free tools: " +
+  FREE_TOOL_NAME +
+  " and tools/list.";
+
 const ALERTS_TOOL: Tool = {
   name: "get-alerts",
   description:
     "Get active weather alerts for a US state. Give the two-letter state code (for " +
     "example CA or NY) and get every active National Weather Service alert for it: " +
     "the event type, the area it covers, its severity, what is happening, and the " +
-    "official instruction. US locations only. Free tool: " +
-    FREE_TOOL_NAME +
-    " and tools/list.",
+    "official instruction. US locations only. " +
+    PAYMENT_TAIL,
   inputSchema: {
     type: "object",
     properties: {
@@ -240,9 +253,7 @@ const FORECAST_TOOL: Tool = {
     "Get the weather forecast for a point on the map. Give latitude and longitude and " +
     "get the next five forecast periods for it: the period name, its temperature, " +
     "wind speed and direction, and the plain-language forecast. US locations only. " +
-    "Free tool: " +
-    FREE_TOOL_NAME +
-    " and tools/list.",
+    PAYMENT_TAIL,
   inputSchema: {
     type: "object",
     properties: {
@@ -446,10 +457,11 @@ export interface WeatherMcpServerOptions {
 }
 
 const SERVER_INSTRUCTIONS =
-  "Paid per call in USDC on Base. Free tools: " +
+  "US National Weather Service data for agents. No API key and no account: " +
+  "discovery and the " +
   FREE_TOOL_NAME +
-  " and tools/list. " +
-  "Data is the US National Weather Service, so only US locations are supported.";
+  " tool are free, and a tools/call costs $0.003 in USDC on Base over x402. " +
+  "Only US locations are supported.";
 
 export function createWeatherMcpServer(opts: WeatherMcpServerOptions): WeatherMcpServer {
   /** In-flight (server, transport) pairs; released when a response closes. */
