@@ -188,3 +188,45 @@ longer starts a loop, because doing so would race the container's deploys. Note
 also that `.origin-url` is deliberately **untracked** (gitignored): it is
 machine-local state that changes on every tunnel restart, and committing it would
 ship a hostname that has already died.
+
+---
+
+## npm publishing: the exact blocker, as of 2026-10-19
+
+Three different failures were hit before the real one was understood, so this is
+written down.
+
+| attempt | result | meaning |
+| --- | --- | --- |
+| `npm publish` with the account token | **E403** "Two-factor authentication or granular access token with bypass 2fa enabled is required" | the token has `bypass_2fa: false`; direct publish is closed unless a token with bypass is issued |
+| `npm trust github @thx93/…` (first try) | **E403** | misleading - it was the wrong scope, resolved below |
+| `npm trust github @thx93/…` (after the org was corrected) | **EOTP** "This operation requires a one-time password" | configuring trust is an *account change*: it needs one interactive 2FA approval, once |
+
+Scopes: the npm org is **`thx93agents`**, not `thx93`. The packages are
+`@thx93/mcp-weather-server` and `@thx93/x402-evidence`, which is the **username
+scope** - valid, and npm accepted it as far as the OTP step (EOTP, not 404/403). So
+no rename is needed.
+
+Trusted publishing then removes tokens from publishing entirely: afterwards the
+GitHub workflows publish via OIDC with a signed provenance attestation and no secret
+at all. The CI plumbing is already proven - the workflow reaches npm and npm signs
+the provenance statement before rejecting the PUT for want of a trust relationship.
+
+**The one thing that cannot be done from a sandbox:** npm masks the auth URL in
+non-TTY output (`https://www.npmjs.com/auth/cli/***`), so the OTP flow has to be
+completed from a real terminal:
+
+```bash
+npm login                     # as thx93, if not already
+npm trust github "@thx93/mcp-weather-server" --file publish.yml \
+  --repo Thx93/mcp-weather-server --allow-publish
+npm trust github "@thx93/x402-evidence" --file publish.yml \
+  --repo Thx93/agent-evidence-api --allow-publish
+```
+
+`--allow-publish` is not optional: configurations created after 2026-09-03 default
+to `npm stage publish` only, which stages a release for a maintainer to approve, and
+that approval needs 2FA and cannot be automated.
+
+After each command prints a URL, open it and approve. Then Actions → "Publish to
+npm" → Run workflow in each repository.
