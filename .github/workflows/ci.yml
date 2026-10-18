@@ -73,6 +73,15 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
+      # The Worker imports @aee/schemas, and that resolves to the package's `dist`,
+      # not its `src` — and dist/ is gitignored, so a fresh checkout has nothing to
+      # resolve. Without this step the bundle dies with
+      # 'Could not resolve "@aee/schemas"'. It mirrors scripts/deploy-live.sh,
+      # which builds for exactly the same reason; that omission in the deploy
+      # script once shipped a three-day-old artifact to production.
+      - name: Build the workspace packages
+        run: pnpm build
+
       # `wrangler deploy --dry-run` builds the bundle without deploying. A Worker
       # that compiles here is the one `scripts/deploy-live.sh` will ship; a bundle
       # with unresolved imports fails this step rather than a live deploy.
