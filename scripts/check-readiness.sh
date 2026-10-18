@@ -52,6 +52,36 @@ CDP=$(curl -s -m 60 -X POST "https://api.cdp.coinbase.com/platform/v2/x402/valid
   | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const j=JSON.parse(d);let f=0;for(const c of (j.preflight||[]))if(!c.passed&&c.severity==="required")f++;process.stdout.write(j.valid&&f===0?"accepted":("rejected/"+f))}catch{process.stdout.write("error")}})')
 if [ "$CDP" = "accepted" ]; then pass "CDP validator (gate to the Bazaar)" "accepted"; else fail "CDP validator" "$CDP"; fi
 
+echo "=== the weather MCP service ==="
+# This section exists because its absence hid a defect that made the weather
+# endpoint unusable for a month: get-alerts declared a top-level ARRAY output
+# schema, and a client on the widely-deployed MCP SDK rejects the entire
+# tools/list response when it meets one. Every check above covers /mcp only, so
+# /weather/mcp could be completely broken while this script reported a sellable
+# service. A second endpoint needs its own checks.
+WEATHER_LIST=$(curl -s -m 30 -X POST "$W/weather/mcp" -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' 2>/dev/null)
+WEATHER_TOOLS=$(printf '%s' "$WEATHER_LIST" | node -e '
+let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{
+  const j=JSON.parse(d); const t=(j.result&&j.result.tools)||[];
+  // An array outputSchema is the exact shape that breaks SDK clients.
+  const bad=t.filter(x=>x.outputSchema&&x.outputSchema.type!=="object").map(x=>x.name);
+  process.stdout.write(t.map(x=>x.name).sort().join(",")+"|"+bad.join(","));
+}catch{process.stdout.write("error|")}})')
+WEATHER_NAMES="${WEATHER_TOOLS%%|*}"
+WEATHER_BAD="${WEATHER_TOOLS##*|}"
+expect "weather tools are listed" "get-alerts,get-forecast,health" "$WEATHER_NAMES"
+if [ -z "$WEATHER_BAD" ]; then
+  pass "weather output schemas are objects" "all object-typed (SDK-compatible)"
+else
+  fail "weather output schemas are objects" "array schema on: $WEATHER_BAD — SDK clients reject tools/list"
+fi
+WEATHER_GATE=$(curl -s -m 30 -o /dev/null -w '%{http_code}' -X POST "$W/weather/mcp" \
+  -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get-alerts","arguments":{"state":"CA"}}}' 2>/dev/null)
+expect "weather paid tool is gated" 402 "$WEATHER_GATE"
+
 echo "=== the MCP challenge is cataloguable ==="
 # The MCP paywall moved to the backend so that a settled MCP call is catalogued by
 # the CDP Bazaar. That only works if the 402 challenge declares the MCP tool shape
