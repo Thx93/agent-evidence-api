@@ -109,7 +109,11 @@ bash scripts/check-load.sh               # holds under concurrency
 ```bash
 bash scripts/go-live.sh        # container + tunnel + origin wiring
 bash scripts/deploy-live.sh    # deploy AND verify the Worker (fails loudly)
-bash scripts/supervise.sh      # detached watchdog, every 5 minutes
+# Durability is the watchdog CONTAINER, not a shell loop (deployment.md §7):
+docker run -d --name aee-watchdog --restart unless-stopped --network host \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /root/dsh-workspace:/root/dsh-workspace aee-watchdog:latest
+bash scripts/watchdog.sh --once   # or one health cycle, from a shell
 ```
 
 ## 7. Test results

@@ -175,8 +175,16 @@ Restored by starting a new tunnel, writing the new URL to `.origin-url`, and
 redeploying the Worker (a quick tunnel's hostname changes on every restart, which is
 why `deploy-live.sh` reads that file and passes `BACKEND_ORIGIN_URL` as a var).
 
-`scripts/supervise.sh` is now running again (300 s interval), so an unhealthy tunnel
-or backend is restarted automatically and the Worker is redeployed with the new
-origin. It lives outside cron and systemd because both are outside the
-sandbox-writable area; it dies on reboot, so after a reboot run
-`bash scripts/supervise.sh 300` once.
+`scripts/supervise.sh` was the fix at the time, and it was the wrong shape: a
+detached shell loop is still a session process, and it was killed like the rest.
+It is now superseded by the **watchdog container**, which has the same
+`--restart unless-stopped` policy that kept the backend alive through both
+outages — see `docs/deployment.md` §7 ("Keeping the origin reachable"). The
+container restarts a dead tunnel, repoints the Worker when the hostname changes,
+and backs off so a broken backend cannot become a deploy storm.
+
+`scripts/supervise.sh` now only reports status and runs a single safe cycle; it no
+longer starts a loop, because doing so would race the container's deploys. Note
+also that `.origin-url` is deliberately **untracked** (gitignored): it is
+machine-local state that changes on every tunnel restart, and committing it would
+ship a hostname that has already died.
