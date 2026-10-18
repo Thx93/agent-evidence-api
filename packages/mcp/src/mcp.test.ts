@@ -31,6 +31,7 @@ import {
   createEvidenceMcpServer,
   FREE_TOOL_NAME,
   PAID_TOOL_NAME,
+  SAMPLE_TOOL_NAME,
   type EvidenceMcpServer,
 } from "./index.js";
 
@@ -301,7 +302,7 @@ test("createEvidenceMcpServer exposes the documented surface and close() is idem
   await mcp.close(); // must be safe to call twice
 });
 
-test("listTools() returns exactly the two expected tools", () => {
+test("listTools() returns exactly the three expected tools", () => {
   const mcp = createEvidenceMcpServer({
     service: stubService(async () => sampleResponse("req_ignored", "q")),
     logger: makeLogger(),
@@ -309,10 +310,10 @@ test("listTools() returns exactly the two expected tools", () => {
   });
 
   const tools = mcp.listTools();
-  assert.equal(tools.length, 2, "the server must expose exactly two tools");
+  assert.equal(tools.length, 3, "the server must expose exactly three tools");
   assert.deepEqual(
     tools.map((tool) => tool.name),
-    [PAID_TOOL_NAME, FREE_TOOL_NAME],
+    [PAID_TOOL_NAME, SAMPLE_TOOL_NAME, FREE_TOOL_NAME],
   );
   assert.equal(PAID_TOOL_NAME, "research_evidence");
   assert.equal(FREE_TOOL_NAME, "health");
@@ -389,7 +390,7 @@ test("the paid tool description contains the SPEC section 29 discovery phrases",
 // Tests: transport-level invocation
 // ---------------------------------------------------------------------------
 
-test("tools/list over the transport advertises the same two tools", async () => {
+test("tools/list over the transport advertises the same three tools", async () => {
   const harness = await startHarness(stubService(async () => sampleResponse("req_ignored", "q")));
   try {
     const { status, contentType, json } = await rpc(harness.url, {
@@ -407,7 +408,7 @@ test("tools/list over the transport advertises the same two tools", async () => 
     assert.ok(Array.isArray(tools), "tools/list must return a tools array");
     assert.deepEqual(
       tools.map((tool) => requireRecord(tool, "tool")["name"]),
-      [PAID_TOOL_NAME, FREE_TOOL_NAME],
+      [PAID_TOOL_NAME, SAMPLE_TOOL_NAME, FREE_TOOL_NAME],
     );
     const first = requireRecord(tools[0], "first tool");
     assert.deepEqual(requireRecord(first["inputSchema"], "inputSchema")["required"], ["question"]);
@@ -719,7 +720,7 @@ test("an MCP client can initialize, list tools and call both tools end to end", 
     const listed = await client.listTools();
     assert.deepEqual(
       listed.tools.map((tool) => tool.name),
-      [PAID_TOOL_NAME, FREE_TOOL_NAME],
+      [PAID_TOOL_NAME, SAMPLE_TOOL_NAME, FREE_TOOL_NAME],
     );
 
     const health = resultPayload(await client.callTool({ name: FREE_TOOL_NAME, arguments: {} }), "health");

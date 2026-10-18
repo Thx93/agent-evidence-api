@@ -41,7 +41,13 @@ import {
 } from "@aee/schemas";
 import { ServiceError, type EvidenceService, type Logger } from "@aee/core";
 
-import { FREE_TOOL_NAME, PAID_TOOL_NAME, type McpToolDefinition } from "./tools.js";
+import {
+  FREE_TOOL_NAME,
+  PAID_TOOL_NAME,
+  SAMPLE_TOOL_NAME,
+  type McpToolDefinition,
+} from "./tools.js";
+import { SAMPLE_EVIDENCE } from "./sample.js";
 
 // ---------------------------------------------------------------------------
 // Public surface
@@ -202,6 +208,24 @@ function buildToolDefinitions(): McpToolDefinition[] {
       },
     },
     {
+      // Free on purpose: it lets a caller judge the output before paying for one.
+      name: SAMPLE_TOOL_NAME,
+      title: "Sample evidence",
+      description:
+        "Return one real, previously produced evidence package, free, so you can " +
+        "see exactly what a paid call returns before spending anything: a verdict, " +
+        "and for every source the URL, retrieval time, content hash and the cited " +
+        "excerpts. Takes no arguments and always returns the same package. The paid " +
+        "tool is research_evidence, which answers your own question.",
+      inputSchema: z.toJSONSchema(z.object({})),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    {
       name: FREE_TOOL_NAME,
       title: "Health",
       description: FREE_TOOL_DESCRIPTION,
@@ -303,7 +327,12 @@ async function invokeTool(
 
   let result: CallToolResult;
 
-  if (name === FREE_TOOL_NAME) {
+  if (name === SAMPLE_TOOL_NAME) {
+    // Free, and deliberately free: this is the proof of output quality. It costs
+    // nothing to serve because it was produced once by a real paid call.
+    result = textResult(SAMPLE_EVIDENCE);
+    fields["outcome"] = "ok";
+  } else if (name === FREE_TOOL_NAME) {
     const health: HealthResponse = {
       status: "ok",
       service: SERVICE_NAME,

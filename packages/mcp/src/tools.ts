@@ -40,6 +40,12 @@ export const PAID_TOOL_NAME = "research_evidence";
 export const FREE_TOOL_NAME = "health";
 
 /**
+ * The free sample tool. Not in any paid set, so `tools/call` for it costs nothing -
+ * that boundary is declared once, here, rather than inferred at the call site.
+ */
+export const SAMPLE_TOOL_NAME = "sample";
+
+/**
  * The tools each MCP route charges for.
  *
  * Per route rather than global: `/mcp` charges for `research_evidence`,

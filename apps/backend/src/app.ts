@@ -182,7 +182,8 @@ const CATALOGUE_DESCRIPTION =
   "question and up to 5 URLs, get cited evidence - passages that support, " +
   "contradict or fail to settle it. Claim verification with a citation for every " +
   "excerpt: source URL, retrieval time, content hash. Never charges when nothing " +
-  "is retrieved.";
+  "is retrieved. Free to evaluate: the `sample` tool returns one real response at " +
+  "no cost, so you can judge the output before paying for your own question.";
 
 /**
  * Tags are a discovery surface, not decoration.
