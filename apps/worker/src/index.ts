@@ -565,6 +565,45 @@ app.use("/v1/evidence", async (c, next) => {
   return next();
 });
 
+/**
+ * The weather capabilities over plain HTTP, forwarded like the evidence route.
+ *
+ * The same origin-health gate applies: a 402 here would quote terms we cannot honour
+ * if the backend is down.
+ */
+for (const path of ["/v1/weather/alerts", "/v1/weather/forecast"]) {
+  app.use(path, async (c, next) => {
+    if (c.req.method !== "POST") return next();
+    if (!(await originHealthy(c.env))) {
+      return fail(
+        c,
+        "BACKEND_UNREACHABLE",
+        newRequestId(),
+        "The weather service is temporarily unavailable; no payment was taken.",
+      );
+    }
+    return next();
+  });
+
+  app.post(path, async (c) => {
+    const requestId = newRequestId();
+    let parsed: unknown;
+    try {
+      parsed = await c.req.json();
+    } catch {
+      return fail(c, "INVALID_REQUEST", requestId, "Request body must be valid JSON.");
+    }
+    // Shape validation belongs to the backend, like the evidence route: answering
+    // 400 before the challenge would tell an unpaid caller their body is wrong
+    // instead of what the call costs.
+    return proxyToBackend(c, `/internal${path}`, {
+      method: "POST",
+      body: JSON.stringify(parsed),
+      contentType: "application/json",
+    });
+  });
+}
+
 app.post("/v1/evidence", async (c) => {
   const requestId = newRequestId();
 

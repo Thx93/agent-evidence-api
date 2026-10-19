@@ -18,6 +18,8 @@ import {
 import {
   createWeatherMcpServer,
   EVIDENCE_PAID_TOOLS,
+  runAlerts,
+  runForecast,
   WEATHER_PAID_TOOLS,
   type EvidenceMcpServer,
 } from "@aee/mcp";
@@ -289,6 +291,53 @@ const WEATHER_MCP_DISCOVERY = declareDiscoveryExtension({
  * what a catalogue matches on, the phrases are now spelled out rather than left to
  * be inferred from a sentence that happens to contain both words.
  */
+/**
+ * Discovery declarations for the weather routes.
+ *
+ * The weather tools were MCP-only, and MCP cannot enter the CDP Bazaar: their
+ * preflight rejects every MCP input type, so the two routes never appear there and
+ * therefore never appear on agentic.market, the storefront that indexes the Bazaar.
+ * Measured consequence: searching that marketplace for "weather alerts" or "weather
+ * forecast" does not return this service at all.
+ *
+ * These are plain HTTP routes for the same capabilities. They pass the preflight like
+ * the evidence route does, and they are genuinely useful on their own terms: an agent
+ * that does not speak MCP can call them with an ordinary POST.
+ */
+const WEATHER_ALERTS_DISCOVERY = declareDiscoveryExtension({
+  bodyType: "json",
+  input: { state: "CA" },
+  output: {
+    example: {
+      state: "CA",
+      count: 1,
+      alerts: [
+        {
+          event: "Flood Advisory",
+          area: "San Francisco",
+          severity: "Minor",
+          description: "Minor flooding expected.",
+          instructions: "Do not drive through flooded roadways.",
+        },
+      ],
+    },
+  },
+});
+
+const WEATHER_FORECAST_DISCOVERY = declareDiscoveryExtension({
+  bodyType: "json",
+  input: { latitude: 37.7749, longitude: -122.4194 },
+  output: {
+    example: {
+      latitude: 37.7749,
+      longitude: -122.4194,
+      periods: [
+        { name: "Today", temperature: 68, temperatureUnit: "F", windSpeed: "5 to 10 mph", windDirection: "W", detailedForecast: "Sunny." },
+      ],
+    },
+  },
+});
+
 const WEATHER_CATALOGUE_DESCRIPTION =
   "US weather forecast and weather alerts for AI agents. get-forecast returns a " +
   "5-day forecast for a latitude and longitude: temperature, wind speed and " +
@@ -539,6 +588,19 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
     ),
   });
 
+  /**
+   * The public URL of a weather HTTP route, derived from the same origin as the rest.
+   */
+  const weatherHttpUrl = (path: string): string => {
+    const known = config.x402.publicResourceUrl || config.x402.publicMcpResourceUrl;
+    if (!known) return "";
+    try {
+      return `${new URL(known).origin}${path}`;
+    } catch {
+      return "";
+    }
+  };
+
   const HTTP_ROUTES = {
     "POST /internal/v1/evidence": {
       // Advertise the PUBLIC url. Without this the challenge names the internal
@@ -552,6 +614,33 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
       // Without this the validator reports "No bazaar extension in top-level
       // extensions object" and the route is not catalogued.
       extensions: { ...HTTP_DISCOVERY },
+      unpaidResponseBody,
+    },
+    "POST /internal/v1/weather/alerts": {
+      ...(weatherHttpUrl("/v1/weather/alerts")
+        ? { resource: weatherHttpUrl("/v1/weather/alerts") }
+        : {}),
+      accepts: paymentOption,
+      description:
+        "US weather alerts: active National Weather Service alerts for a two-letter state " +
+        "code - the event, the area, its severity and the official instruction.",
+      serviceName: SERVICE_NAME,
+      tags: WEATHER_CATALOGUE_TAGS,
+      extensions: { ...WEATHER_ALERTS_DISCOVERY },
+      unpaidResponseBody,
+    },
+    "POST /internal/v1/weather/forecast": {
+      ...(weatherHttpUrl("/v1/weather/forecast")
+        ? { resource: weatherHttpUrl("/v1/weather/forecast") }
+        : {}),
+      accepts: paymentOption,
+      description:
+        "US weather forecast: the next five National Weather Service forecast periods " +
+        "for a latitude and longitude - temperature, wind speed and direction, and the " +
+        "plain-language forecast.",
+      serviceName: SERVICE_NAME,
+      tags: WEATHER_CATALOGUE_TAGS,
+      extensions: { ...WEATHER_FORECAST_DISCOVERY },
       unpaidResponseBody,
     },
   };
@@ -677,7 +766,12 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
     // route so a free request never waits on the facilitator.
     app.addHook("onRequest", async (req: FastifyRequest, reply: FastifyReply) => {
       const path = req.url.split("?")[0] ?? req.url;
-      if (path !== "/internal/v1/evidence") return;
+      const PAID_HTTP_PATHS = new Set([
+        "/internal/v1/evidence",
+        "/internal/v1/weather/alerts",
+        "/internal/v1/weather/forecast",
+      ]);
+      if (!PAID_HTTP_PATHS.has(path)) return;
       try {
         await ensurePaidRoutesReady();
       } catch (err) {
@@ -891,6 +985,44 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
               `$${priceUsd}; discovery and the free tools cost nothing.`,
             mcpBody,
           ),
+          "/v1/weather/alerts": paid(
+            "Active US weather alerts for a state",
+            "Active National Weather Service alerts for a two-letter state code: the " +
+              "event, the area it covers, its severity and the official instruction.",
+            {
+              required: true,
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["state"],
+                    properties: { state: { type: "string", description: "Two-letter US state code" } },
+                  },
+                },
+              },
+            },
+          ),
+          "/v1/weather/forecast": paid(
+            "Five-period US weather forecast for a point",
+            "The next five National Weather Service forecast periods for a latitude and " +
+              "longitude: period name, temperature, wind speed and direction, and the " +
+              "plain-language forecast.",
+            {
+              required: true,
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["latitude", "longitude"],
+                    properties: {
+                      latitude: { type: "number", minimum: -90, maximum: 90 },
+                      longitude: { type: "number", minimum: -180, maximum: 180 },
+                    },
+                  },
+                },
+              },
+            },
+          ),
           "/weather/mcp": paid(
             "US weather alerts and forecast over MCP",
             WEATHER_CATALOGUE_DESCRIPTION,
@@ -1078,6 +1210,81 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
   // ---------------------------------------------------------------- MCP ----
   //
   // The MCP paywall, in the backend. See `mcp-paywall.ts` for why it is a
+  /**
+   * The weather capabilities over plain HTTP.
+   *
+   * Same contract as the evidence route: the paywall has already accepted a payment
+   * by the time these run, and a failure answers with an error status, which cancels
+   * settlement - so a caller whose request could not be served is not charged. The
+   * NWS is the upstream, so an unreachable or unsupported location is an upstream
+   * failure rather than a result.
+   */
+  app.post("/internal/v1/weather/alerts", async (req: FastifyRequest, reply: FastifyReply) => {
+    const requestId = String(req.id);
+    const body = (req.body ?? {}) as { state?: unknown };
+    const state = typeof body.state === "string" ? body.state.trim() : "";
+    if (!/^[A-Za-z]{2}$/.test(state)) {
+      return reply
+        .code(ERROR_HTTP_STATUS.INVALID_REQUEST)
+        .send(
+          errorResponse(
+            "INVALID_REQUEST",
+            requestId,
+            "state must be a two-letter US state code, for example CA.",
+          ),
+        );
+    }
+
+    const outcome = await runAlerts(state);
+    if (outcome.isError) {
+      return reply
+        .code(ERROR_HTTP_STATUS.UPSTREAM_HTTP_FAILURE)
+        .send(
+          errorResponse(
+            "UPSTREAM_HTTP_FAILURE",
+            requestId,
+            outcome.content[0]?.text ?? "The weather service could not be reached. Nothing was charged.",
+          ),
+        );
+    }
+    return reply.send(outcome.structuredContent ?? {});
+  });
+
+  app.post("/internal/v1/weather/forecast", async (req: FastifyRequest, reply: FastifyReply) => {
+    const requestId = String(req.id);
+    const body = (req.body ?? {}) as { latitude?: unknown; longitude?: unknown };
+    const latitude = typeof body.latitude === "number" ? body.latitude : Number.NaN;
+    const longitude = typeof body.longitude === "number" ? body.longitude : Number.NaN;
+    if (
+      !Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+      !Number.isFinite(longitude) || longitude < -180 || longitude > 180
+    ) {
+      return reply
+        .code(ERROR_HTTP_STATUS.INVALID_REQUEST)
+        .send(
+          errorResponse(
+            "INVALID_REQUEST",
+            requestId,
+            "latitude (-90..90) and longitude (-180..180) are required numbers.",
+          ),
+        );
+    }
+
+    const outcome = await runForecast(latitude, longitude);
+    if (outcome.isError) {
+      return reply
+        .code(ERROR_HTTP_STATUS.UPSTREAM_HTTP_FAILURE)
+        .send(
+          errorResponse(
+            "UPSTREAM_HTTP_FAILURE",
+            requestId,
+            outcome.content[0]?.text ?? "The weather service could not be reached. Nothing was charged.",
+          ),
+        );
+    }
+    return reply.send(outcome.structuredContent ?? {});
+  });
+
   // `preHandler` rather than the framework adapter's `onRequest` hook (the body is
   // not parsed yet at `onRequest`, so `tools/list` could not be told from
   // `tools/call`), and why it moved off the edge at all (the CDP Bazaar's MCP
