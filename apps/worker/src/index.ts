@@ -215,7 +215,7 @@ function landingHtml(env: Env): string {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Agent Evidence API — cited web evidence for AI agents</title>
+<title>Agent Evidence API — cited web evidence and US weather for AI agents</title>
 <style>
  :root{color-scheme:light dark}
  body{max-width:46rem;margin:3rem auto;padding:0 1.25rem;
@@ -231,7 +231,7 @@ function landingHtml(env: Env): string {
 </style></head><body>
 
 <h1>Agent Evidence API</h1>
-<p class="sub">Cited, timestamped web evidence for AI agents. No account, no API key.</p>
+<p class="sub">Cited, timestamped web evidence and National Weather Service data for agents. No account, no API key.</p>
 
 <p>Send a question and the public pages you want checked. You get back short
 quoted excerpts with their source URL, retrieval time and content hash, plus an
@@ -239,6 +239,17 @@ explicit <code>supported</code> / <code>contradicted</code> / <code>mixed</code>
 <code>inconclusive</code> assessment.</p>
 
 <p class="price">${price} USDC per request · ${net} · paid over HTTP 402 (x402)</p>
+
+<h2>Weather, too</h2>
+<p>The same wallet pays for US weather from the National Weather Service. Useful when an
+agent needs a forecast or an active alert and has no way to sign up for an API key:</p>
+<pre><code>curl -X POST https://agent-evidence-api.thx93.workers.dev/v1/weather/alerts \
+  -H 'content-type: application/json' -d '{"state":"TX"}'
+
+curl -X POST https://agent-evidence-api.thx93.workers.dev/v1/weather/forecast \
+  -H 'content-type: application/json' -d '{"latitude":37.7749,"longitude":-122.4194}'</code></pre>
+<p>Both are over MCP as well, at <code>/weather/mcp</code> (<code>get-alerts</code> and
+<code>get-forecast</code>). US locations only.</p>
 
 <h2>See the paywall — no wallet needed</h2>
 <pre><code>curl -X POST ${"https://agent-evidence-api.thx93.workers.dev"}/v1/evidence \
@@ -492,20 +503,34 @@ app.get("/", (c) => {
     service: SERVICE_NAME,
     version: SERVICE_VERSION,
     description:
-      "Evidence infrastructure for AI agents. Returns structured, cited, freshly-retrieved " +
-      "evidence from public web pages so an agent can verify claims and ground answers in sources.",
+      "Evidence and US weather for AI agents. Returns structured, cited, freshly-retrieved " +
+      "evidence from public web pages so an agent can verify claims and ground answers in " +
+      "sources, and serves National Weather Service alerts and forecasts so an agent can " +
+      "answer weather questions without an API key or an account.",
+    // This is the free description of the service - what a caller reads before deciding
+    // whether to pay for anything. It described only the evidence capability for as long
+    // as the weather routes existed, which is the one place a buyer looks first.
     endpoints: {
       health: "GET /health (free)",
       /** A real response, served free so it can be judged before paying. */
       demo: "GET /demo (free HTML) and GET /demo.json (free JSON)",
       evidence: "POST /v1/evidence (paid, x402)",
+      weatherAlerts:
+        "POST /v1/weather/alerts (paid, x402) - active NWS alerts for a two-letter state code",
+      weatherForecast:
+        "POST /v1/weather/forecast (paid, x402) - five forecast periods for a latitude and longitude",
       mcp: "POST /mcp (MCP streamable HTTP; initialize and tools/list are free)",
+      weatherMcp: "POST /weather/mcp (MCP; exposes get-alerts and get-forecast)",
     },
     mcp: {
       transport: "streamable-http",
+      endpoints: { evidence: "POST /mcp", weather: "POST /weather/mcp" },
       tools: {
         research_evidence: "paid",
+        sample: "free",
         health: "free",
+        "get-alerts": "paid",
+        "get-forecast": "paid",
       },
     },
     payment: {
