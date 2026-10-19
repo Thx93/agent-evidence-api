@@ -289,3 +289,30 @@ POST https://www.x402scan.com/api/x402/registry/register-origin
 The other counters - `siwx`, `public`, `apiKey` - are auth-mode tallies, and zero is
 correct for three x402-paid routes. `agentcash discover` re-reads the origin and
 returns all three resources with the guidance intact.
+
+## Where the x402 volume actually is (measured 2026-10-19)
+
+x402scan's dashboard reports the ecosystem at **113.5K transactions and $121.38K in
+24 hours, across 3.08K buyers and 2K sellers**. The market is not empty, and that is
+worth stating plainly after several rounds of "the constraint is demand".
+
+What those buyers buy, by volume over 24 hours:
+
+| server | what it is | volume | txns | buyers |
+| --- | --- | --- | --- | --- |
+| AX1 Console | agentic activities launchpad | $166.74 | 8.34K | 189 |
+| BlockRun on Solana | 114 AI models + search + market data + RPC, one endpoint | $107.42 | 40.65K | 23 |
+| Claw402 | payment infrastructure for AI and APIs | $47.69 | 17.77K | 27 |
+| Agentic Portal | pay-per-call Pocket Network services | $22.77 | 4.55K | 49 |
+
+Two patterns, both uncomfortable for a $0.003 claim-verification API:
+
+1. **Volume concentrates in broad infrastructure** - model gateways, payment rails,
+   network access, multi-purpose endpoints. Not narrow single-purpose tools.
+2. The header says it outright: these are addresses "listed in the **Bazaar**". The
+   highest-traffic surface is the one our MCP routes cannot enter.
+
+This does not say there is no demand for claim verification - 402oracle.com carries
+settlement history in agent402's index, so some exists. It says the demand that
+moves real volume is for things an agent needs on every loop, not for a narrow
+verification tool it needs occasionally.
