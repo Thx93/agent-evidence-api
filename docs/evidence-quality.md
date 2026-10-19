@@ -141,9 +141,18 @@ this cause does not apply to us.
 
 **2. The settlement payload must carry `resource`.** From #843: *"your settlements
 don't appear to have `paymentPayload.resource` attached, which is needed for
-discovery"* — alongside `paymentPayload.extensions.bazaar`. **Not yet verified for
-our client.** This is the next thing to check, and it is checkable: intercept the
-payload our buyer sends to the facilitator and inspect it.
+discovery"* — alongside `paymentPayload.extensions.bazaar`. **Checked, and we are
+not affected.** Intercepting the payload our buyer actually sends to a facilitator
+(a verify-only call, so no funds moved) shows both fields present:
+
+```
+paymentPayload keys : x402Version, payload, extensions, resource, accepted
+resource attached?  : YES
+extensions.bazaar?  : YES
+```
+
+The `@x402/core` v2 schema models `resource` as optional, which is why this was worth
+checking rather than assuming.
 
 **3. Separately, their preflight rejects MCP input types.** Reported to #850 with
 reproduction: `bazaar.info.input.method` fails as `"Skipped: input type is not http"`
