@@ -112,6 +112,11 @@ describe("public paths", () => {
       "/.well-known/x402",
       "/buy.mjs",
       "/health",
+      // The discovery contract the aggregators fetch. Public for the same reason the
+      // manifest is: a crawler that has to authenticate cannot learn the price, and
+      // x402scan will not list an origin that serves none. (Sorted by code unit, so
+      // "." then "b", "h", "o" - it belongs last, not second.)
+      "/openapi.json",
     ]);
   });
 });

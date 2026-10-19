@@ -52,6 +52,11 @@ export const PUBLIC_PATHS = new Set([
   // The x402 capability manifest is the record a crawler fetches to learn how to
   // pay for this host. Being readable without a credential is the entire point.
   "/.well-known/x402",
+  // Both aggregators that crawl an origin look for this beside the manifest.
+  // Agent402's self-serve registration answered "Source URL returned HTTP 404" for
+  // us precisely because it was missing, and x402scan refuses to list an origin
+  // without it: "Publish your spec at /openapi.json."
+  "/openapi.json",
 ]);
 
 export function isPublicPath(path: string): boolean {

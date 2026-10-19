@@ -766,6 +766,140 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
    * `network_unknown`. Each entry therefore carries its own `accepts`, in the
    * same shape the live 402 returns, describing the resource it is attached to.
    */
+  /**
+   * The OpenAPI discovery contract, at the path crawlers actually look for.
+   *
+   * Two independent indexes require it. x402scan's discovery spec is explicit -
+   * "OpenAPI is the canonical discovery contract. Publish your spec at
+   * /openapi.json" - with a payable operation carrying `x-payment-info` and a
+   * request schema, and it refuses to list an origin that has none. Agent402 reads
+   * `/.well-known/x402` *plus* this file and reported "Source URL returned HTTP 404"
+   * for our origin before it existed.
+   *
+   * Every value is derived from the same configuration the live challenge uses
+   * (price, recipient, network, version), because a discovery document that
+   * disagrees with the 402 it describes is worse than no document: the spec itself
+   * says runtime behaviour is authoritative and static metadata must match it.
+   */
+  app.get("/openapi.json", async (req: FastifyRequest, reply: FastifyReply) => {
+    const base = (() => {
+      const known = config.x402.publicResourceUrl || config.x402.publicMcpResourceUrl;
+      if (known) {
+        try {
+          return new URL(known).origin;
+        } catch {
+          // Fall through to the request origin rather than throwing.
+        }
+      }
+      return `${req.protocol}://${req.hostname}`;
+    })();
+
+    const httpResource = config.x402.publicResourceUrl || `${base}/v1/evidence`;
+    const mcpResource = config.x402.publicMcpResourceUrl || `${base}/mcp`;
+    const weatherResource = weatherResourceUrl || `${base}/weather/mcp`;
+    const priceUsd = config.x402.priceUsd;
+
+    /** x402scan requires the price as decimal USD; the 402 carries atomic units. */
+    const paymentInfo = {
+      price: { mode: "fixed", currency: "USD", amount: priceUsd },
+      protocols: [{ x402: {} }],
+    };
+
+    /**
+     * A JSON-RPC envelope, because an MCP route is not a REST verb.
+     *
+     * x402scan asks for `requestBody.content["application/json"].schema` on every
+     * invocable route; omitting it is what it calls an unreliable listing.
+     */
+    const mcpBody = {
+      required: true,
+      content: {
+        "application/json": {
+          schema: {
+            type: "object",
+            required: ["jsonrpc", "method"],
+            properties: {
+              jsonrpc: { type: "string", enum: ["2.0"] },
+              id: { oneOf: [{ type: "string" }, { type: "number" }] },
+              method: { type: "string", description: "initialize, tools/list or tools/call" },
+              params: { type: "object" },
+            },
+          },
+        },
+      },
+    };
+
+    const paid = (summary: string, description: string, body: unknown) => ({
+      post: {
+        summary,
+        description,
+        requestBody: body,
+        "x-payment-info": paymentInfo,
+        responses: {
+          "200": { description: "Result delivered; the payment settled." },
+          "402": { description: "Payment Required" },
+        },
+      },
+    });
+
+    return reply
+      .header("cache-control", "public, max-age=300")
+      .header("access-control-allow-origin", "*")
+      .send({
+        openapi: "3.1.0",
+        info: {
+          title: "Agent Evidence API",
+          version: SERVICE_VERSION,
+          description: CATALOGUE_DESCRIPTION,
+          // x402scan surfaces this to an agent before it pays.
+          "x-guidance":
+            "Send one question and the URLs to check it against. You get back a verdict " +
+            "(supported, contradicted, mixed or inconclusive) and, for each source, the " +
+            "excerpts that bear on the question with their source URL, retrieval time and " +
+            "content hash. The service never charges when nothing is retrieved, and it " +
+            "abstains rather than guessing when a question asks more than one thing and " +
+            "only one source answered. Free routes: GET /health, and the MCP tool `sample`.",
+          // Used to verify ownership of the origin, per the discovery spec.
+          contact: { email: "aee-outreach-mublj2wz@uberip.com" },
+        },
+        servers: [{ url: base }],
+        paths: {
+          "/v1/evidence": paid(
+            "Cited evidence for a claim",
+            CATALOGUE_DESCRIPTION,
+            {
+              required: true,
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["question", "urls"],
+                    properties: {
+                      question: { type: "string" },
+                      urls: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 5 },
+                      mode: { type: "string", enum: ["evidence"] },
+                    },
+                  },
+                },
+              },
+            },
+          ),
+          "/mcp": paid(
+            "Evidence tools over MCP",
+            "Streamable-HTTP MCP endpoint exposing `research_evidence` (paid), and the free " +
+              "tools `sample` and `health`. A tools/call for `research_evidence` costs " +
+              `$${priceUsd}; discovery and the free tools cost nothing.`,
+            mcpBody,
+          ),
+          "/weather/mcp": paid(
+            "US weather alerts and forecast over MCP",
+            WEATHER_CATALOGUE_DESCRIPTION,
+            mcpBody,
+          ),
+        },
+      });
+  });
+
   app.get("/.well-known/x402", async (req: FastifyRequest, reply: FastifyReply) => {
     const httpResource = config.x402.publicResourceUrl;
     const mcpResource = config.x402.publicMcpResourceUrl;

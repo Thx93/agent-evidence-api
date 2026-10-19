@@ -74,8 +74,11 @@ rm -f "$BUILD_OUT"
 # 0.1.6 source shipped as 0.1.5. `pnpm build` is supposed to prevent that; this
 # checks it did, because "the build ran" and "the artifact changed" are different
 # claims.
-SRC_VERSION="$(sed -n 's/.*SERVICE_VERSION = "\([^"]*\)".*/\1/p' packages/schemas/src/evidence.ts)"
-DIST_VERSION="$(sed -n 's/.*SERVICE_VERSION = "\([^"]*\)".*/\1/p' packages/schemas/dist/evidence.js)"
+# Paths are absolute: this script has already cd'd to "$ROOT/apps/worker", so a
+# relative path here silently finds nothing - which the first version of this guard
+# did, and then refused every deploy because it could not read a file that exists.
+SRC_VERSION="$(sed -n 's/.*SERVICE_VERSION = "\([^"]*\)".*/\1/p' "$ROOT/packages/schemas/src/evidence.ts")"
+DIST_VERSION="$(sed -n 's/.*SERVICE_VERSION = "\([^"]*\)".*/\1/p' "$ROOT/packages/schemas/dist/evidence.js")"
 if [ -z "$DIST_VERSION" ] || [ "$DIST_VERSION" != "$SRC_VERSION" ]; then
   echo "  ✖ the built @aee/schemas is stale: src=$SRC_VERSION dist=${DIST_VERSION:-missing}"
   echo "    The Worker would bundle the dist copy. Refusing to deploy."

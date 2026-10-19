@@ -794,6 +794,56 @@ app.get("/.well-known/x402", async (c) => {
   return res;
 });
 
+/**
+ * A favicon, because discovery warns without one.
+ *
+ * x402scan's audit reports FAVICON_MISSING as its only complaint about this origin.
+ * An API has no tab to decorate, but the check exists for a reason: a listing that
+ * looks unfinished is a listing a buyer trusts less, and this clears the last
+ * warning standing between us and a clean record. Served as SVG, which is what the
+ * one icon we have is - the .ico path returns the same bytes rather than pretending
+ * to be a bitmap format we did not generate.
+ */
+const FAVICON_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">' +
+  '<rect width="32" height="32" rx="7" fill="#0f172a"/>' +
+  '<path d="M9 8h10l4 4v12H9z" fill="none" stroke="#e2e8f0" stroke-width="2" stroke-linejoin="round"/>' +
+  '<path d="M12 18l3 3 6-6" fill="none" stroke="#34d399" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
+  "</svg>";
+
+app.get("/favicon.svg", (c) =>
+  c.body(FAVICON_SVG, 200, {
+    "content-type": "image/svg+xml; charset=utf-8",
+    "cache-control": "public, max-age=86400",
+  }),
+);
+
+app.get("/favicon.ico", (c) =>
+  c.body(FAVICON_SVG, 200, {
+    "content-type": "image/svg+xml; charset=utf-8",
+    "cache-control": "public, max-age=86400",
+  }),
+);
+
+/**
+ * The OpenAPI discovery contract, at the path the crawlers ask for.
+ *
+ * x402scan will not list an origin without it ("Publish your spec at
+ * /openapi.json"), and Agent402 reads it beside `/.well-known/x402` and reported
+ * "Source URL returned HTTP 404" for us while it was missing. Served from the
+ * backend so the prices and version in it come from the same configuration as the
+ * live challenge, and cached like the manifest because it is a public document a
+ * crawler is expected to re-read.
+ */
+app.get("/openapi.json", async (c) => {
+  const res = await proxyToBackend(c, "/openapi.json", { method: "GET" });
+  res.headers.set("access-control-allow-origin", "*");
+  if (res.ok) {
+    res.headers.set("cache-control", "public, max-age=300");
+  }
+  return res;
+});
+
 // ---------------------------------------------------------------------------
 // fallthrough
 // ---------------------------------------------------------------------------
