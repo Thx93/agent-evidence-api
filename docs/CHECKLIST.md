@@ -3,7 +3,7 @@
 Everything in this file requires a human: a wallet, an account, a decision, or a
 payment. Nothing here is blocked on engineering.
 
-**Last verified:** 2026-09-21 · service version 0.1.1
+**Last verified:** 2026-10-19 · service version 0.1.6
 
 Run this at any time to see the current truth:
 
@@ -20,7 +20,7 @@ curl -s https://agent-evidence-api.thx93.workers.dev/health?deep=1
 |---|---|
 | Backend + Worker deployed to public URLs | live on Base mainnet |
 | Payment path verified end to end | simulated against the real USDC contract; only a balance was missing |
-| Published to the MCP Registry | `io.github.Thx93/agent-evidence-api` **0.1.1**, active |
+| Published to the MCP Registry | `io.github.Thx93/agent-evidence-api` **0.1.6**, active |
 | One-command purchase client | `…/buy.mjs`, zero install, self-serve wallet |
 | Landing page, catalogue metadata, docs | written, links checked, honest about limits |
 | Failure behaviour | every failure refuses payment; verified under concurrency |

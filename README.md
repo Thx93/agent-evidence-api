@@ -457,7 +457,7 @@ curl -s https://${PUBLIC_API_DOMAIN}/health
 ```
 
 ```json
-{ "status": "ok", "service": "agent-evidence-api", "version": "0.1.0" }
+{ "status": "ok", "service": "agent-evidence-api", "version": "0.1.6" }
 ```
 
 ### `GET /`
@@ -471,7 +471,7 @@ curl -s https://${PUBLIC_API_DOMAIN}/
 ```json
 {
   "service": "agent-evidence-api",
-  "version": "0.1.0",
+  "version": "0.1.6",
   "description": "Evidence infrastructure for AI agents. Returns structured, cited, freshly-retrieved evidence from public web pages so an agent can verify claims and ground answers in sources.",
   "endpoints": {
     "health": "GET /health (free)",
