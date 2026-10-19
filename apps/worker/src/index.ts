@@ -216,6 +216,21 @@ function landingHtml(env: Env): string {
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Agent Evidence API — cited web evidence and US weather for AI agents</title>
+<!-- Social/SEO metadata. Without it a shared link renders as a bare URL with no
+     title, description or card - which is how this service was being passed around
+     before anyone looked. Text-only cards (summary) rather than a large image: an
+     og:image needs a raster asset we do not have, and a card with an accurate
+     description beats one with a placeholder graphic. -->
+<meta name="description" content="Cited, source-grounded web evidence and claim verification plus US weather for AI agents. Paid per call in USDC on Base over x402. No API key, no account.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Agent Evidence API">
+<meta property="og:title" content="Agent Evidence API — cited evidence and US weather for agents">
+<meta property="og:description" content="Send a question and up to 5 URLs; get cited passages with source URL, retrieval time and content hash, plus a supported/contradicted/mixed/inconclusive assessment. Also serves US weather alerts and forecasts. $0.003 per call, no API key.">
+<meta property="og:url" content="https://agent-evidence-api.thx93.workers.dev/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Agent Evidence API — cited evidence and US weather for agents">
+<meta name="twitter:description" content="Cited, source-grounded web evidence and US weather for AI agents, $0.003 per call over x402. No API key, no account. Free sample at /demo.">
+<meta name="robots" content="index,follow">
 <style>
  :root{color-scheme:light dark}
  body{max-width:46rem;margin:3rem auto;padding:0 1.25rem;
@@ -886,6 +901,85 @@ app.get("/favicon.ico", (c) =>
   c.body(FAVICON_SVG, 200, {
     "content-type": "image/svg+xml; charset=utf-8",
     "cache-control": "public, max-age=86400",
+  }),
+);
+
+/**
+ * `/llms.txt` — the generative-engine surface.
+ *
+ * Answer engines and agent crawlers look for this file by convention (llmstxt.org):
+ * a short, plain-text, unambiguous statement of what a site offers, so a model can
+ * cite it accurately instead of inferring from marketing HTML. We published none, so
+ * the only thing a crawler could read was the landing page and the OpenAPI spec.
+ *
+ * Written for extraction, not persuasion: one sentence defining the service, the
+ * exact prices, the exact paths, and the limits stated plainly. A model that quotes
+ * this should be correct, including about what the service cannot do.
+ */
+const LLMS_TXT = `# Agent Evidence API
+
+> Cited, source-grounded web evidence and US weather for AI agents. Paid per call in
+> USDC on Base over x402. No API key, no account, no signup.
+
+## What this is
+
+Agent Evidence API is an HTTP and MCP service for AI agents. It has two capabilities:
+
+1. **Evidence and claim verification.** You send a question and up to five public URLs.
+   It fetches those pages, extracts the passages that bear on the question, and returns
+   them with the source URL, retrieval time and content hash, plus an assessment of
+   \`supported\` / \`contradicted\` / \`mixed\` / \`inconclusive\`.
+2. **US weather.** Active National Weather Service alerts for a state, and five-period
+   forecasts for a latitude and longitude.
+
+It is not a web scraper, a search engine, or a crawler. You supply the URLs; the
+service does not find sources for you.
+
+## Price
+
+0.003 USDC per call, on Base (\`eip155:8453\`), paid through x402. Nothing is charged
+when nothing is retrieved: if a request cannot be served, settlement is cancelled.
+
+## Endpoints
+
+- \`POST /v1/evidence\` — paid. Body: \`{"question": string, "urls": string[]}\` (1-5 URLs).
+- \`POST /v1/weather/alerts\` — paid. Body: \`{"state": "TX"}\` (two-letter US state).
+- \`POST /v1/weather/forecast\` — paid. Body: \`{"latitude": number, "longitude": number}\`.
+- \`POST /mcp\` — paid MCP over streamable HTTP. Tools: \`research_evidence\` (paid),
+  \`sample\` (free), \`health\` (free).
+- \`POST /weather/mcp\` — paid MCP. Tools: \`get-alerts\`, \`get-forecast\`, \`health\`.
+
+## Free, without paying
+
+- \`GET /health\` — liveness.
+- \`GET /demo\` and \`GET /demo.json\` — one complete, unedited evidence package produced
+  by a real paid call, so the output can be judged before anything is bought.
+- \`GET /\` — a capability document listing every endpoint and price.
+- MCP \`initialize\`, \`tools/list\` and the \`sample\` tool are free on both MCP endpoints.
+
+## Machine-readable
+
+- \`/.well-known/x402\` — the x402 capability manifest, all five paid resources.
+- \`/openapi.json\` — the OpenAPI 3.1 discovery contract.
+
+## Limits, stated plainly
+
+- Weather is US only: it is the US National Weather Service's data.
+- Evidence is retrieved from the URLs you supply; there is no built-in search.
+- Assessment uses deterministic lexical matching, not semantic reasoning. When a
+  question asks more than one thing and only one source contributed a matching
+  passage, the service answers \`inconclusive\` rather than guessing.
+
+## Source
+
+https://github.com/Thx93/agent-evidence-api
+`;
+
+app.get("/llms.txt", (c) =>
+  c.body(LLMS_TXT, 200, {
+    "content-type": "text/plain; charset=utf-8",
+    "cache-control": "public, max-age=3600",
+    "access-control-allow-origin": "*",
   }),
 );
 

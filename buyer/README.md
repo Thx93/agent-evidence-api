@@ -137,6 +137,37 @@ except as a signed payment authorisation. **Use a dedicated low-balance wallet.*
 
 Evidence, not truth.
 
+## FAQ
+
+**Do I need an API key?**
+No. There is nothing to sign up for. The CLI pays per call in USDC on Base from the
+wallet you give it.
+
+**How much does a call cost?**
+0.003 USDC, and nothing when nothing is retrieved — if the service cannot deliver
+evidence, settlement is cancelled.
+
+**Where do I get a wallet?**
+Any Base wallet works. The CLI reads the key from `X402_PRIVATE_KEY` or
+`X402_PRIVATE_KEY_FILE` and never sends it anywhere; only a signed payment
+authorisation leaves the process.
+
+**Can I see the output before paying?**
+Yes — `GET https://agent-evidence-api.thx93.workers.dev/demo.json` is one complete,
+unedited package from a real paid call.
+
+**How is this different from a search engine?**
+It is not one. You supply the URLs; the CLI sends them and returns the passages that
+bear on your question, with the source URL, retrieval time and content hash.
+
+**What happens if a source is unreachable?**
+It is reported per source and does not fail the whole request. If nothing at all is
+retrieved, you are not charged.
+
+**Does it work as an MCP tool?**
+Yes — the same service is exposed over MCP at `POST /mcp` (tools `research_evidence`,
+`sample`, `health`).
+
 ## Licence
 
 MIT

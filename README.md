@@ -99,6 +99,43 @@ Verified against the live deployment: a request whose sources all fail returns
 502 `NO_SOURCES_RETRIEVED`, and a request with one good source plus one dead one
 returns 200.
 
+## FAQ
+
+**What is Agent Evidence API?**
+An HTTP and MCP service for AI agents that returns cited, source-grounded evidence from
+public web pages, plus US weather from the National Weather Service. You send a question
+and up to five URLs; it returns the passages that bear on the question with their source
+URL, retrieval time and content hash, and an assessment of `supported`, `contradicted`,
+`mixed` or `inconclusive`.
+
+**Do I need an API key or an account?**
+No. There is nothing to sign up for. Payment is per call in USDC on Base over x402, so an
+agent with a wallet can pay for exactly what it uses.
+
+**How much does it cost?**
+0.003 USDC per call. Nothing is charged when nothing is retrieved — if a source cannot be
+fetched or no evidence is delivered, settlement is cancelled.
+
+**Can I see the output before paying?**
+Yes. `GET /demo` (HTML) and `GET /demo.json` serve one complete, unedited evidence
+package from a real paid call. The MCP `sample` tool returns the same thing, free.
+
+**How is this different from a search engine or a scraper?**
+It is neither. You supply the URLs; the service does not discover sources for you. What
+it adds is provenance: every excerpt is tied to a real retrieval, with a timestamp and a
+content hash, so a claim can be traced back to what the page actually said.
+
+**What are its limits?**
+Matching is deterministic and lexical, not semantic. When a question asks more than one
+thing and only one source contributed a matching passage, the service answers
+`inconclusive` rather than guessing. Weather is US only, because the data is the US
+National Weather Service's.
+
+**How do I call it from an agent?**
+Over HTTP (`POST /v1/evidence`) or MCP (`POST /mcp`). The buyer CLI is zero-install:
+`curl -fsSL https://agent-evidence-api.thx93.workers.dev/buy.mjs -o buy.mjs`, or
+`npx @thx93/x402-evidence`.
+
 ## Market analysis
 
 **[docs/market-analysis.md](./docs/market-analysis.md)** — what the x402 economy
