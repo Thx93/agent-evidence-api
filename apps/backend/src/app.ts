@@ -279,12 +279,23 @@ const WEATHER_MCP_DISCOVERY = declareDiscoveryExtension({
 });
 
 /** One line shown to buyers browsing the x402 catalogue for the weather route. */
+/**
+ * Written so the phrases a buyer would actually type appear literally.
+ *
+ * Measured in the catalogue: searching "forecast" ranked us first, but
+ * "weather forecast" and "5-day forecast" did not find us at all, even though both
+ * words were already present in this text and "forecast" was a tag. The difference
+ * is adjacency - the words existed, the phrases did not. Since these strings are
+ * what a catalogue matches on, the phrases are now spelled out rather than left to
+ * be inferred from a sentence that happens to contain both words.
+ */
 const WEATHER_CATALOGUE_DESCRIPTION =
-  "US weather for AI agents: get-alerts returns every active National Weather " +
-  "Service alert for a state code - the event, the area it covers, its severity " +
-  "and the official instruction. get-forecast returns the next five forecast " +
-  "periods for a latitude and longitude. Read-only weather lookup, US locations " +
-  "only.";
+  "US weather forecast and weather alerts for AI agents. get-forecast returns a " +
+  "5-day forecast for a latitude and longitude: temperature, wind speed and " +
+  "direction, and the plain-language conditions for each period. get-alerts returns " +
+  "every active National Weather Service alert for a two-letter state code - the " +
+  "event, the area it covers, its severity and the official instruction. Read-only " +
+  "US weather data, no API key required.";
 
 const WEATHER_CATALOGUE_TAGS = [
   "weather",
