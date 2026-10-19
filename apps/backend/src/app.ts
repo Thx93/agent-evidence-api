@@ -208,6 +208,25 @@ const MCP_DISCOVERY = declareDiscoveryExtension({
  * One line shown to buyers browsing the x402 catalogue, where it is the whole
  * pitch. Shared by the HTTP and MCP routes so the two listings cannot drift.
  */
+/**
+ * The name a catalogue shows and matches on - not the product's name.
+ *
+ * Measured on agentic.market (2026-10-19): that marketplace matches the SERVICE NAME,
+ * not descriptions. Queries appearing only in our description - "retrieval time",
+ * "content hash", "passages that support" - return nothing, while "evidence" returns
+ * us, because the name is `agent-evidence-api`. So the weather capabilities we just
+ * published over HTTP were undiscoverable there by name.
+ *
+ * This is deliberately separate from SERVICE_NAME, which is the product's identity in
+ * health responses and documentation and should not churn for a listing's sake. Only
+ * the catalogue metadata uses this.
+ *
+ * "evidence" is kept, and kept first: the evidence listings are first for several
+ * queries and the point of the change is to add a word, not to trade one away. The
+ * PayAI rankings are re-measured after every change to this string.
+ */
+const CATALOGUE_SERVICE_NAME = "Agent Evidence API & US Weather";
+
 const CATALOGUE_DESCRIPTION =
   "Verify a claim or fact check a statement against public web sources: send a " +
   "question and up to 5 URLs, get cited evidence - passages that support, " +
@@ -609,7 +628,7 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
       ...(config.x402.publicResourceUrl ? { resource: config.x402.publicResourceUrl } : {}),
       accepts: paymentOption,
       description: CATALOGUE_DESCRIPTION,
-      serviceName: SERVICE_NAME,
+      serviceName: CATALOGUE_SERVICE_NAME,
       tags: CATALOGUE_TAGS,
       // Without this the validator reports "No bazaar extension in top-level
       // extensions object" and the route is not catalogued.
@@ -624,7 +643,7 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
       description:
         "US weather alerts: active National Weather Service alerts for a two-letter state " +
         "code - the event, the area, its severity and the official instruction.",
-      serviceName: SERVICE_NAME,
+      serviceName: CATALOGUE_SERVICE_NAME,
       tags: WEATHER_CATALOGUE_TAGS,
       extensions: { ...WEATHER_ALERTS_DISCOVERY },
       unpaidResponseBody,
@@ -638,7 +657,7 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
         "US weather forecast: the next five National Weather Service forecast periods " +
         "for a latitude and longitude - temperature, wind speed and direction, and the " +
         "plain-language forecast.",
-      serviceName: SERVICE_NAME,
+      serviceName: CATALOGUE_SERVICE_NAME,
       tags: WEATHER_CATALOGUE_TAGS,
       extensions: { ...WEATHER_FORECAST_DISCOVERY },
       unpaidResponseBody,
@@ -665,7 +684,7 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
   /** Shared by both MCP routes so the two cannot drift on terms or error text. */
   const sharedMcpRoute = {
     accepts: paymentOption,
-    serviceName: SERVICE_NAME,
+    serviceName: CATALOGUE_SERVICE_NAME,
     unpaidResponseBody,
     // Verification can succeed while settlement fails (for example the buyer's
     // balance moved between the two). Do not leave them guessing.

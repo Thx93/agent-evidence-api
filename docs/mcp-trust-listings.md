@@ -357,3 +357,40 @@ check exists only for the http branch. Rejected for two reasons:
 
 The honest route is the one already taken: reported to cdp-sdk#850 with a
 reproduction, and left for them to fix.
+
+## The catalogue name: renamed, measured, kept (2026-10-19)
+
+agentic.market matches the **service name**, not descriptions. Measured: queries that
+appear only in our description - "retrieval time", "content hash", "passages that
+support" - return nothing, while "evidence" returns us because the name is
+`agent-evidence-api`. That is why the weather capabilities published over HTTP were
+undiscoverable there by name.
+
+So the catalogue name is now **"Agent Evidence API & US Weather"** - a separate
+constant from `SERVICE_NAME`, which remains the product's identity in health responses
+and documentation and should not churn for a listing's sake.
+
+It was changed as a measured experiment, with the PayAI rankings taken before and
+after:
+
+| query | before | after |
+| --- | --- | --- |
+| claim verification | #1 | #1 |
+| fact checking | #1 | #1 |
+| sources | #1 | #1 |
+| evidence | #1 | #1 |
+| source verification | #1 | #1 |
+| citations | #10 | **#9** |
+| weather / national weather service / 5-day forecast | #1 | #1 |
+| temperature | #2 | #2 |
+| weather alerts | #3 | #3 |
+
+Nothing regressed and one query improved, so it stays. "evidence" is kept and kept
+first: the point was to add a word, not trade one away.
+
+**What it did not do.** agentic.market still does not return us for "weather" or
+"weather alerts", because CDP's Bazaar records lag: their `serviceName` is still the
+old string, with `lastUpdated` from before the change, and a settled call did not
+refresh it. Their ingestion is asynchronous, so that surface may follow later - or may
+never, if the name it displays comes from somewhere we do not control. Not claimed
+either way until it is observed.
