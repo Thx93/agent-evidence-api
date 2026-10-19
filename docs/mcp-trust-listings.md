@@ -118,3 +118,36 @@ That worked against the workspace's existing GitHub credential and issued a regi
 JWT good for about five minutes — publish in the same breath. The interactive device
 code expires in roughly fifteen minutes and, once missed, has to be re-requested,
 which is exactly what happened the first time.
+
+## How the PayAI catalogue actually ranks (measured 2026-10-19)
+
+Two signals were tested by changing them and re-measuring the same queries.
+
+**Descriptions match phrases, not just words.** Our weather description contained
+"weather" and "forecast", and `forecast` was a tag, yet "forecast" ranked us first
+while "weather forecast" and "5-day forecast" did not find us at all. After spelling
+the phrases out literally:
+
+| query | before | after |
+| --- | --- | --- |
+| `5-day forecast` | absent | **#1** |
+| `temperature` | #5 | **#2** |
+| `weather alerts` | - | #3 |
+
+`weather forecast` is still absent, so this explains part of the behaviour rather
+than all of it.
+
+**`serviceName` is a strong ranking signal - and cannot be overridden per route.**
+Searching "weather forecast" returns entries *named* "Weather forecast (US)",
+"Datakoot Weather & Geo" and "weather-forecast-<city>". Both of our routes reported
+`serviceName: agent-evidence-api`, which contains neither word, so the weather
+listing was described as weather but not named weather.
+
+Setting `serviceName` on the weather route alone (spread the shared route config, then
+override the field) did not rename it - it **cleared** the field. The catalogue entry
+for `/weather/mcp` went from `"agent-evidence-api"` to `undefined`, while `/mcp` and
+`/v1/evidence` were unaffected. That was reverted and the entries verified restored.
+
+So: the name is the signal that places for a name-shaped query, and this route config
+does not accept overriding it. Improving weather's name means changing the shared
+service name, which would rename all three resources - a decision, not a tweak.
