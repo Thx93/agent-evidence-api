@@ -885,3 +885,34 @@ The fuller checklist, for a deployment from scratch:
 
 Per SPEC §43: do not fake or invent any of these, and do not claim the deployment
 works until each step has actually been performed and observed.
+
+
+## The host disk fills up, and a full disk looks like a code failure
+
+Seen 2026-10-19: `deploy-backend.sh` failed at
+
+```
+ERR_PNPM_PACKAGE_MANAGER_CREATE_SLOT_DIR
+  Failed to create virtual store slot directory at "/prod/backend/node_modules/.pnpm/jose@5.10.0":
+  No space left on device (os error 28)
+```
+
+The change being deployed was fine. The host was at 100% - 46MB free of 58GB - and
+`pnpm deploy` could not create its virtual store. Nothing about the error suggests
+disk unless the `os error 28` is read carefully.
+
+Before suspecting the code, check:
+
+```bash
+df -h /            # free space
+docker system df   # image/container/volume usage
+du -xhd1 /tmp /root | sort -rh | head
+```
+
+Clearing only what is disposable - `npm cache clean --force`, `/tmp/node-compile-cache`,
+`/tmp/npm-cache`, and `docker image prune -f` for dangling images - took the host from
+46MB free to 11GB. Volumes were not touched: the usage log lives in one.
+
+Note the script behaved correctly under the failure: it stopped before switching the
+live container, so production kept serving the previous version rather than going
+down.
