@@ -316,3 +316,44 @@ This does not say there is no demand for claim verification - 402oracle.com carr
 settlement history in agent402's index, so some exists. It says the demand that
 moves real volume is for things an agent needs on every loop, not for a narrow
 verification tool it needs occasionally.
+
+## agentic.market: the buyer-facing surface, and what it shows (2026-10-19)
+
+CDP's Bazaar has a storefront. agentic.market says it plainly in its own FAQ: *"If
+your service/endpoints are indexed on the Bazaar, you'll automatically show up on
+agentic.market."* We are Bazaar-indexed for `/v1/evidence`, and the consequence is
+verifiable:
+
+```
+https://agentic.market/services/agent-evidence-api-thx93-workers-dev
+
+  agent-evidence-api · agent-evidence-api.thx93.workers.dev
+  Avg / request  $0.003
+  Endpoints      1
+  crawlable route  POST /v1/evidence
+```
+
+Searching its palette for "evidence" returns us among the results. So the Bazaar
+listing is not paperwork - it is a storefront a buyer can find us on, and it needed
+no registration and no fee.
+
+### Endpoints: 1 is the cost of the preflight bug
+
+The page lists one route, not three. The two MCP routes cannot pass CDP's preflight
+(`bazaar.info.input.method` fails as "Skipped: input type is not http"), so they are
+not in the Bazaar, so they are not here. That is why a search for "weather alerts" or
+"claim verification" on agentic.market does not return us while 402oracle appears for
+both - it has more endpoints to match on.
+
+**The workaround is available and deliberately not taken.** Declaring
+`input.type: "http"` instead of `"mcp"` would likely satisfy the validator, since the
+check exists only for the http branch. Rejected for two reasons:
+
+1. It is a misdeclaration. The body is JSON-RPC; `"mcp"` is the accurate label and
+   `"http"` is the one that merely passes.
+2. It risks an asset that works. Our PayAI weather entries are first for several
+   queries and are keyed on the MCP `toolName`; re-declaring the input type could
+   drop that key and reset listings we already have.
+
+The honest route is the one already taken: reported to cdp-sdk#850 with a
+reproduction, and left for them to fix.
