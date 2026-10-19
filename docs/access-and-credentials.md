@@ -212,21 +212,45 @@ GitHub workflows publish via OIDC with a signed provenance attestation and no se
 at all. The CI plumbing is already proven - the workflow reaches npm and npm signs
 the provenance statement before rejecting the PUT for want of a trust relationship.
 
-**The one thing that cannot be done from a sandbox:** npm masks the auth URL in
-non-TTY output (`https://www.npmjs.com/auth/cli/***`), so the OTP flow has to be
-completed from a real terminal:
+**Corrected 2026-10-19:** an earlier revision of this file said the step could only
+be done from a real terminal, because npm masks the auth URL in non-TTY output
+(`https://www.npmjs.com/auth/cli/***`, and `authId=***`, including in the debug logs
+under `.npm-cache/_logs`). That is true about the URL - it cannot be recovered
+headlessly - but it is not the only way in. **npm accepts the code directly**, which
+removes the browser step entirely:
 
 ```bash
-npm login                     # as thx93, if not already
 npm trust github "@thx93/mcp-weather-server" --file publish.yml \
-  --repo Thx93/mcp-weather-server --allow-publish
+  --repo Thx93/mcp-weather-server --allow-publish --otp=<6-digit code>
+
 npm trust github "@thx93/x402-evidence" --file publish.yml \
-  --repo Thx93/agent-evidence-api --allow-publish
+  --repo Thx93/agent-evidence-api --allow-publish --otp=<6-digit code>
 ```
+
+Verified by feeding a deliberately wrong code: npm answered
+"requires a one-time password from your authenticator" rather than "unknown
+positional argument", so the flag is parsed and only the value was rejected. The
+`npm_config_otp` environment variable works identically. A genuine code from the
+account's authenticator completes the operation in one shot, from anywhere.
 
 `--allow-publish` is not optional: configurations created after 2026-09-03 default
 to `npm stage publish` only, which stages a release for a maintainer to approve, and
 that approval needs 2FA and cannot be automated.
+
+Once trust exists, publishing needs no code at all - the GitHub workflow exchanges an
+OIDC token and npm signs a provenance attestation, which the CI logs already show
+happening before the trust relationship is what stops the PUT.
+
+For completeness, the same relationship can be POSTed to the registry directly. The
+body shape, discovered by probing, is:
+
+```json
+[{"type":"github","permissions":["createPackage"],
+  "claims":{"repository":"<owner>/<repo>","workflow_ref":{"file":"publish.yml"}}}]
+```
+
+`POST /-/package/<url-encoded name>/trust` with that body answers `Unauthorized` for
+a normal token, so the CLI path above is the one that works.
 
 After each command prints a URL, open it and approve. Then Actions → "Publish to
 npm" → Run workflow in each repository.
