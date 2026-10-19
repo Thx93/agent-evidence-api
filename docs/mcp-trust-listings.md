@@ -151,3 +151,40 @@ for `/weather/mcp` went from `"agent-evidence-api"` to `undefined`, while `/mcp`
 So: the name is the signal that places for a name-shaped query, and this route config
 does not accept overriding it. Improving weather's name means changing the shared
 service name, which would rename all three resources - a decision, not a tweak.
+
+### Decisions taken from those measurements (2026-10-19)
+
+**The shared service name stays.** Renaming it to contain "weather" would rename all
+three resources, and the evidence listings are currently first for the queries their
+name earns:
+
+| query | rank |
+| --- | --- |
+| `evidence` | #1 |
+| `agent evidence` | #1 |
+| `web evidence` | #1 |
+| `source verification` | #1 |
+| `verify claim` | #2 |
+
+Trading four first places on the evidence service for one weather query that
+competitors win on their *name* ("Weather forecast (US)") is not a good exchange, and
+it is not a call to make silently. Per-route naming is not available - see below - so
+the only lever is a second deployment.
+
+**Per-route naming is genuinely unavailable, not merely awkward.** Two places were
+tried and both are closed:
+
+1. Setting `serviceName` on the route config **clears** the field rather than
+   overriding it (measured; reverted).
+2. The bazaar extension has no room for it either - `extensions.bazaar.info` and its
+   schema allow exactly `type, toolName, description, transport, inputSchema, example,
+   method`.
+
+**A second catalogue entry for `get-forecast` was considered and rejected.** The
+weather route hardcodes `toolName: "get-alerts"`, so a call to `get-forecast` is
+catalogued under `get-alerts` and there is no fourth entry. Making the declaration
+dynamic is possible - the 402 is written from the middleware result in one branch, so
+its `toolName` could be rewritten per call - but `forecast` already ranks #1 while
+`weather forecast` does not, and that query is won on service name. A second entry
+sharing the same name would not fix a name-shaped query, so the change would add risk
+to the payment path for no measured gain.
