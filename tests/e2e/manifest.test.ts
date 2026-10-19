@@ -88,13 +88,18 @@ describe("the manifest is public", () => {
 });
 
 describe("the manifest describes both resources", () => {
-  test("lists exactly the HTTP, MCP and weather endpoints", () => {
-    assert.equal(manifest.resources.length, 3);
+  test("lists every paid route, HTTP and MCP, evidence and weather", () => {
+    // Five, not three: the weather capabilities were MCP-only until the HTTP routes
+    // were added so they could pass CDP's preflight and enter the Bazaar. A manifest
+    // that omits them is the document a crawler reads and finds half the service in.
+    assert.equal(manifest.resources.length, 5);
     assert.deepEqual(
       manifest.resources.map((r) => r.url).sort(),
       [
         "https://agent-evidence-api.example.invalid/mcp",
         "https://agent-evidence-api.example.invalid/v1/evidence",
+        "https://agent-evidence-api.example.invalid/v1/weather/alerts",
+        "https://agent-evidence-api.example.invalid/v1/weather/forecast",
         "https://agent-evidence-api.example.invalid/weather/mcp",
       ],
     );

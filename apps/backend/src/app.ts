@@ -1121,6 +1121,24 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
             accepts: [accept(httpResource)],
           },
           {
+            url: weatherHttpUrl("/v1/weather/alerts"),
+            method: "POST",
+            description:
+              "US weather alerts over HTTP: every active National Weather Service alert for a " +
+              "two-letter state code - the event, the area it covers, its severity and the " +
+              "official instruction. Needs no API key and no account. US locations only.",
+            accepts: [accept(weatherHttpUrl("/v1/weather/alerts"))],
+          },
+          {
+            url: weatherHttpUrl("/v1/weather/forecast"),
+            method: "POST",
+            description:
+              "US weather forecast over HTTP: the next five National Weather Service forecast " +
+              "periods for a latitude and longitude - period name, temperature, wind speed and " +
+              "direction, and the plain-language forecast. Needs no API key. US locations only.",
+            accepts: [accept(weatherHttpUrl("/v1/weather/forecast"))],
+          },
+          {
             url: mcpResource,
             method: "POST",
             description:
