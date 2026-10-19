@@ -31,7 +31,7 @@ from what is already implemented in the repository. See
 ┌──────────────▼───────────────┐
 │  Backend VPS (Fastify + TS)  │
 │  POST /internal/v1/evidence  │
-│  POST /internal/v1/weather/*  │
+│  POST /internal/v1/weather/* │
 │  ANY  /mcp, /weather/mcp     │
 │      │                       │
 │      └─▶ EvidenceService ─┬─▶ @aee/fetcher     (SSRF-hardened fetch)
