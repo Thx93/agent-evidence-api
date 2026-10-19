@@ -31,7 +31,8 @@ from what is already implemented in the repository. See
 ┌──────────────▼───────────────┐
 │  Backend VPS (Fastify + TS)  │
 │  POST /internal/v1/evidence  │
-│  ANY  /mcp                   │
+│  POST /internal/v1/weather/*  │
+│  ANY  /mcp, /weather/mcp     │
 │      │                       │
 │      └─▶ EvidenceService ─┬─▶ @aee/fetcher     (SSRF-hardened fetch)
 │                           ├─▶ @aee/extraction (parse, normalise, rank)
@@ -145,7 +146,10 @@ The backend exposes internal endpoints:
 
 ```text
 POST /internal/v1/evidence
+POST /internal/v1/weather/alerts
+POST /internal/v1/weather/forecast
 ANY  /mcp
+ANY  /weather/mcp
 ```
 
 The Worker forwards to these paths and attaches a server-to-server credential:

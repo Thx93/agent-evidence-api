@@ -494,7 +494,14 @@ different shapes:
 | Route | Declares | Shelf |
 |---|---|---|
 | `POST /v1/evidence` | `type: "http"` + method + body example | ~6,567 |
+| `POST /v1/weather/alerts` | `type: "http"` + method + body example | - |
+| `POST /v1/weather/forecast` | `type: "http"` + method + body example | - |
 | `POST /mcp` | `type: "mcp"` + `toolName` + `transport` + `inputSchema` | ~33 |
+| `POST /weather/mcp` | `type: "mcp"` + `toolName` + `transport` + `inputSchema` | - |
+
+The two weather HTTP routes exist because MCP cannot pass CDP's preflight - it rejects
+every MCP input type - so an MCP-only capability never reaches the Bazaar, and the
+Bazaar is what agentic.market indexes. The same capability over HTTP does.
 
 So once a payment settles, this service should appear on **both** — including the
 MCP shelf, where MCP-aware agents look and where there is far less to compete

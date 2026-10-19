@@ -574,7 +574,8 @@ Cloudflare Worker          ← payment gate, the only public surface
 protected origin           ← reachable only via the Worker
    │
    ▼
-VPS backend (Fastify)      ← POST /internal/v1/evidence, ANY /mcp
+VPS backend (Fastify)      ← POST /internal/v1/evidence, POST /internal/v1/weather/*,
+                             ANY /mcp, ANY /weather/mcp
 ```
 
 ### The backend is never anonymous
@@ -614,7 +615,10 @@ transport that can authenticate.
 
 ```text
 POST /internal/v1/evidence
+POST /internal/v1/weather/alerts
+POST /internal/v1/weather/forecast
 ANY  /mcp
+ANY  /weather/mcp
 ```
 
 The `/internal/` prefix is a naming convention, not a security control. The

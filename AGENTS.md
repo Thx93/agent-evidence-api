@@ -18,11 +18,13 @@ An agent submits a question/claim plus optional URLs. The service fetches those
 public sources, extracts and normalises content, records provenance, and returns
 a structured evidence package so the agent can ground its answer in sources.
 
-The single capability of v0.1.0:
+The capabilities:
 
 > agent-accessible web evidence and claim verification
 
-It is reachable by agents over **both** HTTP and MCP. Payment is **x402 + USDC on
+and, added later, US weather from the National Weather Service (`get-alerts` and
+`get-forecast`). Both are reachable by agents over **both** HTTP and MCP, and neither
+needs an API key or an account. Payment is **x402 + USDC on
 Base**. The public edge is a **Cloudflare Worker (Free plan)**; heavy work runs on
 the Linux VPS.
 
