@@ -82,6 +82,29 @@ WEATHER_GATE=$(curl -s -m 30 -o /dev/null -w '%{http_code}' -X POST "$W/weather/
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get-alerts","arguments":{"state":"CA"}}}' 2>/dev/null)
 expect "weather paid tool is gated" 402 "$WEATHER_GATE"
 
+echo "=== the weather HTTP routes ==="
+# Same lesson as the section above, one layer along: these routes were added so the
+# weather capability could enter the Bazaar at all, and the checks above cover
+# /v1/evidence and the two MCP endpoints. A route that is not in this script is a
+# route whose breakage this script would report as a sellable service.
+for ROUTE in alerts forecast; do
+  CODE=$(curl -s -m 30 -o /dev/null -w '%{http_code}' -X POST "$W/v1/weather/$ROUTE" \
+    -H 'content-type: application/json' -d '{}' 2>/dev/null)
+  if [ "$CODE" = "402" ]; then pass "weather HTTP: $ROUTE is gated" "402"; else fail "weather HTTP: $ROUTE" "expected 402, got $CODE"; fi
+
+  CDP_W=$(curl -s -m 60 -X POST "https://api.cdp.coinbase.com/platform/v2/x402/validate" \
+    -H 'content-type: application/json' \
+    --data "{\"resource\":\"$W/v1/weather/$ROUTE\",\"method\":\"POST\"}" 2>/dev/null \
+    | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const j=JSON.parse(d);let f=0;for(const c of (j.preflight||[]))if(!c.passed&&c.severity==="required")f++;process.stdout.write(j.valid&&f===0?"accepted":("rejected/"+f))}catch{process.stdout.write("error")}})')
+  if [ "$CDP_W" = "accepted" ]; then pass "weather HTTP: $ROUTE passes CDP preflight" "accepted"; else fail "weather HTTP: $ROUTE preflight" "$CDP_W"; fi
+done
+
+# The manifest is the document a crawler reads. Declaring three resources when five
+# are served is how a crawler finds half the service.
+MANIFEST_COUNT=$(curl -s -m 30 "$W/.well-known/x402" 2>/dev/null \
+  | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{process.stdout.write(String((JSON.parse(d).resources||[]).length))}catch{process.stdout.write("error")}})')
+if [ "$MANIFEST_COUNT" = "5" ]; then pass "manifest declares every paid route" "5"; else fail "manifest resource count" "$MANIFEST_COUNT (expected 5)"; fi
+
 echo "=== the MCP challenge is cataloguable ==="
 # The MCP paywall moved to the backend so that a settled MCP call is catalogued by
 # the CDP Bazaar. That only works if the 402 challenge declares the MCP tool shape
