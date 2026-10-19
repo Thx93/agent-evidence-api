@@ -188,3 +188,53 @@ its `toolName` could be rewritten per call - but `forecast` already ranks #1 whi
 `weather forecast` does not, and that query is won on service name. A second entry
 sharing the same name would not fix a name-shaped query, so the change would add risk
 to the payment path for no measured gain.
+
+## agent402.tools: crawled, indexed, and gated on real demand (2026-10-19)
+
+A cross-seller x402 index with a "Smart Order Router" that resolves a task to the
+best seller across the ecosystem. It is worth knowing about because it is the first
+aggregator found that **already lists us without being asked**, and because of what
+it says about *why* it will not send us orders.
+
+`GET https://agent402.tools/api/index?seller=agent-evidence-api.thx93.workers.dev`
+is free and returns the full row for one origin:
+
+```
+displayName    : Agent Evidence API
+toolCount      : 3            (all three tools, with their descriptions)
+discoveryPath  : /.well-known/x402
+history        : [1,1,1,1,1]  last five crawls, oldest first: our manifest parsed every time
+health         : 1
+routable       : true
+networks       : ["eip155:8453"]
+payTo          : 0x9c0e…55FD0
+
+paywall        : { ok: false, status: 502, at: 2026-10-18T01:35:56Z }
+routerDispatchEligible : false
+routerDispatchReason   : settlement_required
+routerDispatchByChain  : base -> "below the settlement floor"
+```
+
+Two readings, one of which is a non-issue and one of which is the whole story.
+
+**The 502 is stale, not a defect.** It was recorded at 01:35 on 2026-10-18, while the
+tunnel was down; every route answers correctly now (`POST /v1/evidence` with an empty
+object returns 402, `/.well-known/x402` returns 200, deep health is ok). Their crawler
+re-reads us - `fetchedAt` was current - so the failed paywall probe is a snapshot of
+the outage, not of the service.
+
+**The router gate is demand, and it is not ours to fake.** `settlement_required` with
+"below the settlement floor" means their order router will not dispatch a task to us
+until we have proven settled volume on-chain. Their own docs describe the tier above
+it: sellers with settlement history are routable, while an unproven seller is tried
+only after every proven candidate.
+
+Their `/api/find` catalogue search returns only their own tools, so external sellers
+surface through the index and the router - and the router is closed until money has
+moved to us from someone else. Which is the objective, stated by a third party as a
+precondition rather than as a marketing claim.
+
+**Deliberately not done:** our own paid calls settle to this same payTo, so making
+enough of them would cross the floor. That would be manufacturing settlement history
+to unlock a router built to measure real demand, and it is exactly the self-purchase
+the goal forbids. The floor stays where it is.
