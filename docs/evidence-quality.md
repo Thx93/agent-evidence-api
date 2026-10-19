@@ -112,9 +112,26 @@ schema allows the field, and the validator answers with the same message. The ch
 short-circuits on `input.type` rather than on the field, so an MCP resource cannot
 pass CDP's preflight at all.
 
-The HTTP route passes all 25 checks, so this is specific to MCP input type. Whether
-their catalogue requires `valid: true` to index a resource is not documented; the
-HTTP route is valid and still absent, so something else gates it too.
+The HTTP route passes all 25 checks, so this is specific to MCP input type.
+
+**Correction, 2026-10-19: the HTTP route IS indexed.** The paragraph that used to sit
+here said it was "valid and still absent". That came from scanning the general
+`discovery/resources` list, which is a paged browse view - 25,818 entries, filter
+params silently ignored - and finding nothing there says nothing about whether a
+particular seller is indexed. The authoritative question is merchant-scoped:
+
+```
+GET /platform/v2/x402/discovery/merchant?payTo=0x9c0e...55FD0
+-> { total: 1 }
+   https://agent-evidence-api.thx93.workers.dev/v1/evidence
+```
+
+The record carries our current description, the $0.003 price, Base USDC and our payTo,
+so it is live rather than vestigial. This is the same check CDP's maintainer used in
+cdp-sdk#849 to tell other sellers their endpoints were indexed.
+
+Accurate position: **the HTTP evidence route is in the CDP Bazaar; the two MCP routes
+cannot pass their preflight and are not.**
 
 ## Why the CDP Bazaar does not list us — what is actually known
 
