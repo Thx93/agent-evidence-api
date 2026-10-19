@@ -115,3 +115,40 @@ pass CDP's preflight at all.
 The HTTP route passes all 25 checks, so this is specific to MCP input type. Whether
 their catalogue requires `valid: true` to index a resource is not documented; the
 HTTP route is valid and still absent, so something else gates it too.
+
+## Why the CDP Bazaar does not list us — what is actually known
+
+The absence is not specific to this service. Coinbase's issue tracker carries the
+same symptom from several sellers, all of them **native MCP** resources:
+
+| issue | state | subject |
+| --- | --- | --- |
+| cdp-sdk#850 | open | "SI native MCP resource absent after successful CDP settlement" |
+| cdp-sdk#844 | closed | "SeekAPI MCP resource remains processing and unindexed" |
+| cdp-sdk#849 | closed | "Settled Base mainnet payments not indexed — v2 bazaar extension present" |
+| cdp-sdk#843 | closed | "Bazaar discovery: selective ingestion — fresh settlements never index" |
+
+Two causes are documented by CDP's own maintainer, and they are ruled out or
+confirmed here:
+
+**1. The MCP handshake must be free.** From #844: *"the MCP initialize handshake
+returned HTTP 402, but the CDP Bazaar requires the handshake and `tools/list` to
+succeed without payment; it expects x402 payment requirements only from the selected
+tools/call request."* Tested against our routes with their own probe pattern
+(`User-Agent: CoinbaseBazaarDiscovery/1.0`, `protocolVersion: 2025-03-26`):
+`initialize` → **200**, `tools/list` → **200**, on both `/mcp` and `/weather/mcp`. So
+this cause does not apply to us.
+
+**2. The settlement payload must carry `resource`.** From #843: *"your settlements
+don't appear to have `paymentPayload.resource` attached, which is needed for
+discovery"* — alongside `paymentPayload.extensions.bazaar`. **Not yet verified for
+our client.** This is the next thing to check, and it is checkable: intercept the
+payload our buyer sends to the facilitator and inspect it.
+
+**3. Separately, their preflight rejects MCP input types.** Reported to #850 with
+reproduction: `bazaar.info.input.method` fails as `"Skipped: input type is not http"`
+for every MCP route, and declaring the method does not change it. Whether ingestion
+runs the same check is the open question put to them.
+
+Practical consequence: paying again would not help. Cause 1 is excluded, cause 2 is
+untested, and cause 3 may be theirs to fix.
