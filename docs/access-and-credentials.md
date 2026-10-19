@@ -54,7 +54,7 @@ its git history. Operator's call.
 | Config | `/root/dsh-workspace/.npmrc` (0600), correctly used as `userconfig` |
 | Account | **thx93** (verified — it appears as `owner` of the `@thx93` scope) |
 | Token | `npm_…`, 40 chars — **rejected**: `/-/whoami` and `/-/npm/v1/user` both 401 |
-| Published packages | none. `@thx93/x402-evidence` and `x402-evidence` both 404 |
+| Published packages | **published 2026-10-19**: `@thx93/x402-evidence@0.1.0` (this repo) and `@thx93/mcp-weather-server@1.1.0` — both resolve on the registry |
 
 The token **worked at 07:12 UTC and started returning 401 at 17:22 UTC the same day**
 (recovered from the npm cache's stored `/-/whoami` success and the log timestamps),
@@ -254,3 +254,25 @@ a normal token, so the CLI path above is the one that works.
 
 After each command prints a URL, open it and approve. Then Actions → "Publish to
 npm" → Run workflow in each repository.
+
+### How it was finally unblocked (2026-10-19)
+
+Three token attempts failed before the right one: a granular token with
+`bypass_2fa: false` (E403 on publish), the same token for the *trust* call (E403,
+wrong scope), and finally a granular token with **bypass two-factor authentication
+enabled** and **"Read and write (publish and stage)"** — not "stage only", which
+stages a release that a maintainer must then promote with 2FA.
+
+With that token `npm publish --access public` succeeded for both packages and the
+registry answered **202 Accepted**; the packages resolved a few minutes later. The
+202 is why they appeared to 404 at first — nothing was wrong, it is asynchronous.
+
+Trusted publishing is still the better end state and still needs one authenticator
+code: a bypass-2FA token is explicitly refused for it —
+
+```
+E403 Granular access tokens that bypass two-factor authentication may not perform this action.
+```
+
+So the token route publishes, and only the code route retires the token. Any token
+issued for this should be revoked once it has done its job.
