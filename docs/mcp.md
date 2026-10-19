@@ -229,6 +229,70 @@ schema:
 
 ---
 
+### `sample`
+
+Free. Returns one real, previously produced evidence package — verdict, sources,
+retrieval times, content hashes and cited excerpts — with no arguments and no cost.
+
+It exists because every other route asks a caller to pay before it can judge whether
+the output is any good. An agent that reaches this tool has already decided to
+interact, and one real response is the cheapest possible proof that the paid call is
+worth $0.003. The package is the same object `/demo.json` serves.
+
+#### Input schema
+
+```json
+{ "type": "object", "properties": {} }
+```
+
+---
+
+### `get-alerts` — on `POST /weather/mcp`
+
+Active National Weather Service alerts for a US state.
+
+| Argument | Type | Required |
+| --- | --- | --- |
+| `state` | string, two-letter US state code | yes |
+
+Returns `{ "alerts": [...] }` — each with `event`, `area`, `severity`, `description`
+and `instructions`. An empty array means no active alerts, not a failure. US
+locations only.
+
+---
+
+### `get-forecast` — on `POST /weather/mcp`
+
+The next five forecast periods for a point.
+
+| Argument | Type | Required |
+| --- | --- | --- |
+| `latitude` | number, −90..90 | yes |
+| `longitude` | number, −180..180 | yes |
+
+Returns `{ "latitude", "longitude", "periods": [...] }` — each period with `name`,
+`temperature`, `temperature_unit`, `wind_speed`, `wind_direction` and
+`detailed_forecast`. A point the NWS does not cover answers with a tool error.
+
+---
+
+## 2b. Two endpoints, one server
+
+| Endpoint | Tools |
+| --- | --- |
+| `POST /mcp` | `research_evidence` (paid), `sample` (free), `health` (free) |
+| `POST /weather/mcp` | `get-alerts` (paid), `get-forecast` (paid), `health` (free) |
+
+Both are declared in the same x402 route table, so a path that is not declared would
+not be charged at all — which is how the weather tools were briefly free before
+`/weather/mcp` was added to it.
+
+The same weather capabilities are also served over plain HTTP at
+`POST /v1/weather/alerts` and `POST /v1/weather/forecast`, because MCP cannot be
+listed in the CDP Bazaar while an HTTP route can. See `docs/api.md` §5 and §6.
+
+---
+
 ## 3. What is free and what is paid
 
 This is the most important property of the MCP surface, and it is deliberate:

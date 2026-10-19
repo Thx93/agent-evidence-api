@@ -69,18 +69,26 @@ what to call before spending anything.
 ```json
 {
   "service": "agent-evidence-api",
-  "version": "0.1.0",
-  "description": "Evidence infrastructure for AI agents. Returns structured, cited, freshly-retrieved evidence from public web pages so an agent can verify claims and ground answers in sources.",
+  "version": "0.1.6",
+  "description": "Evidence and US weather for AI agents. Returns structured, cited, freshly-retrieved evidence from public web pages so an agent can verify claims and ground answers in sources, and serves National Weather Service alerts and forecasts so an agent can answer weather questions without an API key or an account.",
   "endpoints": {
     "health": "GET /health (free)",
+    "demo": "GET /demo (free HTML) and GET /demo.json (free JSON)",
     "evidence": "POST /v1/evidence (paid, x402)",
-    "mcp": "POST /mcp (MCP streamable HTTP; initialize and tools/list are free)"
+    "weatherAlerts": "POST /v1/weather/alerts (paid, x402)",
+    "weatherForecast": "POST /v1/weather/forecast (paid, x402)",
+    "mcp": "POST /mcp (MCP streamable HTTP; initialize and tools/list are free)",
+    "weatherMcp": "POST /weather/mcp (MCP; exposes get-alerts and get-forecast)"
   },
   "mcp": {
     "transport": "streamable-http",
+    "endpoints": { "evidence": "POST /mcp", "weather": "POST /weather/mcp" },
     "tools": {
       "research_evidence": "paid",
-      "health": "free"
+      "sample": "free",
+      "health": "free",
+      "get-alerts": "paid",
+      "get-forecast": "paid"
     }
   },
   "payment": {
@@ -620,7 +628,87 @@ returned; the bad one appears with a warning.
 
 ---
 
-## 5. Error codes
+## 5. `POST /v1/weather/alerts` — paid
+
+Active National Weather Service alerts for a US state. `$0.003`, paid over x402 on
+the same terms as the evidence route.
+
+This route exists in addition to the MCP tool `get-alerts` because MCP cannot be
+listed in the CDP Bazaar: their preflight rejects every MCP input type, so an
+MCP-only capability is invisible on the storefront that indexes the Bazaar. The
+same capability over HTTP is not.
+
+### Request
+
+```json
+{ "state": "TX" }
+```
+
+`state` is a two-letter US state code, case-insensitive. Anything else is
+`400 INVALID_REQUEST`.
+
+### Response `200`
+
+```json
+{
+  "alerts": [
+    {
+      "event": "Flood Advisory",
+      "area": "Clay, TX; Wichita, TX",
+      "severity": "Minor",
+      "description": "…",
+      "instructions": "…"
+    }
+  ]
+}
+```
+
+An empty `alerts` array is a result, not an error: it means no active alerts. If the
+National Weather Service cannot be reached, the route answers
+`502 UPSTREAM_HTTP_FAILURE` and **no payment is taken** — settlement is cancelled
+whenever the handler returns an error status.
+
+---
+
+## 6. `POST /v1/weather/forecast` — paid
+
+The next five National Weather Service forecast periods for a point. `$0.003`.
+
+### Request
+
+```json
+{ "latitude": 37.7749, "longitude": -122.4194 }
+```
+
+`latitude` must be within −90..90 and `longitude` within −180..180. Anything else,
+including numeric strings, is `400 INVALID_REQUEST`.
+
+### Response `200`
+
+```json
+{
+  "latitude": 37.7749,
+  "longitude": -122.4194,
+  "periods": [
+    {
+      "name": "Overnight",
+      "temperature": 54,
+      "temperature_unit": "F",
+      "wind_speed": "8 to 14 mph",
+      "wind_direction": "W",
+      "detailed_forecast": "Mostly cloudy, with a low around 54."
+    }
+  ]
+}
+```
+
+Five periods is a bound, not a truncation notice: it answers "what is the weather
+like" and fits a context window. A location the NWS does not cover (anything outside
+the US) answers `502 UPSTREAM_HTTP_FAILURE`, without charge.
+
+---
+
+## 7. Error codes
 
 Every non-2xx JSON response from the Worker or the backend uses exactly one
 envelope:
@@ -720,7 +808,7 @@ validation is the zod schema in `@aee/schemas` applied by the backend.
 
 ---
 
-## 6. Resource limits
+## 8. Resource limits
 
 Every effective limit is environment-driven. Defaults come from `DEFAULT_LIMITS`
 in `packages/schemas/src/evidence.ts`; the environment variable names are read in
@@ -768,7 +856,7 @@ Be aware of what is enforced today versus designed:
 
 ---
 
-## 7. Caching and provenance
+## 9. Caching and provenance
 
 - Cache keys are normalised URLs (`cacheKey`): scheme and host lower-cased,
   fragment stripped, default ports collapsed, userinfo dropped, tracking
@@ -789,7 +877,7 @@ Be aware of what is enforced today versus designed:
 
 ---
 
-## 8. Observability
+## 10. Observability
 
 Structured JSON logs, one object per line, with a request ID on every request
 (SPEC §24). Recorded fields include duration, source count, successful and failed
