@@ -238,3 +238,54 @@ precondition rather than as a marketing claim.
 enough of them would cross the floor. That would be manufacturing settlement history
 to unlock a router built to measure real demand, and it is exactly the self-purchase
 the goal forbids. The floor stays where it is.
+
+## /openapi.json: the discovery document two indexes require (2026-10-19)
+
+We served `/.well-known/x402` and no OpenAPI spec. Both aggregators wanted the spec.
+
+- **x402scan** is a marketplace and block explorer for paid x402 APIs whose discovery
+  spec is explicit: *"OpenAPI is the canonical discovery contract. Publish your spec at
+  /openapi.json"* - each payable operation carrying `x-payment-info` (a structured USD
+  price plus `protocols`) and a request body schema. Without it the register form
+  answers **"No discovery document found"** and will not list the origin.
+- **agent402** reads `/.well-known/x402` *alongside* `openapi.json`. Our own code
+  comment already recorded that its self-serve registration answered *"Source URL
+  returned HTTP 404"* for us; the file simply did not exist.
+
+It is now served from the backend and proxied by the Worker, with every value derived
+from the same configuration the live challenge uses - price, recipient, network,
+version - because a discovery document that disagrees with the 402 it describes is
+worse than none, and the spec says runtime behaviour is authoritative. The MCP routes
+declare a JSON-RPC envelope rather than being omitted: a missing request schema is
+what x402scan calls an unreliable listing.
+
+Their own audit, run against the deployed origin:
+
+```
+Source:  openapi     Spec: https://agent-evidence-api.thx93.workers.dev/openapi.json
+Routes:  3
+  POST /v1/evidence   paid 0.003 USD  [x402]
+  POST /mcp           paid 0.003 USD  [x402]
+  POST /weather/mcp   paid 0.003 USD  [x402]
+Guidance: 114 tokens
+Warnings: 0        (was 1: FAVICON_MISSING, now served)
+```
+
+### Registered, with the operator's approval
+
+The spec is emphatic that a listing is published only after explicit approval, so the
+origin, routes, prices and audit were put to the operator and registration happened
+only after a yes. Authentication is SIWX (identity-only, no payment), which the
+`agentcash` CLI performs; it needs a writable `HOME`, and its base directory is
+`join(homedir(), ".agentcash")`, so it was run with `HOME` inside the workspace.
+
+```
+POST https://www.x402scan.com/api/x402/registry/register-origin
+{"origin":"https://agent-evidence-api.thx93.workers.dev"}
+
+-> {"registered": 3, "failed": 0, "total": 3, "source": "openapi"}
+```
+
+The other counters - `siwx`, `public`, `apiKey` - are auth-mode tallies, and zero is
+correct for three x402-paid routes. `agentcash discover` re-reads the origin and
+returns all three resources with the guidance intact.
