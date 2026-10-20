@@ -1,0 +1,48 @@
+Hello Simon,
+
+Thanks for reaching out about Thx93/mcp-weather-server.
+
+I tried the form at payforapi.com/add. It requires a minimum price of 0.01 per call,
+and our endpoints are priced at 0.003 USDC, so the form will not accept them. Rather
+than enter a price we do not actually charge, I am taking you up on your second
+option and sending the details directly.
+
+Two services on one origin. Both are USDC on Base over x402 v2, no API key, no
+account, one price each:
+
+1. US Weather Alerts & Forecast
+   https://agent-evidence-api.thx93.workers.dev/v1/weather/alerts
+   Active National Weather Service alerts for a two-letter US state code: the event,
+   the area it covers, its severity and the official instruction. A second endpoint,
+   /v1/weather/forecast, returns five forecast periods for a latitude and longitude.
+   Also over MCP at /weather/mcp as get-alerts and get-forecast. US locations only.
+   Price: 0.003 USDC per call.
+
+2. Agent Evidence API
+   https://agent-evidence-api.thx93.workers.dev/v1/evidence
+   Send a question and up to five public URLs; get back the passages that bear on it,
+   each with its source URL, retrieval time and content hash, plus an assessment of
+   supported, contradicted, mixed or inconclusive. Also over MCP at /mcp.
+   Price: 0.003 USDC per call.
+
+For both: the 402 challenge is at the endpoint, settlement goes directly to
+0x9c0e2B44180439294Fa30Ae2B2a94f8655455FD0, and nothing is charged when no data is
+returned. A complete, unedited sample response from a real paid call is at
+https://agent-evidence-api.thx93.workers.dev/demo.json if it helps you describe it.
+
+Two questions:
+
+- Can you list at 0.003, or should we wait until the floor comes down? I would rather
+  not advertise a price three times what we charge.
+- Is there a Russian description you would want me to review before it goes live? I
+  would rather check the translation than have it say something inaccurate about what
+  the service does.
+
+One small note: your email said "no confirmations", but the form sends a code that has
+to be entered before the card is submitted. Not a problem, just a few minutes of
+working out what was missing.
+
+Thanks for the offer either way.
+
+Thx93
+https://github.com/Thx93/agent-evidence-api

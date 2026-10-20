@@ -163,3 +163,44 @@ to run — not a plan.
    something to do unilaterally to someone's existing handle.
 3. **The landing page indexed.** `x402-market` is a real, quotable artefact; it needs
    a domain with history behind it to rank for anything.
+
+---
+
+## Inbound: payforapi.com free listing (2026-10-20)
+
+A cold email from Simon (`saymon74462@gmail.com`) offering a free listing on
+**payforapi.com**, a bilingual RU/EN x402 marketplace. Verified before acting:
+the site is real, their own endpoints are in the PayAI catalogue
+(`funding.payforapi.com/*`), and they list a public GitHub repo and a Telegram chat.
+
+Three submission paths were tried. All three are blocked for us, for different
+reasons, and none of them is our fault:
+
+| path | result |
+| --- | --- |
+| Form at `payforapi.com/add` | **Blocked by a price floor.** The price field is `min=0.01 step=0.01`; our calls are 0.003. Submitting shows "Value must be greater than or equal to 0.01" and the form will not submit. |
+| Reply to Simon (Gmail) | **`550 5.7.26` "blocked because the sender is unauthenticated"** — Gmail now requires SPF or DKIM. Note this is *newer* than the 2026-09-21 finding above: direct-to-MX over IPv4 used to be accepted by Gmail. It no longer is. |
+| `support@payforapi.com` (mx1.masterhost.ru) | **`550` rejected by their spam filtering engine.** |
+
+The form itself is also worth knowing about: it is a Next.js form whose submit button
+does nothing until every field validates, and a React hydration error (#418) on the
+page means clicks are silently ignored until you notice the validation tooltip. Their
+email says "no confirmations", but the form emails a code that must be entered.
+
+**Not done, deliberately:** listing at 0.01 to satisfy the floor. That would advertise
+three times what we actually charge — a buyer would see 0.01, call, and be quoted
+0.003. Inaccurate catalogue metadata is the thing this project has spent rounds
+removing, not adding.
+
+### What would unblock it
+
+1. **A price decision.** If the operator wants to list here, the price has to be 0.01
+   on this marketplace. That is a business decision with consequences elsewhere: the
+   PayAI entries rank #1 at 0.003, and raising the price to fit one directory could
+   change that.
+2. **A sending domain with SPF and DKIM.** This is now the second time the lack of one
+   has blocked inbound-offer replies. It is the single highest-value thing the operator
+   can provide for outreach, and it is not something this session can obtain.
+
+A draft reply is saved at `docs/payforapi-reply-draft.txt`, ready to send the moment
+there is a domain that can send.
