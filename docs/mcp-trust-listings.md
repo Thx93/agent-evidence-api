@@ -394,3 +394,41 @@ old string, with `lastUpdated` from before the change, and a settled call did no
 refresh it. Their ingestion is asynchronous, so that surface may follow later - or may
 never, if the name it displays comes from somewhere we do not control. Not claimed
 either way until it is observed.
+
+## What a catalogue probe actually needs (2026-10-20)
+
+Trying to list on payforapi.com surfaced three things about our own paywall, each
+found by a third party failing to see it. All three are fixed.
+
+**1. The body of a 402 must contain the terms.** Ours carried a generic error and put
+the x402 PaymentRequired object only in the `payment-required` header. A validator that
+reads the body - most do - saw no `accepts` and reported *"the service does not respond
+over the x402 protocol"*. The Worker now promotes the header's object into the body and
+keeps the human-readable error beside it.
+
+**2. GET must answer 402, not 404.** Their checker GETs the URL and expects the
+challenge; their own endpoints do exactly that. Ours 404'd, so a payable endpoint looked
+dead. GET and HEAD now present the same challenge.
+
+**3. An empty POST must answer 402, not 400.** The Worker parsed the body before the
+backend paywall ran, so a probe that posted nothing was told its body was invalid
+instead of what the call costs. This is the same "paywall-then-validation" ordering the
+code comments already described - the comment had been written but the parse was still
+first.
+
+A note on the third: the comment in `apps/worker/src/index.ts` warned about exactly this
+and the behaviour was still wrong, because the note described the intent while the code
+above it still parsed. Comments do not enforce ordering; the probe did.
+
+### Price is now 0.01
+
+payforapi's form enforces `min=0.01`, and advertising 0.01 while charging 0.003 would
+have been a lie in someone else's catalogue. The price is therefore 0.01 everywhere
+now, and the ranking cost was measured rather than assumed: #1 on seven PayAI queries
+before, identical after refreshing all four entries.
+
+### Status
+
+Registration was still blocked by their per-IP rate limit (429) at the end of this
+round, after the validation errors had been cleared. The submission is ready to repeat
+unchanged once the window passes.
