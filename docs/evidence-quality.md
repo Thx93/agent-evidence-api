@@ -126,7 +126,7 @@ GET /platform/v2/x402/discovery/merchant?payTo=0x9c0e...55FD0
    https://agent-evidence-api.thx93.workers.dev/v1/evidence
 ```
 
-The record carries our current description, the $0.003 price, Base USDC and our payTo,
+The record carries our current description, the price, Base USDC and our payTo,
 so it is live rather than vestigial. This is the same check CDP's maintainer used in
 cdp-sdk#849 to tell other sellers their endpoints were indexed.
 

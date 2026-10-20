@@ -235,7 +235,7 @@ export function loadConfig(): AppConfig {
       network: str("X402_NETWORK", "eip155:84532"),
       recipient: str("X402_RECIPIENT", ""),
       facilitatorUrl: str("X402_FACILITATOR_URL", "https://x402.org/facilitator"),
-      priceUsd: str("X402_PRICE_USD", "0.003"),
+      priceUsd: str("X402_PRICE_USD", "0.01"),
       ...(optStr("CDP_API_KEY_ID") ? { cdpApiKeyId: optStr("CDP_API_KEY_ID") } : {}),
       ...(optStr("CDP_API_KEY_SECRET") ? { cdpApiKeySecret: optStr("CDP_API_KEY_SECRET") } : {}),
       devBypassPayment: str("DEV_BYPASS_PAYMENT", "") === "true",

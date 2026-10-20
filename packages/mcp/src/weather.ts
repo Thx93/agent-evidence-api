@@ -188,7 +188,7 @@ const READ_ONLY_ANNOTATIONS = {
  * unanswered - what a call costs, and whether credentials are needed first.
  */
 const PAYMENT_TAIL =
-  "No API key and no account: discovery is free, a call costs $0.003 in USDC on Base " +
+  "No API key and no account: discovery is free, a call costs $0.01 in USDC on Base " +
   "via x402, and nothing is charged when the request returns no data. Free tools: " +
   FREE_TOOL_NAME +
   " and tools/list.";
@@ -460,7 +460,7 @@ const SERVER_INSTRUCTIONS =
   "US National Weather Service data for agents. No API key and no account: " +
   "discovery and the " +
   FREE_TOOL_NAME +
-  " tool are free, and a tools/call costs $0.003 in USDC on Base over x402. " +
+  " tool are free, and a tools/call costs $0.01 in USDC on Base over x402. " +
   "Only US locations are supported.";
 
 export function createWeatherMcpServer(opts: WeatherMcpServerOptions): WeatherMcpServer {

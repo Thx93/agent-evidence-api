@@ -6,7 +6,7 @@
 
 Cited, source-grounded web evidence and claim verification, plus US weather from the
 National Weather Service, for AI agents — over both HTTP and MCP. Paid per call in
-USDC on Base over x402 — $0.003 a call, and nothing at all when nothing is retrieved.
+USDC on Base over x402 — $0.01 a call, and nothing at all when nothing is retrieved.
 No API key and no account for either service.
 
 | What | Where |
@@ -114,7 +114,7 @@ No. There is nothing to sign up for. Payment is per call in USDC on Base over x4
 agent with a wallet can pay for exactly what it uses.
 
 **How much does it cost?**
-0.003 USDC per call. Nothing is charged when nothing is retrieved — if a source cannot be
+0.01 USDC per call. Nothing is charged when nothing is retrieved — if a source cannot be
 fetched or no evidence is delivered, settlement is cancelled.
 
 **Can I see the output before paying?**
@@ -683,7 +683,7 @@ Pricing is environment-driven, never hard-coded.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `X402_PRICE_USD` | `0.003` | Price per evidence request, in USD. |
+| `X402_PRICE_USD` | `0.01` | Price per request, in USD. |
 | `X402_NETWORK` | `eip155:84532` | Settlement network. |
 | `X402_RECIPIENT` | *(empty)* | **Public** receiving address. |
 | `X402_FACILITATOR_URL` | `https://x402.org/facilitator` | Facilitator used for verification. |

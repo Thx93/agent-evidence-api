@@ -47,7 +47,7 @@
     "X402_RECIPIENT": "0x9c0e2B44180439294Fa30Ae2B2a94f8655455FD0",
 
     "X402_FACILITATOR_URL": "https://facilitator.payai.network",
-    "X402_PRICE_USD": "0.003",
+    "X402_PRICE_USD": "0.01",
 
     // Placeholder origin — RFC 2606 reserves .invalid so a missed replacement
     // fails loudly instead of pointing at a real third-party host.

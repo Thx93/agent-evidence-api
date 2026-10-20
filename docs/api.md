@@ -96,7 +96,7 @@ what to call before spending anything.
     "scheme": "exact",
     "network": "eip155:84532",
     "asset": "USDC",
-    "price_usd": "0.003",
+    "price_usd": "0.01",
     "recipient": "0x…",
     "facilitator": "https://x402.org/facilitator"
   }
@@ -630,7 +630,7 @@ returned; the bad one appears with a warning.
 
 ## 5. `POST /v1/weather/alerts` — paid
 
-Active National Weather Service alerts for a US state. `$0.003`, paid over x402 on
+Active National Weather Service alerts for a US state. `$0.01`, paid over x402 on
 the same terms as the evidence route.
 
 This route exists in addition to the MCP tool `get-alerts` because MCP cannot be
@@ -672,7 +672,7 @@ whenever the handler returns an error status.
 
 ## 6. `POST /v1/weather/forecast` — paid
 
-The next five National Weather Service forecast periods for a point. `$0.003`.
+The next five National Weather Service forecast periods for a point. `$0.01`.
 
 ### Request
 

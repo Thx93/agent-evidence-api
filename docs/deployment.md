@@ -524,7 +524,7 @@ These are read by the **backend**, which enforces payment for both `POST
 | `X402_NETWORK` | `eip155:84532` | Safe testnet default in `packages/core`; production sets `eip155:8453`. |
 | `X402_RECIPIENT` | *(empty)* | Public address only. |
 | `X402_FACILITATOR_URL` | `https://x402.org/facilitator` | Used when no CDP credentials are present. |
-| `X402_PRICE_USD` | `0.003` | `$` prefix optional; decimals preserved to USDC's 6. An unusable value makes the paid routes refuse to serve rather than substituting a price. |
+| `X402_PRICE_USD` | `0.01` | `$` prefix optional; decimals preserved to USDC's 6. An unusable value makes the paid routes refuse to serve rather than substituting a price. |
 | `X402_RESOURCE_URL` | *(empty)* | The **public** URL of the HTTP resource, advertised in the 402 challenge. Must be set in production; without it the challenge names the internal origin. |
 | `X402_MCP_RESOURCE_URL` | derived | The **public** URL of the MCP route. Derived from `X402_RESOURCE_URL` when that ends in `/v1/evidence` (replacing the tail with `/mcp`); set it explicitly if the shape is unusual. A wrong value sends catalogue browsers and buyers to an unreachable address. |
 | `CDP_API_KEY_ID` / `CDP_API_KEY_SECRET` | *(empty)* | Present, settlement goes through the **CDP Facilitator** — the only route into the CDP Bazaar, the Bazaar MCP server, Amazon Bedrock AgentCore and agentic.market. Absent, the `X402_FACILITATOR_URL` facilitator is used. Stored outside the repository at `/root/dsh-workspace/.cdp-credentials`. |

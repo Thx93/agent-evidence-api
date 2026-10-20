@@ -225,11 +225,11 @@ function landingHtml(env: Env): string {
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Agent Evidence API">
 <meta property="og:title" content="Agent Evidence API — cited evidence and US weather for agents">
-<meta property="og:description" content="Send a question and up to 5 URLs; get cited passages with source URL, retrieval time and content hash, plus a supported/contradicted/mixed/inconclusive assessment. Also serves US weather alerts and forecasts. $0.003 per call, no API key.">
+<meta property="og:description" content="Send a question and up to 5 URLs; get cited passages with source URL, retrieval time and content hash, plus a supported/contradicted/mixed/inconclusive assessment. Also serves US weather alerts and forecasts. ${price} per call, no API key.">
 <meta property="og:url" content="https://agent-evidence-api.thx93.workers.dev/">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Agent Evidence API — cited evidence and US weather for agents">
-<meta name="twitter:description" content="Cited, source-grounded web evidence and US weather for AI agents, $0.003 per call over x402. No API key, no account. Free sample at /demo.">
+<meta name="twitter:description" content="Cited, source-grounded web evidence and US weather for AI agents, ${price} per call over x402. No API key, no account. Free sample at /demo.">
 <meta name="robots" content="index,follow">
 <style>
  :root{color-scheme:light dark}
@@ -417,7 +417,7 @@ app.get("/x402-market", (c) =>
  * So this serves one genuinely-produced package, verbatim, with the pipeline it
  * came from. It is a sample, not a live call, and the page says so plainly.
  */
-function demoHtml(): string {
+function demoHtml(price: string): string {
   const sources = DEMO_SAMPLE.sources
     .map((source) => {
       const excerpts = source.evidence
@@ -474,7 +474,7 @@ ${sources}
 <ul>${DEMO_SAMPLE.limitations.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul>
 
 <h2>Get this for your own question</h2>
-<p>Discovery is free. You pay $0.003 in USDC on Base only when a call returns
+<p>Discovery is free. You pay ${price} in USDC on Base only when a call returns
 something, and never when nothing is retrieved.</p>
 <pre>curl -s -X POST https://agent-evidence-api.thx93.workers.dev/mcp \\
   -H 'content-type: application/json' \\
@@ -495,7 +495,7 @@ and every excerpt is public page content that the source already publishes.</p>
 }
 
 app.get("/demo", (c) =>
-  c.html(demoHtml(), 200, { "cache-control": "public, max-age=600" }),
+  c.html(demoHtml(priceString(c.env.X402_PRICE_USD)), 200, { "cache-control": "public, max-age=600" }),
 );
 
 /** The same sample as raw JSON, for an agent that would rather parse than read. */
@@ -606,6 +606,73 @@ app.use("/v1/evidence", async (c, next) => {
 });
 
 /**
+ * Put the x402 terms in the 402 BODY, not only in a header.
+ *
+ * x402 v2 carries the PaymentRequired object in the `payment-required` response
+ * header, and that is what the backend emits. But a validator that reads the body -
+ * which is what most catalogue checkers do - sees only a generic error and concludes
+ * the endpoint is not payable. payforapi.com's checker said exactly that: "expected
+ * HTTP 402 with payment details", against a 402 whose header held a perfectly
+ * well-formed challenge.
+ *
+ * Their own endpoints put the object in the body. So this promotes the header into
+ * the body and keeps the human-readable error alongside it, which is additive: any
+ * client reading either place finds the terms.
+ */
+async function withPaymentBody(res: Response): Promise<Response> {
+  if (res.status !== 402) return res;
+  const encoded = res.headers.get("payment-required");
+  if (!encoded) return res;
+
+  let required: Record<string, unknown>;
+  try {
+    const bytes = Uint8Array.from(atob(encoded), (ch) => ch.charCodeAt(0));
+    required = JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>;
+  } catch {
+    return res;
+  }
+
+  let existing: Record<string, unknown> = {};
+  try {
+    existing = (await res.clone().json()) as Record<string, unknown>;
+  } catch {
+    // A non-JSON body is left alone; the terms are still in the header.
+  }
+
+  const headers = new Headers(res.headers);
+  headers.set("content-type", "application/json; charset=utf-8");
+  // The body changed shape, so a cached length would be wrong.
+  headers.delete("content-length");
+  return new Response(JSON.stringify({ ...required, ...existing }), {
+    status: 402,
+    headers,
+  });
+}
+
+/**
+ * Present the payment challenge to GET and HEAD.
+ *
+ * These routes are POST-only, but answering GET with 404 made a payable endpoint
+ * look dead to every prober that checks it the simple way. payforapi.com's validator
+ * does exactly that: it GETs the URL and expects `402 PaymentRequired`, and their own
+ * endpoints answer 402 on GET. Ours returned 404, so the listing was rejected with
+ * "the service does not respond over the x402 protocol" even though a POST returns a
+ * perfectly well-formed challenge.
+ *
+ * The proxy call is made as a POST because that is the declared route; the challenge
+ * it returns is method-agnostic in x402 - it names the resource, the price and the
+ * payTo, not the verb. A caller that then POSTs proceeds normally.
+ */
+for (const path of ["/v1/evidence", "/v1/weather/alerts", "/v1/weather/forecast"]) {
+  const internal = `/internal${path}`;
+  app.on(["GET", "HEAD"], path, async (c) => {
+    const res = await proxyToBackend(c, internal, { method: "POST", body: "", contentType: "application/json" });
+    res.headers.set("allow", "POST, GET, HEAD");
+    return withPaymentBody(res);
+  });
+}
+
+/**
  * The weather capabilities over plain HTTP, forwarded like the evidence route.
  *
  * The same origin-health gate applies: a 402 here would quote terms we cannot honour
@@ -626,33 +693,30 @@ for (const path of ["/v1/weather/alerts", "/v1/weather/forecast"]) {
   });
 
   app.post(path, async (c) => {
-    const requestId = newRequestId();
-    let parsed: unknown;
-    try {
-      parsed = await c.req.json();
-    } catch {
-      return fail(c, "INVALID_REQUEST", requestId, "Request body must be valid JSON.");
-    }
-    // Shape validation belongs to the backend, like the evidence route: answering
-    // 400 before the challenge would tell an unpaid caller their body is wrong
-    // instead of what the call costs.
-    return proxyToBackend(c, `/internal${path}`, {
-      method: "POST",
-      body: JSON.stringify(parsed),
-      contentType: "application/json",
-    });
+    // Raw body, unparsed: see the note on the evidence route. A probe that posts
+    // nothing must still receive the 402 challenge, not a 400 about its body.
+    const raw = await c.req.text();
+    return withPaymentBody(
+      await proxyToBackend(c, `/internal${path}`, {
+        method: "POST",
+        body: raw,
+        contentType: "application/json",
+      }),
+    );
   });
 }
 
 app.post("/v1/evidence", async (c) => {
-  const requestId = newRequestId();
-
-  let parsed: unknown;
-  try {
-    parsed = await c.req.json();
-  } catch {
-    return fail(c, "INVALID_REQUEST", requestId, "Request body must be valid JSON.");
-  }
+  // The raw body is forwarded unparsed, deliberately.
+  //
+  // Parsing here answered 400 to a probe that posts an empty body - before the
+  // caller had been shown the price - which is how an x402 prober concludes the
+  // endpoint simply is not payable. payforapi.com's validator does exactly that and
+  // reported "the service does not respond over x402: expected HTTP 402". The
+  // backend's paywall runs in an `onRequest` hook, which is before body parsing, so
+  // forwarding raw gives the documented order: challenge first, validation second,
+  // and settlement cancelled if validation then fails.
+  const raw = await c.req.text();
 
   // Shape validation deliberately does NOT happen here any more. The paywall now
   // runs in the backend, so validating first would answer 400 to a caller who has
@@ -664,11 +728,13 @@ app.post("/v1/evidence", async (c) => {
   // fails validation downstream - where the middleware cancels settlement, so it is
   // never charged. The backend validates every request through EvidenceService, so
   // nothing is lost by removing the duplicate check.
-  return proxyToBackend(c, "/internal/v1/evidence", {
-    method: "POST",
-    body: JSON.stringify(parsed),
-    contentType: "application/json",
-  });
+  return withPaymentBody(
+    await proxyToBackend(c, "/internal/v1/evidence", {
+      method: "POST",
+      body: raw,
+      contentType: "application/json",
+    }),
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -916,7 +982,7 @@ app.get("/favicon.ico", (c) =>
  * exact prices, the exact paths, and the limits stated plainly. A model that quotes
  * this should be correct, including about what the service cannot do.
  */
-const LLMS_TXT = `# Agent Evidence API
+const llmsTxt = (price: string): string => `# Agent Evidence API
 
 > Cited, source-grounded web evidence and US weather for AI agents. Paid per call in
 > USDC on Base over x402. No API key, no account, no signup.
@@ -937,7 +1003,7 @@ service does not find sources for you.
 
 ## Price
 
-0.003 USDC per call, on Base (\`eip155:8453\`), paid through x402. Nothing is charged
+${price} USDC per call, on Base (\`eip155:8453\`), paid through x402. Nothing is charged
 when nothing is retrieved: if a request cannot be served, settlement is cancelled.
 
 ## Endpoints
@@ -976,7 +1042,7 @@ https://github.com/Thx93/agent-evidence-api
 `;
 
 app.get("/llms.txt", (c) =>
-  c.body(LLMS_TXT, 200, {
+  c.body(llmsTxt(priceString(c.env.X402_PRICE_USD)), 200, {
     "content-type": "text/plain; charset=utf-8",
     "cache-control": "public, max-age=3600",
     "access-control-allow-origin": "*",

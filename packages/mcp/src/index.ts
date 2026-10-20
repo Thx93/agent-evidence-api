@@ -132,7 +132,7 @@ const PAID_TOOL_DESCRIPTION =
   "Returns source URLs, retrieval timestamps, short evidence excerpts, publisher and document metadata, and an explicit supported/contradicted/mixed/inconclusive assessment. " +
   "Fresh web evidence is retrieved per request unless served from a bounded cache, and each source reports its actual retrieval time. " +
   "Every excerpt returned is cited evidence tied to its source URL. " +
-  "No API key and no account: discovery is free, a call costs $0.003 in USDC on Base " +
+  "No API key and no account: discovery is free, a call costs $0.01 in USDC on Base " +
   "via x402, and nothing is charged when no source is retrieved.";
 
 const FREE_TOOL_DESCRIPTION =
