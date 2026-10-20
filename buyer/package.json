@@ -1,6 +1,6 @@
 {
   "name": "@thx93/x402-evidence",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": false,
   "type": "module",
   "description": "Buy structured, cited web evidence for a question. Pay-per-call with USDC on Base via x402 - no account, no API key, no signup.",
