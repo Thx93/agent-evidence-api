@@ -30,7 +30,7 @@ import { ExactEvmScheme } from "@x402/evm/exact/client";
 import { toClientEvmSigner } from "@x402/evm";
 import { wrapFetchWithPayment } from "@x402/fetch";
 
-const DEFAULT_MCP = "https://agent-evidence-api.thx93.workers.dev/mcp";
+const DEFAULT_MCP = "https://agent-evidence.thx93.dev/mcp";
 const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 const NETWORK = "eip155:8453";
 

@@ -22,7 +22,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKSPACE="$(cd "$ROOT/.." && pwd)"
 
 ENV_FILE="$WORKSPACE/.aee-live.env"
-PUBLIC_URL="https://agent-evidence-api.thx93.workers.dev"
+PUBLIC_URL="https://agent-evidence.thx93.dev"
 VERSION_FILE="$ROOT/data/last-backend-version"
 
 if [ ! -f "$ENV_FILE" ]; then

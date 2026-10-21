@@ -3,11 +3,11 @@
   "name": "io.github.Thx93/agent-evidence-api",
   "title": "Agent Evidence API",
   "description": "Cited web evidence and claim verification for AI agents. No API key: $0.003 USDC per call.",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://agent-evidence-api.thx93.workers.dev/mcp"
+      "url": "https://agent-evidence.thx93.dev/mcp"
     }
   ]
 }

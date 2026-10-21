@@ -25,9 +25,9 @@ import time
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
 
-SENDER_ADDRESS = "outreach@agent-evidence-api.thx93.workers.dev"
+SENDER_ADDRESS = "outreach@thx93.dev"
 SENDER_NAME = "Agent Evidence API"
-EHLO_NAME = "agent-evidence-api.thx93.workers.dev"
+EHLO_NAME = "thx93.dev"
 
 
 def mx_hosts(domain: str) -> list[str]:
@@ -73,12 +73,45 @@ def build(to: str, subject: str, body: str, in_reply_to: str | None) -> EmailMes
     msg["To"] = to
     msg["Subject"] = subject
     msg["Date"] = formatdate(localtime=True)
-    msg["Message-ID"] = make_msgid(domain="agent-evidence-api.thx93.workers.dev")
+    msg["Message-ID"] = make_msgid(domain="agent-evidence.thx93.dev")
     if in_reply_to:
         msg["In-Reply-To"] = in_reply_to
         msg["References"] = in_reply_to
     msg.set_content(body)
     return msg
+
+
+DKIM_SELECTOR = b"s1"
+DKIM_DOMAIN = b"thx93.dev"
+DKIM_KEY = "/root/dsh-workspace/.dkim-key.pem"
+
+
+def sign(message: EmailMessage) -> bytes:
+    """Return the message bytes with a DKIM-Signature prepended.
+
+    SPF alone proves which IP sent the mail; DKIM proves the message was not altered
+    and gives the receiver a cryptographic reason to trust the domain. Both are
+    required by Gmail now, which is why direct-to-MX from an unauthenticated sender
+    stopped working. If dkimpy is missing the message still goes out - SPF alone is
+    better than nothing - but the caller is told.
+    """
+    raw = message.as_bytes()
+    try:
+        import dkim  # noqa: PLC0415  (only present in the venv)
+    except ImportError:
+        print("    ! dkimpy not importable - sending WITHOUT a DKIM signature")
+        return raw
+    key = open(DKIM_KEY, "rb").read()
+    signature = dkim.sign(
+        raw,
+        selector=DKIM_SELECTOR,
+        domain=DKIM_DOMAIN,
+        privkey=key,
+        include_headers=[b"from", b"to", b"subject", b"date", b"message-id",
+                         b"mime-version", b"content-type"],
+    )
+    print("    signed with DKIM (s1._domainkey.thx93.dev)")
+    return signature + raw
 
 
 def main() -> int:
@@ -115,7 +148,8 @@ def main() -> int:
                 print("    dry run: connected and quit without sending")
                 return 0
             message = build(args.to, args.subject, body, args.in_reply_to)
-            refused = smtp.send_message(message, from_addr=SENDER_ADDRESS, to_addrs=[args.to])
+            signed = sign(message)
+            refused = smtp.sendmail(SENDER_ADDRESS, [args.to], signed)
             smtp.quit()
             if refused:
                 print(f"    ✖ refused: {refused}")

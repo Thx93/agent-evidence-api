@@ -602,7 +602,7 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
         newRequestId(),
         paymentHeader
           ? "The supplied payment could not be verified. It may be malformed, expired, for the wrong network, or for an amount below the quoted price."
-          : "This endpoint requires payment. See https://agent-evidence-api.thx93.workers.dev/ for the terms.",
+          : "This endpoint requires payment. See https://agent-evidence.thx93.dev/ for the terms.",
       ),
     ),
   });

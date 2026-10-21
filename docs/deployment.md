@@ -31,7 +31,7 @@ untouched. See `docs/market-analysis.md` for the measurements behind that.
 No Kubernetes, no Terraform, no Redis, no PostgreSQL, no full observability
 stack. SPEC §31 and §36 forbid all of them.
 
-> **Status.** Deployed and live at `https://agent-evidence-api.thx93.workers.dev`
+> **Status.** Deployed and live at `https://agent-evidence.thx93.dev`
 > (service version `0.1.5`), mainnet USDC on Base. The backend runs as the Docker
 > container `aee-live`; the Worker is the public edge; a `cloudflared` quick tunnel
 > exposes the origin. `scripts/check-readiness.sh` verifies the buyer journey end to

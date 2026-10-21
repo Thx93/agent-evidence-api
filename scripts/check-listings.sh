@@ -12,7 +12,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NEEDLE="agent-evidence-api"
-PUBLIC_URL="https://agent-evidence-api.thx93.workers.dev"
+PUBLIC_URL="https://agent-evidence.thx93.dev"
 MISSING=0
 
 echo "=== x402 Bazaar (PayAI facilitator) ==="
@@ -37,7 +37,7 @@ else
 fi
 
 echo "=== Agent402 index ==="
-curl -s -m 40 "https://agent402.tools/api/index?seller=agent-evidence-api.thx93.workers.dev" 2>/dev/null \
+curl -s -m 40 "https://agent402.tools/api/index?seller=agent-evidence.thx93.dev" 2>/dev/null \
   | node "$ROOT/scripts/parse-agent402.mjs" 2>/dev/null
 
 echo "=== 402 Index ==="

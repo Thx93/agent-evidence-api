@@ -49,6 +49,12 @@
     "X402_FACILITATOR_URL": "https://facilitator.payai.network",
     "X402_PRICE_USD": "0.01",
 
+    // The canonical public origin. Every URL this Worker prints - the landing page,
+    // the demo, llms.txt, the OpenAPI contract, the og:url - derives from this one
+    // value, because seven hardcoded copies of the old workers.dev hostname were how
+    // this drifted in the first place.
+    "PUBLIC_ORIGIN": "https://agent-evidence.thx93.dev",
+
     // Placeholder origin — RFC 2606 reserves .invalid so a missed replacement
     // fails loudly instead of pointing at a real third-party host.
     "BACKEND_ORIGIN_URL": "https://origin.example.invalid"

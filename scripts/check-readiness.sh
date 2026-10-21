@@ -11,7 +11,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-W="https://agent-evidence-api.thx93.workers.dev"
+W="https://agent-evidence.thx93.dev"
 FAILED=0
 
 pass() { printf '  ✓ %-46s %s\n' "$1" "$2"; }
@@ -126,7 +126,7 @@ echo "=== the advertised terms match what is charged ==="
 # they can drift: a manifest that quotes a price or address the service does not
 # charge is worse than no manifest. The live 402 challenge is the authority.
 DRIFT=$(node -e '
-const W = "https://agent-evidence-api.thx93.workers.dev";
+const W = "https://agent-evidence.thx93.dev";
 const decode = (h) => JSON.parse(Buffer.from(h, "base64").toString("utf8"));
 const post = (u) => fetch(u, { method: "POST", headers: { "content-type": "application/json" },
   body: JSON.stringify({ question: "q", urls: ["https://example.com"] }) });

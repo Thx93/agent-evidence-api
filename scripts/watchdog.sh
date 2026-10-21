@@ -86,7 +86,7 @@ export PATH="/root/dsh-workspace/bin:${PATH}"
 export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-/root/dsh-workspace/.config}"
 export HOME="${HOME:-/root}"
 
-PUBLIC_URL="${AEE_PUBLIC_URL:-https://agent-evidence-api.thx93.workers.dev}"
+PUBLIC_URL="${AEE_PUBLIC_URL:-https://agent-evidence.thx93.dev}"
 TUNNEL_CONTAINER="${AEE_TUNNEL_CONTAINER:-aee-tunnel}"
 BACKEND_CONTAINER="${AEE_BACKEND_CONTAINER:-aee-live}"
 BACKEND_ORIGIN="${AEE_BACKEND_ORIGIN:-http://127.0.0.1:8080}"

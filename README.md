@@ -11,14 +11,14 @@ No API key and no account for either service.
 
 | What | Where |
 |---|---|
-| HTTP evidence endpoint | `POST https://agent-evidence-api.thx93.workers.dev/v1/evidence` |
-| HTTP weather alerts | `POST https://agent-evidence-api.thx93.workers.dev/v1/weather/alerts` — `{"state":"TX"}` |
-| HTTP weather forecast | `POST https://agent-evidence-api.thx93.workers.dev/v1/weather/forecast` — `{"latitude":37.7749,"longitude":-122.4194}` |
-| MCP service (`research_evidence`) | `POST https://agent-evidence-api.thx93.workers.dev/mcp` |
-| MCP service (`get-alerts`, `get-forecast`) | `POST https://agent-evidence-api.thx93.workers.dev/weather/mcp` |
-| **Free sample of real output** | `GET https://agent-evidence-api.thx93.workers.dev/demo` — an unedited response from an actual paid call, no wallet needed |
-| Zero-install buyer CLI | `curl -fsSL https://agent-evidence-api.thx93.workers.dev/buy.mjs -o buy.mjs` |
-| x402 capability manifest (all five paid resources) | `https://agent-evidence-api.thx93.workers.dev/.well-known/x402` |
+| HTTP evidence endpoint | `POST https://agent-evidence.thx93.dev/v1/evidence` |
+| HTTP weather alerts | `POST https://agent-evidence.thx93.dev/v1/weather/alerts` — `{"state":"TX"}` |
+| HTTP weather forecast | `POST https://agent-evidence.thx93.dev/v1/weather/forecast` — `{"latitude":37.7749,"longitude":-122.4194}` |
+| MCP service (`research_evidence`) | `POST https://agent-evidence.thx93.dev/mcp` |
+| MCP service (`get-alerts`, `get-forecast`) | `POST https://agent-evidence.thx93.dev/weather/mcp` |
+| **Free sample of real output** | `GET https://agent-evidence.thx93.dev/demo` — an unedited response from an actual paid call, no wallet needed |
+| Zero-install buyer CLI | `curl -fsSL https://agent-evidence.thx93.dev/buy.mjs -o buy.mjs` |
+| x402 capability manifest (all five paid resources) | `https://agent-evidence.thx93.dev/.well-known/x402` |
 
 Discovery is free on every MCP route (`tools/list`, `initialize`, `ping`, and a
 `health` tool), so an agent can read the schemas and probe for liveness before
@@ -134,7 +134,7 @@ National Weather Service's.
 
 **How do I call it from an agent?**
 Over HTTP (`POST /v1/evidence`) or MCP (`POST /mcp`). The buyer CLI is zero-install:
-`curl -fsSL https://agent-evidence-api.thx93.workers.dev/buy.mjs -o buy.mjs`, or
+`curl -fsSL https://agent-evidence.thx93.dev/buy.mjs -o buy.mjs`, or
 `npx @thx93/x402-evidence`.
 
 ## Market analysis
@@ -208,9 +208,9 @@ on [basescan](https://basescan.org/address/0x9c0e2B44180439294Fa30Ae2B2a94f86554
 
 | | |
 |---|---|
-| **Endpoint** | https://agent-evidence-api.thx93.workers.dev |
-| **MCP** | https://agent-evidence-api.thx93.workers.dev/mcp |
-| **Health** | [`/health`](https://agent-evidence-api.thx93.workers.dev/health) · deep: [`/health?deep=1`](https://agent-evidence-api.thx93.workers.dev/health?deep=1) |
+| **Endpoint** | https://agent-evidence.thx93.dev |
+| **MCP** | https://agent-evidence.thx93.dev/mcp |
+| **Health** | [`/health`](https://agent-evidence.thx93.dev/health) · deep: [`/health?deep=1`](https://agent-evidence.thx93.dev/health?deep=1) |
 | **Registry** | `io.github.Thx93/agent-evidence-api` — published, status active |
 | **Payment** | x402, `exact`, **0.03 USDC** on Base mainnet (`eip155:8453`) |
 | **Buy it** | zero install: `curl -fsSL .../buy.mjs -o buy.mjs && node buy.mjs "question" https://source.example` |
@@ -219,14 +219,14 @@ Buy something with no npm account and nothing to install — the buyer CLI is a
 single self-contained file served by the service itself:
 
 ```bash
-curl -fsSL https://agent-evidence-api.thx93.workers.dev/buy.mjs -o buy.mjs
+curl -fsSL https://agent-evidence.thx93.dev/buy.mjs -o buy.mjs
 X402_PRIVATE_KEY=0x... node buy.mjs "Is Rotamech a manufacturer of centrifugal pumps?" https://example.com
 ```
 
 Or just look at the paywall first — this returns a 402 and charges nothing:
 
 ```bash
-curl -X POST https://agent-evidence-api.thx93.workers.dev/v1/evidence \
+curl -X POST https://agent-evidence.thx93.dev/v1/evidence \
   -H 'content-type: application/json' \
   -d '{"question":"Is Rotamech a manufacturer of centrifugal pumps?","urls":["https://example.com"]}'
 ```

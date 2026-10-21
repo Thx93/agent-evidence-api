@@ -40,9 +40,9 @@ import { x402Client } from "@x402/core/client";
 import { ExactEvmScheme } from "@x402/evm/exact/client";
 import { toClientEvmSigner } from "@x402/evm";
 
-const EVIDENCE = "https://agent-evidence-api.thx93.workers.dev/v1/evidence";
-const EVIDENCE_MCP = "https://agent-evidence-api.thx93.workers.dev/mcp";
-const WEATHER_MCP = "https://agent-evidence-api.thx93.workers.dev/weather/mcp";
+const EVIDENCE = "https://agent-evidence.thx93.dev/v1/evidence";
+const EVIDENCE_MCP = "https://agent-evidence.thx93.dev/mcp";
+const WEATHER_MCP = "https://agent-evidence.thx93.dev/weather/mcp";
 const FACILITATOR = "https://facilitator.payai.network";
 
 /** The one question the cataloguer has to be able to see a price for. */

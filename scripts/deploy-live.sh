@@ -23,7 +23,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT/apps/worker"
 
 export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-/root/dsh-workspace/.config}"
-PUBLIC_URL="https://agent-evidence-api.thx93.workers.dev"
+PUBLIC_URL="https://agent-evidence.thx93.dev"
 VERSION_FILE="$ROOT/data/last-worker-version"
 
 # A quick tunnel is handed a new hostname on every restart, so .origin-url is

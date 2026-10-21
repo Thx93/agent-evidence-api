@@ -16,7 +16,7 @@ Discovery here means three things in order of importance:
    expectation, and a client that removes the server.
 
 > **Status.** Published and live. The service and its MCP server are deployed at
-> `https://agent-evidence-api.thx93.workers.dev`, listed in the CDP Bazaar (HTTP
+> `https://agent-evidence.thx93.dev`, listed in the CDP Bazaar (HTTP
 > route), PayAI's Bazaar (HTTP + MCP), agentic.market, the MCP Registry, Agent402,
 > 402 Index and glama.ai (owned, 4.3/5.0), and has passed every readiness check
 > (discoverable, gated, payable, safe to charge).
@@ -512,7 +512,7 @@ actually catalogued, so it is declared. Without it the entry describes a tool bu
 never says how to reach it. Verify what is published:
 
 ```bash
-curl -sD - -o /dev/null -X POST https://agent-evidence-api.thx93.workers.dev/mcp \
+curl -sD - -o /dev/null -X POST https://agent-evidence.thx93.dev/mcp \
   -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"research_evidence","arguments":{"question":"q","urls":["https://example.com"]}}}' \
 | grep -i '^payment-required:' | cut -d' ' -f2 | base64 -d | python3 -m json.tool | grep -A5 bazaar
@@ -751,7 +751,7 @@ It crawls the MCP Registry, so our listing propagated there without any action:
 
 ```
 Agent Evidence API · Status Healthy · Transport Streamable HTTP · MCP 2025-11-25
-URL: https://agent-evidence-api.thx93.workers.dev/mcp   (correct)
+URL: https://agent-evidence.thx93.dev/mcp   (correct)
 Score 4.3/5.0 across 2 tools
   Disambiguation      5/5
   Naming Consistency  4/5   "'health' is a bare noun; research_evidence is verb_noun"
@@ -789,7 +789,7 @@ and the only way to find out whether anyone is finding this service at all.
 Ownership is proven by publishing an exact JSON document on the connector's own
 origin, at a URL Glama fetches:
 
-    https://agent-evidence-api.thx93.workers.dev/.well-known/glama.json
+    https://agent-evidence.thx93.dev/.well-known/glama.json
 
 Three methods exist; two are now available to this project:
 

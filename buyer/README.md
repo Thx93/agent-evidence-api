@@ -7,7 +7,7 @@ No account. No API key. No signup. No subscription. One command, one payment, on
 **Nothing to install** — the service serves this client as a single self-contained file:
 
 ```bash
-curl -fsSL https://agent-evidence-api.thx93.workers.dev/buy.mjs -o buy.mjs
+curl -fsSL https://agent-evidence.thx93.dev/buy.mjs -o buy.mjs
 export X402_PRIVATE_KEY=0x...        # a wallet holding a little USDC on Base
 node buy.mjs "Is Company X a manufacturer of centrifugal pumps?" \
     https://company.example/about https://company.example/products
@@ -63,7 +63,7 @@ The same capability is exposed as a remote MCP server, so an agent can call it a
 a tool:
 
 ```
-https://agent-evidence-api.thx93.workers.dev/mcp
+https://agent-evidence.thx93.dev/mcp
 ```
 
 Tools:
@@ -81,7 +81,7 @@ before deciding to pay for one. Only an actual `research_evidence` call is charg
   "mcpServers": {
     "evidence": {
       "type": "streamable-http",
-      "url": "https://agent-evidence-api.thx93.workers.dev/mcp"
+      "url": "https://agent-evidence.thx93.dev/mcp"
     }
   }
 }
@@ -153,7 +153,7 @@ Any Base wallet works. The CLI reads the key from `X402_PRIVATE_KEY` or
 authorisation leaves the process.
 
 **Can I see the output before paying?**
-Yes — `GET https://agent-evidence-api.thx93.workers.dev/demo.json` is one complete,
+Yes — `GET https://agent-evidence.thx93.dev/demo.json` is one complete,
 unedited package from a real paid call.
 
 **How is this different from a search engine?**

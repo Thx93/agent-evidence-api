@@ -6,7 +6,7 @@ implementation of the feature — SPEC §39 requires both adapters to call the s
 `EvidenceService`, and that is the design here.
 
 > **Status.** Implemented and deployed at
-> `https://agent-evidence-api.thx93.workers.dev/mcp`. The backend registers `POST`,
+> `https://agent-evidence.thx93.dev/mcp`. The backend registers `POST`,
 > `GET`, and `DELETE` on `/mcp`, hijacks the socket, and hands it to an
 > `EvidenceMcpServer` created by `@aee/mcp` (`apps/backend/src/app.ts`).
 > `packages/mcp` implements the server, the tool definitions, and `tools/call`

@@ -50,6 +50,8 @@ function escapeHtml(value: unknown): string {
  */
 
 export interface Env {
+  /** Canonical public origin, e.g. https://agent-evidence.thx93.dev. */
+  PUBLIC_ORIGIN: string;
   X402_NETWORK: string;
   X402_RECIPIENT: string;
   X402_FACILITATOR_URL: string;
@@ -63,6 +65,16 @@ type Ctx = Context<{ Bindings: Env }>;
 
 /** Base mainnet. */
 const MAINNET = "eip155:8453";
+
+/**
+ * The one place the public origin comes from.
+ *
+ * Every URL this Worker renders - landing page, demo, llms.txt, OpenAPI, og:url -
+ * is built from this, so changing the domain is one variable rather than a search
+ * for seven literals that will drift apart.
+ */
+const publicOrigin = (env: Env): string =>
+  (env.PUBLIC_ORIGIN || "https://agent-evidence.thx93.dev").replace(/\/+$/, "");
 
 /** Hard cap on a JSON-RPC body the edge will buffer. Cheap rejection. */
 const MAX_MCP_BODY_BYTES = 64 * 1024;
@@ -211,6 +223,7 @@ app.get("/health", async (c) => {
 /** Human-facing landing page. Plain HTML, no dependencies, no tracking. */
 function landingHtml(env: Env): string {
   const price = priceString(env.X402_PRICE_USD);
+  const origin = publicOrigin(env);
   const net = env.X402_NETWORK === MAINNET ? "Base mainnet" : "Base Sepolia (testnet)";
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -226,7 +239,7 @@ function landingHtml(env: Env): string {
 <meta property="og:site_name" content="Agent Evidence API">
 <meta property="og:title" content="Agent Evidence API — cited evidence and US weather for agents">
 <meta property="og:description" content="Send a question and up to 5 URLs; get cited passages with source URL, retrieval time and content hash, plus a supported/contradicted/mixed/inconclusive assessment. Also serves US weather alerts and forecasts. ${price} per call, no API key.">
-<meta property="og:url" content="https://agent-evidence-api.thx93.workers.dev/">
+<meta property="og:url" content="${origin}/">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Agent Evidence API — cited evidence and US weather for agents">
 <meta name="twitter:description" content="Cited, source-grounded web evidence and US weather for AI agents, ${price} per call over x402. No API key, no account. Free sample at /demo.">
@@ -258,16 +271,16 @@ explicit <code>supported</code> / <code>contradicted</code> / <code>mixed</code>
 <h2>Weather, too</h2>
 <p>The same wallet pays for US weather from the National Weather Service. Useful when an
 agent needs a forecast or an active alert and has no way to sign up for an API key:</p>
-<pre><code>curl -X POST https://agent-evidence-api.thx93.workers.dev/v1/weather/alerts \
+<pre><code>curl -X POST ${origin}/v1/weather/alerts \
   -H 'content-type: application/json' -d '{"state":"TX"}'
 
-curl -X POST https://agent-evidence-api.thx93.workers.dev/v1/weather/forecast \
+curl -X POST ${origin}/v1/weather/forecast \
   -H 'content-type: application/json' -d '{"latitude":37.7749,"longitude":-122.4194}'</code></pre>
 <p>Both are over MCP as well, at <code>/weather/mcp</code> (<code>get-alerts</code> and
 <code>get-forecast</code>). US locations only.</p>
 
 <h2>See the paywall — no wallet needed</h2>
-<pre><code>curl -X POST ${"https://agent-evidence-api.thx93.workers.dev"}/v1/evidence \
+<pre><code>curl -X POST ${origin}/v1/evidence \
   -H 'content-type: application/json' \
   -d '{"question":"Is Rotamech a manufacturer of centrifugal pumps?","urls":["https://example.com"]}'</code></pre>
 <p>You get a <code>402</code> with the price and the payment address. Nothing is charged.</p>
@@ -277,7 +290,7 @@ fails and <em>no payment is taken</em> — x402 cancels settlement whenever the 
 returns an error. Partial success does bill, because you received real evidence.</p>
 
 <h2>Buy something (zero install)</h2>
-<pre><code>curl -fsSL ${"https://agent-evidence-api.thx93.workers.dev"}/buy.mjs -o buy.mjs
+<pre><code>curl -fsSL ${origin}/buy.mjs -o buy.mjs
 
 # no wallet yet? one command creates one, kept out of your shell history
 node -e "console.log('0x'+require('crypto').randomBytes(32).toString('hex'))" \
@@ -292,7 +305,7 @@ never sent to us. No ETH is needed — the facilitator submits the transaction.<
 <h2>Or use it as an MCP tool</h2>
 <pre><code>{ "mcpServers": { "evidence": {
   "type": "streamable-http",
-  "url": "${"https://agent-evidence-api.thx93.workers.dev"}/mcp" } } }</code></pre>
+  "url": "${origin}/mcp" } } }</code></pre>
 <table>
 <tr><td><code>research_evidence</code></td><td>${price} — fetch sources, return cited evidence</td></tr>
 <tr><td><code>health</code></td><td>free</td></tr>
@@ -417,7 +430,7 @@ app.get("/x402-market", (c) =>
  * So this serves one genuinely-produced package, verbatim, with the pipeline it
  * came from. It is a sample, not a live call, and the page says so plainly.
  */
-function demoHtml(price: string): string {
+function demoHtml(price: string, origin: string): string {
   const sources = DEMO_SAMPLE.sources
     .map((source) => {
       const excerpts = source.evidence
@@ -476,7 +489,7 @@ ${sources}
 <h2>Get this for your own question</h2>
 <p>Discovery is free. You pay ${price} in USDC on Base only when a call returns
 something, and never when nothing is retrieved.</p>
-<pre>curl -s -X POST https://agent-evidence-api.thx93.workers.dev/mcp \\
+<pre>curl -s -X POST ${origin}/mcp \\
   -H 'content-type: application/json' \\
   -H 'accept: application/json, text/event-stream' \\
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'</pre>
@@ -495,7 +508,7 @@ and every excerpt is public page content that the source already publishes.</p>
 }
 
 app.get("/demo", (c) =>
-  c.html(demoHtml(priceString(c.env.X402_PRICE_USD)), 200, { "cache-control": "public, max-age=600" }),
+  c.html(demoHtml(priceString(c.env.X402_PRICE_USD), publicOrigin(c.env)), 200, { "cache-control": "public, max-age=600" }),
 );
 
 /** The same sample as raw JSON, for an agent that would rather parse than read. */
