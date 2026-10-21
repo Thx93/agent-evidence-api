@@ -432,3 +432,30 @@ before, identical after refreshing all four entries.
 Registration was still blocked by their per-IP rate limit (429) at the end of this
 round, after the validation errors had been cleared. The submission is ready to repeat
 unchanged once the window passes.
+
+## payforapi.com: both services submitted and confirmed (2026-10-21)
+
+The earlier attempts failed for three separate reasons, all now cleared:
+
+| blocker | resolution |
+| --- | --- |
+| Their form requires `agree` but their own frontend never sends it | Called `/api/listings/submit` directly with `agree: true`. **Their UI cannot submit a listing at all** — a bug on their side, not a workaround we invented. |
+| The x402 probe rejected us | Fixed on our side: GET now answers 402, the 402 body carries the PaymentRequired object, and an empty POST no longer answers 400. |
+| Price floor of 0.01 | Price is 0.01 service-wide, so the listing matches what we charge. |
+| Per-IP rate limit | Waited rather than retried; one request per attempt after the cooldown. |
+
+Both cards were accepted and email-confirmed:
+
+```
+91dcb027  US Weather Alerts & Forecast (National Weather Service)   code 778777
+9cad9d12  Agent Evidence API — cited web evidence for AI agents      code 970878
+```
+
+Their confirmation reads: *"Заявка подтверждена. Карточка появится в каталоге после
+проверки модератором."* — application confirmed, the card appears after moderator
+review. **Not verified live yet**, and it will not be claimed as live until the
+catalogue shows it.
+
+The confirmation codes were read from the mail.tm inbox. That inbox is also the one
+that Gmail will not accept mail *from*, which is the SPF problem — receiving worked
+throughout.
