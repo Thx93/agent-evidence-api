@@ -632,7 +632,22 @@ app.use("/v1/evidence", async (c, next) => {
  * the body and keeps the human-readable error alongside it, which is additive: any
  * client reading either place finds the terms.
  */
-async function withPaymentBody(res: Response): Promise<Response> {
+/**
+ * True when the request came in on the legacy workers.dev host rather than the
+ * canonical domain. Used only to decide whether to advertise for cataloguing.
+ */
+function isAliasHost(url: string): boolean {
+  try {
+    return new URL(url).hostname.endsWith(".workers.dev");
+  } catch {
+    return false;
+  }
+}
+
+async function withPaymentBody(
+  res: Response,
+  opts: { stripBazaar?: boolean } = {},
+): Promise<Response> {
   if (res.status !== 402) return res;
   const encoded = res.headers.get("payment-required");
   if (!encoded) return res;
@@ -643,6 +658,13 @@ async function withPaymentBody(res: Response): Promise<Response> {
     required = JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>;
   } catch {
     return res;
+  }
+
+  if (opts.stripBazaar && required.extensions && typeof required.extensions === "object") {
+    const extensions = { ...(required.extensions as Record<string, unknown>) };
+    delete extensions.bazaar;
+    if (Object.keys(extensions).length === 0) delete required.extensions;
+    else required.extensions = extensions;
   }
 
   let existing: Record<string, unknown> = {};
@@ -656,11 +678,22 @@ async function withPaymentBody(res: Response): Promise<Response> {
   headers.set("content-type", "application/json; charset=utf-8");
   // The body changed shape, so a cached length would be wrong.
   headers.delete("content-length");
+
+  if (opts.stripBazaar) {
+    // The header carries the same object, so it has to lose the declaration too or
+    // a crawler reading the header would still catalogue the old URL.
+    const bytes = new TextEncoder().encode(JSON.stringify(required));
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    headers.set("payment-required", btoa(binary));
+  }
+
   return new Response(JSON.stringify({ ...required, ...existing }), {
     status: 402,
     headers,
   });
 }
+
 
 /**
  * Present the payment challenge to GET and HEAD.
@@ -681,7 +714,7 @@ for (const path of ["/v1/evidence", "/v1/weather/alerts", "/v1/weather/forecast"
   app.on(["GET", "HEAD"], path, async (c) => {
     const res = await proxyToBackend(c, internal, { method: "POST", body: "", contentType: "application/json" });
     res.headers.set("allow", "POST, GET, HEAD");
-    return withPaymentBody(res);
+    return withPaymentBody(res, { stripBazaar: isAliasHost(c.req.url) });
   });
 }
 
@@ -715,6 +748,7 @@ for (const path of ["/v1/weather/alerts", "/v1/weather/forecast"]) {
         body: raw,
         contentType: "application/json",
       }),
+      { stripBazaar: isAliasHost(c.req.url) },
     );
   });
 }
@@ -747,6 +781,7 @@ app.post("/v1/evidence", async (c) => {
       body: raw,
       contentType: "application/json",
     }),
+    { stripBazaar: isAliasHost(c.req.url) },
   );
 });
 
@@ -808,11 +843,18 @@ for (const path of MCP_PATHS) {
 
   app.post(path, async (c) => {
     const raw = (c.get("mcpBody" as never) as string | undefined) ?? "";
-    return proxyToBackend(c, path, {
-      method: "POST",
-      body: raw,
-      contentType: "application/json",
-    });
+    // Same treatment as the HTTP routes: the canonical host advertises itself for
+    // cataloguing, the workers.dev alias does not. Without this the alias would keep
+    // publishing declarations for tools the catalogue has already attributed to it,
+    // and the custom-domain entries could never take those names.
+    return withPaymentBody(
+      await proxyToBackend(c, path, {
+        method: "POST",
+        body: raw,
+        contentType: "application/json",
+      }),
+      { stripBazaar: isAliasHost(c.req.url) },
+    );
   });
 
   /** SSE stream for server-initiated messages. Free. */
