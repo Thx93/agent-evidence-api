@@ -424,6 +424,37 @@ async function invokeTool(
 // Server factory
 // ---------------------------------------------------------------------------
 
+/**
+ * Widen a request's `Accept` header to the two media types the MCP SDK insists on.
+ *
+ * The SDK answers 406 to any POST whose Accept does not name both
+ * `application/json` and `text/event-stream`. The spec does ask compliant clients to
+ * send both, but a plain JSON prober does not - and the endpoint then looks broken to
+ * anything that is not an MCP client. Catalogue crawlers are exactly that: PayAI's
+ * indexer produced entries for our plain-HTTP routes while never creating one for
+ * either MCP endpoint, and their crawler's `tools/list` came back 406.
+ *
+ * The transport is built with `enableJsonResponse`, so it replies with JSON whatever
+ * the header said. Widening it therefore cannot change a response format - it only
+ * stops the server refusing a caller it would happily serve.
+ */
+function widenAcceptHeader(req: IncomingMessage): void {
+  const current = String(req.headers.accept ?? "");
+  const namesJson = current.includes("application/json") || current.includes("*/*");
+  const namesSse = current.includes("text/event-stream");
+  if (namesJson && namesSse) return;
+
+  const parts = new Set(
+    current
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean),
+  );
+  parts.add("application/json");
+  parts.add("text/event-stream");
+  req.headers.accept = [...parts].join(", ");
+}
+
 export function createEvidenceMcpServer(opts: EvidenceMcpServerOptions): EvidenceMcpServer {
   /** In-flight (server, transport) pairs; released when a response closes. */
   const active = new Set<{ server: Server; transport: StreamableHTTPServerTransport }>();
@@ -474,6 +505,7 @@ export function createEvidenceMcpServer(opts: EvidenceMcpServerOptions): Evidenc
 
     try {
       await server.connect(transport);
+      widenAcceptHeader(req);
       await transport.handleRequest(req, res, parsedBody);
     } catch (err) {
       release();

@@ -995,7 +995,7 @@ app.get("/favicon.ico", (c) =>
  * exact prices, the exact paths, and the limits stated plainly. A model that quotes
  * this should be correct, including about what the service cannot do.
  */
-const llmsTxt = (price: string): string => `# Agent Evidence API
+const llmsTxt = (price: string, origin: string): string => `# Agent Evidence API
 
 > Cited, source-grounded web evidence and US weather for AI agents. Paid per call in
 > USDC on Base over x402. No API key, no account, no signup.
@@ -1018,6 +1018,10 @@ service does not find sources for you.
 
 ${price} USDC per call, on Base (\`eip155:8453\`), paid through x402. Nothing is charged
 when nothing is retrieved: if a request cannot be served, settlement is cancelled.
+
+## Origin
+
+\`${origin}\`
 
 ## Endpoints
 
@@ -1055,7 +1059,7 @@ https://github.com/Thx93/agent-evidence-api
 `;
 
 app.get("/llms.txt", (c) =>
-  c.body(llmsTxt(priceString(c.env.X402_PRICE_USD)), 200, {
+  c.body(llmsTxt(priceString(c.env.X402_PRICE_USD), publicOrigin(c.env)), 200, {
     "content-type": "text/plain; charset=utf-8",
     "cache-control": "public, max-age=3600",
     "access-control-allow-origin": "*",
