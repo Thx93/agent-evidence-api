@@ -237,7 +237,7 @@ retrieval times, content hashes and cited excerpts — with no arguments and no 
 It exists because every other route asks a caller to pay before it can judge whether
 the output is any good. An agent that reaches this tool has already decided to
 interact, and one real response is the cheapest possible proof that the paid call is
-worth $0.003. The package is the same object `/demo.json` serves.
+worth $0.01. The package is the same object `/demo.json` serves.
 
 #### Input schema
 

@@ -86,7 +86,7 @@ confidently wrong, which is the part that made it unsellable.
 ## The honest one-line summary
 
 The service is honest about its provenance and its limitations. It no longer claims a
-verdict it cannot support; whether it is worth $0.003 to a buyer who checks is the
+verdict it cannot support; whether it is worth $0.01 to a buyer who checks is the
 open question, and nobody has paid to find out.
 
 ## A platform limitation found while trying to get catalogued
