@@ -3,6 +3,7 @@
 [![CI](https://github.com/Thx93/agent-evidence-api/actions/workflows/ci.yml/badge.svg)](https://github.com/Thx93/agent-evidence-api/actions/workflows/ci.yml)
 [![M8ven Score](https://m8ven.ai/badge/mcp/thx93/agent-evidence-api)](https://m8ven.ai/mcp/thx93/agent-evidence-api)
 [![Listed on mcpservers.org](https://mcpservers.org/badge.svg)](https://mcpservers.org/servers/thx93/agent-evidence-api)
+[![MCPRush](https://mcprush.com/badge/agent-evidence-api-mcp/compact.svg)](https://mcprush.com/to/agent-evidence-api-mcp?ref=badge)
 
 Cited, source-grounded web evidence and claim verification, plus US weather from the
 National Weather Service, for AI agents — over both HTTP and MCP. Paid per call in
