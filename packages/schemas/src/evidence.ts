@@ -158,6 +158,23 @@ export const HealthResponseSchema = z.object({
 });
 export type HealthResponse = z.infer<typeof HealthResponseSchema>;
 
+/** The weather route is its own MCP service, so it has its own identity. */
+export const WEATHER_SERVICE_NAME = "weather";
+
+/**
+ * The weather service's health payload.
+ *
+ * Deliberately not `HealthResponseSchema`: that one pins `service` to the evidence
+ * service's name, which is exactly the bug this replaces — /weather/mcp used to
+ * report itself as the evidence service. The field is checked as a non-empty string.
+ */
+export const WeatherHealthResponseSchema = z.object({
+  status: z.enum(["ok", "degraded"]),
+  service: z.string().min(1),
+  version: z.string().min(1),
+});
+export type WeatherHealthResponse = z.infer<typeof WeatherHealthResponseSchema>;
+
 /**
  * Effective resource limits. Every one is environment-driven; these are the
  * defaults used when a variable is unset.

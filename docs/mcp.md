@@ -581,3 +581,20 @@ remote `research_evidence` call from a wallet key supplied through
 than a payment failure. Override the endpoint with `AGENT_EVIDENCE_MCP_URL`.
 
 Source: [`mcp-stdio/`](../mcp-stdio). npm: `@thx93/agent-evidence-mcp`.
+
+## Two services, two identities
+
+`/mcp` and `/weather/mcp` are separate MCP services with separate release lines, and
+each now announces itself as such:
+
+| route | `serverInfo.name` | `serverInfo.version` | source |
+|---|---|---|---|
+| `/mcp` | `agent-evidence-api` | `SERVICE_VERSION` (0.1.9) | `packages/mcp/src/index.ts` |
+| `/weather/mcp` | `weather` | `WEATHER_SERVICE_VERSION` (1.2.1) | `packages/mcp/src/weather.ts` |
+
+Both are environment-driven (`WEATHER_SERVICE_NAME`, `WEATHER_SERVICE_VERSION`).
+Before this, the weather route answered with the evidence service's name and
+version, so every client and every catalogue that displays a `serverInfo` was told
+the wrong product — and the weather listing on aggregators showed a version that
+belongs to the other server. The free `health` tool reports the same identity it
+announces in `initialize`.

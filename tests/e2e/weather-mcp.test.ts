@@ -190,6 +190,35 @@ describe("the weather service is discoverable for free", () => {
     assert.equal(status, 200);
   });
 
+  test("the route announces the weather server, not the evidence server", async () => {
+    // Regression: /weather/mcp used to answer with SERVICE_NAME/SERVICE_VERSION, so
+    // every client and catalogue was told this was "agent-evidence-api" at the
+    // evidence service's version - the wrong product on the one field a host shows.
+    const { body } = await rpc("/weather/mcp", {
+      jsonrpc: "2.0",
+      id: 7,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "tests", version: "0" },
+      },
+    });
+    const parsed = JSON.parse(body) as { result: { serverInfo: { name: string; version: string } } };
+    assert.equal(parsed.result.serverInfo.name, "weather");
+    assert.equal(parsed.result.serverInfo.version, "1.2.1");
+  });
+
+  test("the health tool reports the weather identity too", async () => {
+    const { body } = await rpc("/weather/mcp", toolCall(8, "health"));
+    const parsed = JSON.parse(body) as { result: { content: Array<{ text: string }> } };
+    const first = parsed.result.content[0];
+    assert.ok(first, "the health tool must return content");
+    const health = JSON.parse(first.text) as { service: string; version: string };
+    assert.equal(health.service, "weather");
+    assert.equal(health.version, "1.2.1");
+  });
+
   test("the free health tool is not gated", async () => {
     const before = facilitator.calls.length;
     const { status, body } = await rpc("/weather/mcp", toolCall(2, "health"));

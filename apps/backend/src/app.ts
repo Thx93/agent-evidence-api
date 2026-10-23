@@ -1536,7 +1536,8 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
    */
   const weatherMcp = createWeatherMcpServer({
     logger,
-    serviceVersion: config.serviceVersion,
+    name: config.weatherName,
+    version: config.weatherVersion,
   });
   app.addHook("onClose", async () => {
     await weatherMcp.close();

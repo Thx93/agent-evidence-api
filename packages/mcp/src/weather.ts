@@ -28,7 +28,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
-import { SERVICE_NAME, type HealthResponse } from "@aee/schemas";
+import { type WeatherHealthResponse } from "@aee/schemas";
 import type { Logger } from "@aee/core";
 
 import { FREE_TOOL_NAME } from "./tools.js";
@@ -456,7 +456,10 @@ export interface WeatherMcpServer {
 
 export interface WeatherMcpServerOptions {
   logger: Logger;
-  serviceVersion: string;
+  /** The MCP server name a client sees. This route is its own product. */
+  name: string;
+  /** The weather service's own version, not the evidence service's. */
+  version: string;
 }
 
 const SERVER_INSTRUCTIONS =
@@ -503,7 +506,7 @@ export function createWeatherMcpServer(opts: WeatherMcpServerOptions): WeatherMc
 
   function buildProtocolServer(): Server {
     const server = new Server(
-      { name: SERVICE_NAME, version: opts.serviceVersion },
+      { name: opts.name, version: opts.version },
       { capabilities: { tools: {} }, instructions: SERVER_INSTRUCTIONS },
     );
 
@@ -523,10 +526,10 @@ export function createWeatherMcpServer(opts: WeatherMcpServerOptions): WeatherMc
 
   async function invokeTool(name: string, rawArgs: unknown) {
     if (name === FREE_TOOL_NAME) {
-      const health: HealthResponse = {
+      const health: WeatherHealthResponse = {
         status: "ok",
-        service: SERVICE_NAME,
-        version: opts.serviceVersion,
+        service: opts.name,
+        version: opts.version,
       };
       return toolOk(JSON.stringify(health), health);
     }

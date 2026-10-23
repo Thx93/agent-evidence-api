@@ -12,6 +12,9 @@ import {
 export interface AppConfig {
   serviceName: string;
   serviceVersion: string;
+  /** The weather route is its own MCP service: own name, own release line. */
+  weatherName: string;
+  weatherVersion: string;
   nodeEnv: string;
   logLevel: LogLevel;
 
@@ -220,6 +223,12 @@ export function loadConfig(): AppConfig {
   return {
     serviceName: str("SERVICE_NAME", "agent-evidence-api"),
     serviceVersion: str("SERVICE_VERSION", "0.1.9"),
+    // The weather route is its own MCP service with its own release line. It used
+    // to announce SERVICE_NAME/SERVICE_VERSION, so a client connecting to
+    // /weather/mcp was told it had reached the evidence service at version 0.1.9 —
+    // the wrong product and the wrong version on the one field every host shows.
+    weatherName: str("WEATHER_SERVICE_NAME", "weather"),
+    weatherVersion: str("WEATHER_SERVICE_VERSION", "1.2.1"),
     nodeEnv: str("NODE_ENV", "development"),
     logLevel: str("LOG_LEVEL", "info") as LogLevel,
 
