@@ -70,3 +70,28 @@ reason and is blocked on the same thing.
 The connector listing is the correct surface for a hosted service, which is what point
 one of that PR asks. If a servers listing is required, the fix is a small standalone
 repository containing only the MCP surface — not a refactor of this one.
+
+## Edge settings that block legitimate clients (2026-10-23)
+
+Issue #1 reported `HTTP 403 / Cloudflare Error 1010 browser_signature_banned` from a
+Python client. It was **Browser Integrity Check**, on by default, rejecting the
+`Python-urllib` user agent while letting `python-requests` through:
+
+```
+User-Agent: Python-urllib/3.12   -> 403 error code 1010
+User-Agent: python-requests/2.31 -> 200
+User-Agent: Mozilla/5.0 ...      -> 200
+```
+
+`browser_check` is now **off**. An endpoint that advertises "no API key, no account,
+call it from anything" cannot sit behind a filter that judges the client by its user
+agent. This is worth remembering before enabling any other edge control: Bot Fight
+Mode and the higher security levels would do the same thing to agents, and agents are
+the entire customer base.
+
+The same setting very likely explains the 15.8% uptime Glama reported, alongside the
+406 described above — two edge/behaviour faults with one root question: *would a plain
+HTTP client be refused?*
+
+**Rule for this zone:** every edge setting must be tested against a bare
+`Python-urllib` and a bare `curl` before being enabled. Both must get a real answer.
