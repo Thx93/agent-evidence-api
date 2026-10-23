@@ -1,4 +1,7 @@
-# Publish @thx93/x402-evidence via Trusted Publishing (OIDC, no long-lived token).
+# Publish both npm packages via Trusted Publishing (OIDC, no long-lived token):
+# @thx93/x402-evidence (the zero-install buyer CLI) and @thx93/agent-evidence-mcp
+# (the stdio MCP adapter). One trust configuration per package, each naming THIS
+# file, `publish.yml`.
 #
 # The account has 2FA enabled and the personal access tokens available to us cannot
 # bypass it, so a token publish fails with
@@ -63,6 +66,57 @@ jobs:
 
       - name: Publish
         working-directory: buyer
+        run: |
+          echo "npm $(npm --version), node $(node --version)"
+          npm publish --provenance --access public
+
+  publish-stdio:
+    name: publish @thx93/agent-evidence-mcp
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        working-directory: mcp-stdio
+        run: npm install --no-audit --no-fund
+
+      # Deterministic and offline: the adapter must answer an MCP `initialize` on
+      # stdio before there is any point publishing it. Nothing here reaches the
+      # network - the remote connection happens lazily on the first tools call, so a
+      # dead endpoint cannot turn this into a flaky release.
+      - name: The adapter answers initialize over stdio
+        working-directory: mcp-stdio
+        run: |
+          node --input-type=module -e '
+            import { spawn } from "node:child_process";
+            const proc = spawn(process.execPath, ["server.mjs"], { stdio: ["pipe", "pipe", "pipe"] });
+            const timer = setTimeout(() => { console.error("no initialize reply in 10s"); proc.kill(); process.exit(1); }, 10000);
+            let buf = "";
+            proc.stdout.on("data", (d) => {
+              buf += d.toString();
+              for (const line of buf.split("\n")) {
+                if (!line.trim()) continue;
+                let msg; try { msg = JSON.parse(line); } catch { continue; }
+                if (msg.id === 1) {
+                  const info = msg.result?.serverInfo ?? {};
+                  if (info.name !== "agent-evidence-mcp") { console.error("unexpected serverInfo", msg.result); process.exit(1); }
+                  console.log("initialize ok:", info.name, info.version);
+                  clearTimeout(timer); proc.kill(); process.exit(0);
+                }
+              }
+            });
+            proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "ci", version: "1" } } }) + "\n");
+          '
+
+      - name: Publish
+        working-directory: mcp-stdio
         run: |
           echo "npm $(npm --version), node $(node --version)"
           npm publish --provenance --access public
