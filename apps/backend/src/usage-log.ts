@@ -21,6 +21,16 @@ import { dirname } from "node:path";
 export interface UsageEvent {
   ts: string;
   request_id: string;
+  /**
+   * Which MCP tool served the call, when the call came over MCP.
+   *
+   * Absent until now, so every MCP line looked like an HTTP line and the free
+   * `preview_evidence` tool was indistinguishable from a paid `research_evidence`
+   * call. Without this field the free tier cannot be measured at all.
+   */
+  tool?: string;
+  /** True for a free preview, so free-tier usage never reads as demand. */
+  preview?: boolean;
   /** sha256 of the question, truncated — lets you spot repeats without storing content. */
   question_hash: string;
   question_chars: number;

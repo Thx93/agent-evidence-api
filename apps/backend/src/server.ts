@@ -71,6 +71,7 @@ async function main(): Promise<void> {
       await usage.record({
         ts: new Date().toISOString(),
         request_id: call.requestId,
+        tool: call.tool,
         // The question text is never written - only this hash and its length.
         question_hash: usage.hashQuestion(call.question),
         question_chars: call.question.length,

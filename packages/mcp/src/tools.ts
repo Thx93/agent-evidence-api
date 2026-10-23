@@ -46,6 +46,16 @@ export const FREE_TOOL_NAME = "health";
 export const SAMPLE_TOOL_NAME = "sample";
 
 /**
+ * Free, bounded version of the paid tool.
+ *
+ * The paid tool costs money and the sample tool returns a canned package, so between
+ * them there was nothing an agent could call to get a real answer about its own
+ * question without paying. That is the gap this fills: one source, three excerpts,
+ * full provenance, no assessment, capped per day.
+ */
+export const PREVIEW_TOOL_NAME = "preview_evidence";
+
+/**
  * The tools each MCP route charges for.
  *
  * Per route rather than global: `/mcp` charges for `research_evidence`,

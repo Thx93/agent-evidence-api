@@ -316,6 +316,8 @@ never sent to us. No ETH is needed — the facilitator submits the transaction.<
   "url": "${origin}/mcp" } } }</code></pre>
 <table>
 <tr><td><code>research_evidence</code></td><td>${price} — fetch sources, return cited evidence</td></tr>
+<tr><td><code>preview_evidence</code></td><td>free — one source, three cited excerpts, no verdict</td></tr>
+<tr><td><code>sample</code></td><td>free — a whole real package, so the output can be judged</td></tr>
 <tr><td><code>health</code></td><td>free</td></tr>
 <tr><td><code>initialize</code> / <code>tools/list</code></td><td>free, so an agent can look before it pays</td></tr>
 </table>
@@ -551,6 +553,10 @@ app.get("/", (c) => {
       /** A real response, served free so it can be judged before paying. */
       demo: "GET /demo (free HTML) and GET /demo.json (free JSON)",
       evidence: "POST /v1/evidence (paid, x402)",
+      preview:
+        "POST /v1/evidence/preview (free) - one source, three cited excerpts, no assessment; 25 per address per day",
+      weatherPreview:
+        "GET /v1/weather/alerts/preview?state=XX and GET /v1/weather/forecast/preview?latitude=&longitude= (free)",
       weatherAlerts:
         "POST /v1/weather/alerts (paid, x402) - active NWS alerts for a two-letter state code",
       weatherForecast:
@@ -563,6 +569,7 @@ app.get("/", (c) => {
       endpoints: { evidence: "POST /mcp", weather: "POST /weather/mcp" },
       tools: {
         research_evidence: "paid",
+        preview_evidence: "free (one source, three excerpts, no verdict)",
         sample: "free",
         health: "free",
         "get-alerts": "paid",
@@ -1174,6 +1181,7 @@ when nothing is retrieved: if a request cannot be served, settlement is cancelle
   by a real paid call, so the output can be judged before anything is bought.
 - \`GET /\` — a capability document listing every endpoint and price.
 - MCP \`initialize\`, \`tools/list\` and the \`sample\` tool are free on both MCP endpoints.
+- \`preview_evidence\` on /mcp — free. One source, three cited excerpts, no verdict.
 - \`POST /v1/evidence/preview\` — free. One source, up to three excerpts with full
   provenance, no assessment. Twenty-five previews per address per day.
 - \`GET /v1/weather/alerts/preview?state=TX\` and

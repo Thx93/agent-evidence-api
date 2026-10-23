@@ -44,6 +44,7 @@ import { ServiceError, type EvidenceService, type Logger } from "@aee/core";
 import {
   FREE_TOOL_NAME,
   PAID_TOOL_NAME,
+  PREVIEW_TOOL_NAME,
   SAMPLE_TOOL_NAME,
   type McpToolDefinition,
 } from "./tools.js";
@@ -153,6 +154,19 @@ const SERVER_INSTRUCTIONS =
 // only; EvidenceService re-validates and owns all policy decisions.
 // ---------------------------------------------------------------------------
 
+const PreviewEvidenceInput = z.object({
+  question: z
+    .string()
+    .trim()
+    .min(8)
+    .max(HARD_CAPS.QUESTION_CHARS)
+    .describe("The question or claim to gather web evidence for."),
+  url: z
+    .string()
+    .url()
+    .describe("One public source URL to retrieve and cite. The paid tool accepts up to five."),
+});
+
 const ResearchEvidenceInput = z.object({
   question: z
     .string()
@@ -210,6 +224,26 @@ function buildToolDefinitions(): McpToolDefinition[] {
       },
     },
     {
+      // Free, and real: the sample tool proves what the output looks like, this one
+      // answers the caller's actual question over one source. It costs us a fetch and
+      // an extraction, so it is capped per day rather than unlimited.
+      name: PREVIEW_TOOL_NAME,
+      title: "Preview evidence (free)",
+      description:
+        "Free preview of the paid tool: give one question and one public URL and get " +
+        "back up to three cited excerpts with the source URL, retrieval time and " +
+        "content hash. No assessment and no verdict - that is what research_evidence " +
+        "adds, over up to five sources. Capped per day. Use this to judge whether the " +
+        "paid call is worth 0.01 USDC.",
+      inputSchema: z.toJSONSchema(PreviewEvidenceInput),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    {
       // Free on purpose: it lets a caller judge the output before paying for one.
       name: SAMPLE_TOOL_NAME,
       title: "Sample evidence",
@@ -246,6 +280,11 @@ function buildToolDefinitions(): McpToolDefinition[] {
 }
 
 const TOOL_DEFINITIONS: readonly McpToolDefinition[] = Object.freeze(buildToolDefinitions());
+
+/** Daily ceiling for the free preview tool, per process. */
+const PREVIEW_PER_DAY = 200;
+let previewDay = "";
+let previewCount = 0;
 
 /**
  * Fresh, independent copies so a caller cannot corrupt the shared definitions
@@ -329,7 +368,85 @@ async function invokeTool(
 
   let result: CallToolResult;
 
-  if (name === SAMPLE_TOOL_NAME) {
+  if (name === PREVIEW_TOOL_NAME) {
+    const day = new Date().toISOString().slice(0, 10);
+    if (previewDay !== day) {
+      previewDay = day;
+      previewCount = 0;
+    }
+    const parsed = PreviewEvidenceInput.safeParse(rawArguments ?? {});
+    if (!parsed.success) {
+      const issues = parsed.error.issues.map((issue) => ({
+        path: issue.path.map((segment) => String(segment)).join("."),
+        message: issue.message,
+      }));
+      result = errorResult(
+        errorResponse("INVALID_REQUEST", requestId, "The tool arguments are invalid.", { issues }),
+      );
+      fields["outcome"] = "invalid_request";
+      fields["error_code"] = "INVALID_REQUEST";
+    } else if (previewCount >= PREVIEW_PER_DAY) {
+      result = errorResult(
+        errorResponse(
+          "PREVIEW_LIMIT",
+          requestId,
+          "The free preview has reached its daily limit. The paid tool, research_evidence, costs 0.01 USDC per call and needs no account.",
+        ),
+      );
+      fields["outcome"] = "preview_limit";
+      fields["error_code"] = "PREVIEW_LIMIT";
+    } else {
+      previewCount += 1;
+      try {
+        const response = await opts.service.execute(
+          { question: parsed.data.question, urls: [parsed.data.url] },
+          requestId,
+        );
+        const source = response.sources[0];
+        result = textResult({
+          preview: true,
+          question: parsed.data.question,
+          source: {
+            requested_url: source?.requested_url ?? parsed.data.url,
+            final_url: source?.final_url ?? null,
+            status: source?.status ?? null,
+            retrieved_at: source?.retrieved_at ?? null,
+            content_hash_sha256: source?.content_hash_sha256 ?? null,
+          },
+          excerpts: (source?.evidence ?? []).slice(0, 3).map((item) => ({
+            excerpt: item.excerpt,
+            relevance: item.relevance,
+            ...(item.context ? { context: item.context } : {}),
+          })),
+          excerpt_count_total: source?.evidence?.length ?? 0,
+          note:
+            "Preview: one source, three excerpts, no assessment. research_evidence takes up to five sources and returns the supported/contradicted/mixed/inconclusive verdict.",
+        });
+        await reportToolCall(opts, {
+          tool: name,
+          outcome: "ok",
+          requestId,
+          question: parsed.data.question,
+          sourcesRequested: 1,
+          sourcesRetrieved: response.sources.filter((s) => s.status === 200).length,
+          evidenceItems: source?.evidence?.length ?? 0,
+          assessment: "n/a",
+          processingMs: Date.now() - startedAt,
+          paymentProvided: false,
+        });
+        fields["outcome"] = "ok";
+      } catch (err) {
+        result = errorResult(
+          errorResponse(
+            "UPSTREAM_HTTP_FAILURE",
+            requestId,
+            err instanceof Error ? err.message : "The source could not be retrieved.",
+          ),
+        );
+        fields["outcome"] = "service_error";
+      }
+    }
+  } else if (name === SAMPLE_TOOL_NAME) {
     // Free, and deliberately free: this is the proof of output quality. It costs
     // nothing to serve because it was produced once by a real paid call.
     result = textResult(SAMPLE_EVIDENCE);

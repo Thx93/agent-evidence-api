@@ -899,6 +899,31 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
     const requestId = String(req.id);
     const quota = takePreview(previewIp(req));
     reply.header("x-preview-remaining", String(quota.remaining));
+    // Recorded separately from a paid call so free-tier usage never reads as demand.
+    // Before this line the preview tier was invisible in the usage log: a preview and
+    // a paid call produced the same record, which was none at all for MCP.
+    const recordPreview = async (
+      outcome: "ok" | "error",
+      counts: { sourcesRetrieved?: number; evidenceItems?: number } = {},
+      errorCode?: string,
+    ): Promise<void> => {
+      await usage.record({
+        ts: new Date().toISOString(),
+        request_id: requestId,
+        question_hash: usage.hashQuestion(typeof (req.body as { question?: string })?.question === "string" ? String((req.body as { question?: string }).question) : ""),
+        question_chars: typeof (req.body as { question?: string })?.question === "string" ? String((req.body as { question?: string }).question).length : 0,
+        sources_requested: 1,
+        sources_retrieved: counts.sourcesRetrieved ?? 0,
+        evidence_items: counts.evidenceItems ?? 0,
+        assessment: "n/a",
+        processing_ms: 0,
+        outcome,
+        preview: true,
+        tool: "preview_evidence",
+        payment_provided: false,
+        ...(errorCode ? { error_code: errorCode } : {}),
+      } as Parameters<typeof usage.record>[0]);
+    };
     if (!quota.ok) return previewLimitReply(reply, requestId, quota.reason ?? "Limit reached.");
 
     const body = (req.body ?? {}) as { question?: unknown; url?: unknown; urls?: unknown };
@@ -919,6 +944,10 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
     try {
       const result = await service.execute({ question, urls: [rawUrl] }, requestId);
       const source = result.sources[0];
+      await recordPreview("ok", {
+        sourcesRetrieved: result.sources.filter((s) => s.status === 200).length,
+        evidenceItems: source?.evidence?.length ?? 0,
+      });
       return reply.send({
         preview: true,
         question,
@@ -940,6 +969,7 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
         previews_remaining_today: quota.remaining,
       });
     } catch (err) {
+      await recordPreview("error", {}, "UPSTREAM_HTTP_FAILURE");
       return reply.code(ERROR_HTTP_STATUS.UPSTREAM_HTTP_FAILURE).send(
         errorResponse(
           "UPSTREAM_HTTP_FAILURE",
