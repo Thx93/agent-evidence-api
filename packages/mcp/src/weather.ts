@@ -195,6 +195,7 @@ const PAYMENT_TAIL =
 
 const ALERTS_TOOL: Tool = {
   name: "get-alerts",
+  title: "Get Weather Alerts",
   description:
     "Get active weather alerts for a US state. Give the two-letter state code (for " +
     "example CA or NY) and get every active National Weather Service alert for it: " +
@@ -249,6 +250,7 @@ const ALERTS_TOOL: Tool = {
 
 const FORECAST_TOOL: Tool = {
   name: "get-forecast",
+  title: "Get Weather Forecast",
   description:
     "Get the weather forecast for a point on the map. Give latitude and longitude and " +
     "get the next five forecast periods for it: the period name, its temperature, " +
@@ -311,6 +313,7 @@ const FORECAST_TOOL: Tool = {
 /** The free liveness tool, so an agent can check a route before paying for it. */
 const HEALTH_TOOL: Tool = {
   name: FREE_TOOL_NAME,
+  title: "Health",
   description: "Check that the service is up. Costs nothing.",
   inputSchema: { type: "object", properties: {}, additionalProperties: false },
   annotations: { ...READ_ONLY_ANNOTATIONS, title: "Health" },
