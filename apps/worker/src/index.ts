@@ -947,11 +947,22 @@ app.get("/buy.mjs", (c) => proxyToBackend(c, "/buy.mjs", { method: "GET" }));
  * origin it is claiming. Deleting this route unfiles the listing.
  *
  * One token per line, plain text, exactly as they ask.
+ *
+ * The token is bound to the claim context (this listing plus the signed-in
+ * account), NOT to the URL alone: on 2026-10-23 an unauthenticated read of the
+ * same claim page returned a different token than the page showed to the signed-in
+ * publisher, and serving the unauthenticated one made the claim page answer "the
+ * file carries a token, but not the one shown here". The page a signed-in
+ * publisher is looking at wins. Re-read the value from that page before changing
+ * this route, and keep it live until the decision email arrives.
  */
 app.get("/.well-known/mcprush.com-claim.txt", (c) =>
-  c.text("mcprush.com-1fc9eba42f879d96adddfbeb\n", 200, {
+  c.text("mcprush.com-bb0130b229fe1d48a31fbb1c\n", 200, {
     "content-type": "text/plain; charset=utf-8",
-    "cache-control": "public, max-age=300",
+    // Never cached: a reviewer checks this file at claim time and may re-read it
+    // later, and a five-minute cache once made a freshly corrected token read as
+    // stale to their checker. There is no upside to caching one line of text.
+    "cache-control": "no-store",
   }),
 );
 

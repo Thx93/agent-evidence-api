@@ -27,8 +27,14 @@ Nothing in the recommendations is claimed to have been tested — we have no acc
    this way: of 56,231 live listings, **all 50 of the top-downloaded ones are also "Publisher not claimed"** `[V]`.
 2. **Claiming is not login-first.** Step 1 is a proof file served from our own host, and the exact file path and
    today's token are published on an open page. Only Step 2 (publisher account) is login-gated `[V]`.
-3. **The claim file already exists and contains a stale token** — a prior attempt left
-   `mcprush.com-bb0130b229fe1d48a31fbb1c` on disk where today's page asks for `mcprush.com-1fc9eba42f879d96adddfbeb` `[V]`.
+3. **The claim token is bound to the claim context, not to the URL.** An
+   unauthenticated read of the claim page returns a different token than the same
+   page shows to a signed-in publisher: on 2026-10-23 the anonymous fetch rendered
+   `mcprush.com-1fc9eb…` while the signed-in page rendered
+   `mcprush.com-bb0130…` `[V]`. Serving the anonymous value made the page answer
+   *"the file at … carries a verification token from mcprush, but not the one shown
+   here"*. **The page a signed-in publisher is looking at is authoritative**; never
+   change this route from an unauthenticated fetch.
 4. **Editing our npm package will never change the mcprush listing.** Their docs say source-read fields
    "stays editable and is never re-read" `[V]`. The listing text only changes through a claimed Studio edit.
 5. **We cannot enter the Top 50 as currently configured.** The ranking counts npm/PyPI/Docker Hub package downloads
@@ -56,7 +62,9 @@ The link on `https://mcprush.com/thx93/agent-evidence-api-mcp` is
 > **Step 1 · Verify ownership** — Domain: **agent-evidence-api.thx93.workers.dev**
 > This address is on workers.dev, whose DNS belongs to the platform, so the proof is a file your server answers with.
 > `https://agent-evidence-api.thx93.workers.dev/.well-known/mcprush.com-claim.txt`
-> `mcprush.com-1fc9eba42f879d96adddfbeb`
+> `mcprush.com-bb0130b229fe1d48a31fbb1c`
+> (Value as rendered to the signed-in publisher on 2026-10-23. An anonymous read of the same page
+> showed a different token — see finding 3. The claim page is the authority, not this document.)
 > Serve it as plain text over HTTPS. One file can carry the lines for several listings.
 > We read that one address and nothing else. Keep the file until we email you the decision — the reviewer reads it
 > again — and delete it after that.
@@ -390,11 +398,15 @@ publisher pay for a higher place? No." — so promotion buys a card slot, never 
 
 ## 6. Exact next actions (for whoever owns the write scope)
 
-1. **Swap the claim token** in the worker's `/.well-known/mcprush.com-claim.txt` to the value the claim page prints
-   **at that moment** (today: `mcprush.com-1fc9eba42f879d96adddfbeb`; on file: `mcprush.com-bb0130b229fe1d48a31fbb1c`),
-   confirm HTTP 200 on both `agent-evidence-api.thx93.workers.dev` and `agent-evidence.thx93.dev`, then open
-   `https://mcprush.com/claim?s=agent-evidence-api-mcp` in a browser and press **"Check the file"**.
-   Keep the file until the decision email arrives; delete it after.
+1. **Serve the claim token the signed-in claim page shows** — verified live on
+   2026-10-23: `mcprush.com-bb0130b229fe1d48a31fbb1c` on both
+   `agent-evidence-api.thx93.workers.dev` and `agent-evidence.thx93.dev`, with
+   `cache-control: no-store` (a five-minute cache once made a corrected token read
+   as stale to their checker). Then, while signed in, open
+   `https://mcprush.com/claim?s=agent-evidence-api-mcp` and press the check /
+   **Continue**. Keep the file until the decision email arrives; delete it after.
+   If the page ever shows a different token, that page wins — update the route from
+   the page, never from an anonymous fetch.
 2. **Create the publisher account** (this is the first thing that needs a human and a login) and complete the claim.
    The same account then also has to claim `thx93-2/weather-mcp` — via GitHub role on `Thx93/mcp-weather-server`,
    since its claim page wants a repo proof, not a domain file.
