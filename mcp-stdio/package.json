@@ -1,0 +1,42 @@
+{
+  "name": "@thx93/agent-evidence-mcp",
+  "version": "0.1.0",
+  "description": "Local stdio MCP server for the Agent Evidence API: cited web evidence and claim verification, $0.01 per call in USDC on Base over x402, no API key.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "agent-evidence-mcp": "server.mjs"
+  },
+  "main": "server.mjs",
+  "files": [
+    "server.mjs",
+    "README.md"
+  ],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "mcp-server",
+    "web-evidence",
+    "claim-verification",
+    "fact-check",
+    "citations",
+    "x402",
+    "usdc",
+    "base"
+  ],
+  "engines": {
+    "node": ">=22.6"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Thx93/agent-evidence-api.git"
+  },
+  "homepage": "https://agent-evidence.thx93.dev",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@x402/core": "^2.26.0",
+    "@x402/evm": "^2.26.0",
+    "@x402/fetch": "^2.26.0",
+    "viem": "^2.56.8"
+  }
+}

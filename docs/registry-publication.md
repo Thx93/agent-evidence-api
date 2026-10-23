@@ -287,3 +287,40 @@ curl -s "https://registry.modelcontextprotocol.io/v0.1/servers?search=agent-evid
 curl -s -o /dev/null -w '%{http_code}\n' \
   "https://registry.modelcontextprotocol.io/v0.1/servers/io.github.Thx93%2Fagent-evidence-api/versions/0.1.1"
 ```
+
+---
+
+## 2026-10-23 — what changed, and why the earlier rules no longer apply
+
+Three statements above were true when written and are not true now.
+
+1. **`repository` is no longer omitted.** The repository is public
+   (`curl -o /dev/null -w '%{http_code}' https://github.com/Thx93/agent-evidence-api`
+   → `200`), so the reason for omitting it — a link that 404s — is gone. Both
+   registry entries now declare `repository`, and `websiteUrl` besides.
+2. **The description is not allowed to carry a stale price.** Published version
+   0.1.7 said `$0.003 USDC per call` while the service charges `$0.01`; the
+   description now states `$0.01` and names what is being bought. A price in a
+   description is copy that has to move with `X402_PRICE_USD` — treat a mismatch
+   as a defect, not as drift.
+3. **A `packages` entry is allowed when the package is real.**
+   `@thx93/agent-evidence-mcp` (stdio) and `@thx93/mcp-weather-server` (stdio) are
+   published npm servers. A remote-only entry is invisible to every
+   download-ranked catalogue (MCPRush's Top 50 counts npm/PyPI/Docker downloads
+   only and excludes URL-only servers), so declaring the package is what makes the
+   listing installable and countable — not decoration.
+
+Current published versions:
+
+| name | version | packages | remotes |
+|---|---|---|---|
+| `io.github.Thx93/agent-evidence-api` | 0.1.9 | `@thx93/agent-evidence-mcp@0.1.0` (stdio) | `/mcp` |
+| `io.github.Thx93/weather` | 1.2.1 | `@thx93/mcp-weather-server@1.1.3` (stdio) | `/weather/mcp` |
+
+Both entries also declare `icons` (a 512x512 PNG served from `/icon.png`), because
+catalogues render a logo and an entry with none shows initials.
+
+**Republishing is still a manual, credentialed action.** `mcp-publisher login
+github -token "$(gh auth token)"` works unattended (the token is short-lived,
+~5 minutes, so publish in the same breath); `mcp-publisher publish <file>` takes a
+path, so a staging copy can be published without moving files into the repository.

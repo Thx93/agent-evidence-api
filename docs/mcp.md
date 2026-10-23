@@ -563,3 +563,21 @@ Known behavioural notes:
   request id, duration, and counts. **Tool arguments are deliberately never
   logged**, because a caller-supplied URL may be sensitive.
 - `close()` is idempotent and releases any in-flight transports.
+
+## Local (stdio) client support
+
+Some hosts — Claude Desktop, Cursor, Zed, and most desktop clients — speak only
+stdio and cannot pay an x402 challenge. `@thx93/agent-evidence-mcp` is the adapter:
+
+```bash
+npx -y @thx93/agent-evidence-mcp
+```
+
+It runs locally, re-advertises the remote tool list (including each tool's
+tool-level `title` and annotations, which hosts and catalogues read), and pays the
+remote `research_evidence` call from a wallet key supplied through
+`X402_PRIVATE_KEY` or `X402_PRIVATE_KEY_FILE`. Without a key the free tools
+(`health`, `sample`) still work and a paid call returns an explanatory error rather
+than a payment failure. Override the endpoint with `AGENT_EVIDENCE_MCP_URL`.
+
+Source: [`mcp-stdio/`](../mcp-stdio). npm: `@thx93/agent-evidence-mcp`.

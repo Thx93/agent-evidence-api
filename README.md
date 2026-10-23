@@ -15,6 +15,7 @@ No API key and no account for either service.
 | HTTP weather alerts | `POST https://agent-evidence.thx93.dev/v1/weather/alerts` — `{"state":"TX"}` |
 | HTTP weather forecast | `POST https://agent-evidence.thx93.dev/v1/weather/forecast` — `{"latitude":37.7749,"longitude":-122.4194}` |
 | MCP service (`research_evidence`) | `POST https://agent-evidence.thx93.dev/mcp` |
+| MCP service over stdio (desktop clients) | `npx -y @thx93/agent-evidence-mcp` — pays x402 from your own wallet |
 | MCP service (`get-alerts`, `get-forecast`) | `POST https://agent-evidence.thx93.dev/weather/mcp` |
 | **Free sample of real output** | `GET https://agent-evidence.thx93.dev/demo` — an unedited response from an actual paid call, no wallet needed |
 | Zero-install buyer CLI | `curl -fsSL https://agent-evidence.thx93.dev/buy.mjs -o buy.mjs` |

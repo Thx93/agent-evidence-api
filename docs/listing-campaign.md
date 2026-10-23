@@ -152,3 +152,53 @@ but no further action is required and no action would speed it up.
 - **Nothing here is claimed live that was not fetched today.** The three live rows
   each cite a URL that returns the listing or the registry API that returns the
   entry.
+
+---
+
+## 2026-10-23 — round two: what is live now, and what MCPRush actually needs
+
+Recorded after a second campaign round (details: [`listing-round-2026-10-23.md`](./listing-round-2026-10-23.md),
+MCPRush teardown: [`mcprush.md`](./mcprush.md)). Every row was fetched the same day.
+
+**New live listings, all free:**
+
+| Directory | Result |
+|---|---|
+| 402 Index (`402index.io`) | 3 listings, registered via its open `POST /api/v1/register` — evidence `77439ab4-…` (category `verification/evidence`), alerts `7ad39fc4-…`, forecast `bc323276-…`. Re-read by id: `price_usd 0.01`, `health_status healthy`, `probe_status probeable`, `x402_payment_valid 1`. |
+| x402dash (`x402dash.com`) | 3 endpoints registered, each `verified: true`; `GET /v1/endpoints?q=agent-evidence` returns them. |
+| mcpservers.org | both pages re-verified live (they were already live). |
+| CDP x402 Bazaar | the 3 HTTP endpoints were already indexed; the two **canonical MCP routes** were settled with a paid call this round so the catalogue can list them under `agent-evidence.thx93.dev` rather than the retired `workers.dev` host. |
+
+**Submitted, awaiting a human reviewer:** x402 List (`a9c83066-…`, probe found 3
+endpoints, 0 errors), MCP Collection (ids 333/334), mcp.tc (two status pages). The
+four GitHub PRs from the first round are all still open; TensorBlock merged both
+entries into its index source on 2026-10-22 but has not rendered the profile pages.
+
+**MCPRush is already listing both servers** — and the listing is the problem:
+
+- `mcprush.com/thx93/agent-evidence-api-mcp` (id `agent-evidence-api-mcp`, grade A,
+  tool-list 93/100) and `mcprush.com/thx93-2/weather-mcp` (id `thx93-weather-mcp`).
+- Both show **`price: free`** and an empty `tags` list; the evidence tagline still
+  reads `…$0.003 USDC per call` (the real price is `$0.01`).
+- Their docs are explicit: *"Every field stays editable and is never re-read."*
+  Editing our npm metadata or the registry entry will **never** fix that copy.
+  Only a claimed publisher account (Studio) can.
+- Claim path: `<https://mcprush.com/claim?s=agent-evidence-api-mcp>` → Step 1 is a
+  plain-text token at
+  `https://agent-evidence-api.thx93.workers.dev/.well-known/mcprush.com-claim.txt`
+  (the Worker route serves it; the value must be the one the page prints at claim
+  time), Step 2 is a publisher account (human, one-time).
+- Ranking: their Top 50 counts **npm/PyPI/Docker downloads only** and excludes
+  URL-only servers. A listing whose source is a package is the only way into the
+  sorted catalogue; claiming and verification are *not* ranking factors (all 50
+  leaders are unclaimed, zero reviews).
+
+**Still stale, and why:** Glama shows the same `$0.003` copy — it mirrors the
+registry description, so the 0.1.8/0.1.9 republish should clear it on the next
+crawl. `mcp.directory` never produced the listing its "24 h" promise implied;
+`mcp.so`'s free GitHub-issue route is unanswered; PulseMCP is still paused.
+
+**Money spent this round: 0.02 USDC**, on two paid MCP calls whose only purpose is
+to create x402 catalogue entries for the canonical host. Nothing else was
+purchasable at or below the 0.16 USDC round budget — the cheapest paid directory
+tier in this ecosystem is $29.

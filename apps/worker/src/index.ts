@@ -10,6 +10,7 @@ import {
 } from "@aee/schemas";
 
 import { DEMO_SAMPLE } from "./demo-sample.js";
+import { ICON_PNG_BASE64 } from "./icon.js";
 
 /**
  * Escape text before it goes into an HTML page.
@@ -948,10 +949,45 @@ app.get("/buy.mjs", (c) => proxyToBackend(c, "/buy.mjs", { method: "GET" }));
  * One token per line, plain text, exactly as they ask.
  */
 app.get("/.well-known/mcprush.com-claim.txt", (c) =>
-  c.text("mcprush.com-bb0130b229fe1d48a31fbb1c\n", 200, {
+  c.text("mcprush.com-1fc9eba42f879d96adddfbeb\n", 200, {
     "content-type": "text/plain; charset=utf-8",
     "cache-control": "public, max-age=300",
   }),
+);
+
+/**
+ * mcpub.dev submission requirement.
+ *
+ * mcpub.dev (github.com/roverbird/mcpub) indexes MCP endpoints, and its submit
+ * form refuses a domain that does not answer this path: "create
+ * `/.well-known/mcp.json` on your domain (any content)". It does not parse the
+ * body, so this is a small, honest manifest rather than a payload shaped for a
+ * parser nobody can read: the two real MCP routes on this origin, in both of
+ * which discovery (initialize, tools/list, health) costs nothing.
+ */
+const MCPUB_MANIFEST = {
+  name: "agent-evidence-api",
+  description:
+    "Cited web evidence and fact checking for AI agents. $0.01 per call in USDC via x402, no API key.",
+  homepage: "https://agent-evidence.thx93.dev",
+  servers: [
+    {
+      name: "agent-evidence",
+      transport: "streamable-http",
+      url: "https://agent-evidence.thx93.dev/mcp",
+      tools: ["research_evidence", "sample", "health"],
+    },
+    {
+      name: "weather",
+      transport: "streamable-http",
+      url: "https://agent-evidence.thx93.dev/weather/mcp",
+      tools: ["get-alerts", "get-forecast", "health"],
+    },
+  ],
+};
+
+app.get("/.well-known/mcp.json", (c) =>
+  c.json(MCPUB_MANIFEST, 200, { "cache-control": "public, max-age=300" }),
 );
 
 /**
@@ -1051,6 +1087,23 @@ app.get("/favicon.ico", (c) =>
   c.body(FAVICON_SVG, 200, {
     "content-type": "image/svg+xml; charset=utf-8",
     "cache-control": "public, max-age=86400",
+  }),
+);
+
+/**
+ * The listing icon: a 512x512 PNG, the same bytes both registry entries declare.
+ *
+ * Catalogues render a logo next to a server and show initials when there is
+ * none. Served as a bitmap deliberately - the icon schema requires png or jpeg
+ * for clients that render icons, and the existing favicon is SVG.
+ */
+const ICON_BYTES = Uint8Array.from(atob(ICON_PNG_BASE64), (ch) => ch.charCodeAt(0));
+
+app.get("/icon.png", (c) =>
+  c.body(ICON_BYTES, 200, {
+    "content-type": "image/png",
+    "cache-control": "public, max-age=86400",
+    "access-control-allow-origin": "*",
   }),
 );
 
