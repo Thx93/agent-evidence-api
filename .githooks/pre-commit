@@ -12,7 +12,7 @@
 set -uo pipefail
 
 ROOT="$(git rev-parse --show-toplevel)"
-export PATH="/root/dsh-workspace/bin:$PATH"
+export PATH="/root/Agents Projects/bin:$PATH"
 
 echo "pre-commit: typecheck + tests (SKIP_TESTS=1 to bypass deliberately)"
 

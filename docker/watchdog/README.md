@@ -93,15 +93,15 @@ starting a 10-minute back-off over a service that is already healed.
 ## Build
 
 ```bash
-cd /root/dsh-workspace/agent-evidence-api
-export PATH="/root/dsh-workspace/bin:$PATH"
+cd /root/Agents Projects/agent-evidence-api
+export PATH="/root/Agents Projects/bin:$PATH"
 docker build -t aee-watchdog:latest docker/watchdog
 ```
 
 ## Start it (one line)
 
 ```bash
-docker run -d --name aee-watchdog --restart unless-stopped --network host -v /var/run/docker.sock:/var/run/docker.sock -v /root/dsh-workspace:/root/dsh-workspace aee-watchdog:latest
+docker run -d --name aee-watchdog --restart unless-stopped --network host -v /var/run/docker.sock:/var/run/docker.sock -v "/root/Agents Projects:/root/Agents Projects" aee-watchdog:latest
 ```
 
 Read that as:
@@ -110,20 +110,20 @@ Read that as:
 | --- | --- |
 | `--restart unless-stopped` | the whole point: survive reboots and crashes without a session |
 | `-v /var/run/docker.sock:/var/run/docker.sock` | `docker inspect/logs/run` against the host's containers |
-| `-v /root/dsh-workspace:/root/dsh-workspace` | the repo **at its real absolute path** *and* everything `scripts/deploy-live.sh` needs |
+| `-v "/root/Agents Projects:/root/Agents Projects"` | the repo **at its real absolute path** *and* everything `scripts/deploy-live.sh` needs |
 | `--network host` | so `http://127.0.0.1:8080` is the host's backend (the tunnel uses `--network host` for the same reason) |
 
 The workspace mount is not optional cosmetics: `deploy-live.sh` needs all of
 
 - the repo itself, including `.origin-url` and `.prod-secret` (**writable** —
   the watchdog rewrites `.origin-url`, and `pnpm build` writes `dist/`),
-- `/root/dsh-workspace/bin` — the `node`, `pnpm`, `wrangler` **wrappers**,
-- `/root/dsh-workspace/node` and `/root/dsh-workspace/node_modules` — the
+- `/root/Agents Projects/bin` — the `node`, `pnpm`, `wrangler` **wrappers**,
+- `/root/Agents Projects/node` and `/root/Agents Projects/node_modules` — the
   workspace Node 24 install and installed dependencies,
-- `/root/dsh-workspace/.config` — `XDG_CONFIG_HOME`, where the `wrangler`
+- `/root/Agents Projects/.config` — `XDG_CONFIG_HOME`, where the `wrangler`
   wrapper looks for its config (a fallback only; the API token is used),
-- `/root/dsh-workspace/.docker` — `DOCKER_CONFIG`, which the `docker` wrapper sets,
-- `/root/dsh-workspace/.cloudflare-credentials` — the Cloudflare credentials.
+- `/root/Agents Projects/.docker` — `DOCKER_CONFIG`, which the `docker` wrapper sets,
+- `/root/Agents Projects/.cloudflare-credentials` — the Cloudflare credentials.
 
 ### `PATH` inside the container is mandatory
 
@@ -131,10 +131,10 @@ The workspace mount is not optional cosmetics: `deploy-live.sh` needs all of
 Inside the container, `PATH` must lead with the workspace bin directory:
 
 ```bash
-export PATH="/root/dsh-workspace/bin:$PATH"
+export PATH="/root/Agents Projects/bin:$PATH"
 ```
 
-The image already sets it (`ENV PATH=/root/dsh-workspace/bin:...`), and
+The image already sets it (`ENV PATH=/root/Agents Projects/bin:...`), and
 `scripts/watchdog.sh` re-exports it, so nothing else has to. It matters for any
 manual `docker exec` too — without it you get "wrangler: command not found", and
 `deploy-live.sh` cannot heal anything.
@@ -142,7 +142,7 @@ manual `docker exec` too — without it you get "wrangler: command not found", a
 ### Credentials
 
 The watchdog loads `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` from
-`/root/dsh-workspace/.cloudflare-credentials` (inside the workspace mount) and
+`/root/Agents Projects/.cloudflare-credentials` (inside the workspace mount) and
 exports them into `scripts/deploy-live.sh`'s environment; `wrangler` picks them
 up from there. It parses the file line by line rather than sourcing it, and it
 never prints the values. If the container already has `CLOUDFLARE_API_TOKEN` in
@@ -151,9 +151,9 @@ its environment, the file is not read at all:
 ```bash
 # alternative: pass them straight in instead of relying on the workspace mount
 docker run -d --name aee-watchdog --restart unless-stopped --network host \
-  --env-file /root/dsh-workspace/.cloudflare-credentials \
+  --env-file /root/Agents Projects/.cloudflare-credentials \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v /root/dsh-workspace:/root/dsh-workspace \
+  -v "/root/Agents Projects:/root/Agents Projects" \
   aee-watchdog:latest
 ```
 
@@ -174,7 +174,7 @@ patching Worker settings over the raw API, which would drop the
 | `AEE_TUNNEL_CONTAINER` | `aee-tunnel` | tunnel container name |
 | `AEE_BACKEND_CONTAINER` | `aee-live` | backend container name |
 | `AEE_BACKEND_ORIGIN` | `http://127.0.0.1:8080` | local origin the tunnel exposes |
-| `AEE_CLOUDFLARE_CREDENTIALS` | `/root/dsh-workspace/.cloudflare-credentials` | credentials file |
+| `AEE_CLOUDFLARE_CREDENTIALS` | `/root/Agents Projects/.cloudflare-credentials` | credentials file |
 | `AEE_DEPLOY_MIN_GAP` | `300` | hard floor between deploys (seconds) |
 | `AEE_BACKOFF_CAP` | `1800` | back-off ceiling (seconds) |
 | `AEE_TUNNEL_RESTART_MIN_GAP` | `300` | floor between tunnel restarts (seconds) |
@@ -187,12 +187,12 @@ patching Worker settings over the raw API, which would drop the
 
 ```bash
 docker ps --filter name=aee-watchdog                       # running, with restart policy
-tail -n 20 /root/dsh-workspace/agent-evidence-api/data/watchdog.log    # one line per cycle
+tail -n 20 /root/Agents Projects/agent-evidence-api/data/watchdog.log    # one line per cycle
 docker logs --tail 40 aee-watchdog                         # loop stdout + deploy output
-tail -n 40 /root/dsh-workspace/agent-evidence-api/data/watchdog-deploy.log
+tail -n 40 /root/Agents Projects/agent-evidence-api/data/watchdog-deploy.log
 
 # force a single cycle by hand (exits 0 when the live service is healthy)
-docker exec aee-watchdog bash /root/dsh-workspace/agent-evidence-api/scripts/watchdog.sh --once
+docker exec aee-watchdog bash /root/Agents Projects/agent-evidence-api/scripts/watchdog.sh --once
 
 # is the live service really serving from a live backend?
 curl -s "https://agent-evidence-api.thx93.workers.dev/health?deep=1"
@@ -202,7 +202,7 @@ curl -s "https://agent-evidence-api.thx93.workers.dev/health?deep=1"
 ### Prove the heal path (what was actually tested)
 
 ```bash
-cd /root/dsh-workspace/agent-evidence-api
+cd /root/Agents Projects/agent-evidence-api
 cp .origin-url /tmp/origin.bak
 printf 'https://invalid.example.invalid\n' > .origin-url     # deliberately stale
 curl -s "https://agent-evidence-api.thx93.workers.dev/health?deep=1"

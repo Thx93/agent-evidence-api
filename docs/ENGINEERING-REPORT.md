@@ -63,8 +63,8 @@ It is **off by default** (`REASONING_PROVIDER=none`) and falls back silently.
 | | |
 |---|---|
 | Spec-required path | `/srv/agent-evidence-api` (symlink) |
-| Physical location | `/root/dsh-workspace/agent-evidence-api` |
-| Reason | the development sandbox permits writes only under `/root/dsh-workspace` |
+| Physical location | `/root/Agents Projects/agent-evidence-api` |
+| Reason | the development sandbox permits writes only under `/root/Agents Projects` |
 
 ## 4. Important files
 
@@ -86,7 +86,7 @@ It is **off by default** (`REASONING_PROVIDER=none`) and falls back silently.
 ## 5. Commands to run locally
 
 ```bash
-export PATH="/root/dsh-workspace/bin:$PATH"   # node, pnpm, wrangler wrappers
+export PATH="/root/Agents Projects/bin:$PATH"   # node, pnpm, wrangler wrappers
 
 pnpm install
 pnpm typecheck          # tsc --noEmit across the workspace
@@ -112,7 +112,7 @@ bash scripts/deploy-live.sh    # deploy AND verify the Worker (fails loudly)
 # Durability is the watchdog CONTAINER, not a shell loop (deployment.md §7):
 docker run -d --name aee-watchdog --restart unless-stopped --network host \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v /root/dsh-workspace:/root/dsh-workspace aee-watchdog:latest
+  -v "/root/Agents Projects:/root/Agents Projects" aee-watchdog:latest
 bash scripts/watchdog.sh --once   # or one health cycle, from a shell
 ```
 

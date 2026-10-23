@@ -175,11 +175,11 @@ guarded: it requires a non-mainnet `X402_NETWORK` as well. See
 ### Local sandbox note
 
 AGENTS.md §9 records that this development environment permits writes only under
-`/root/dsh-workspace`, and that the project is exposed at the SPEC-required path
+`/root/Agents Projects`, and that the project is exposed at the SPEC-required path
 `/srv/agent-evidence-api` by a symlink. Tooling is expected on `PATH` via:
 
 ```bash
-export PATH="/root/dsh-workspace/bin:$PATH"   # node, npm, pnpm, wrangler, cloudflared
+export PATH="/root/Agents Projects/bin:$PATH"   # node, npm, pnpm, wrangler, cloudflared
 ```
 
 This is a constraint of the development sandbox, not of the product. On a normal
@@ -438,17 +438,17 @@ bash scripts/deploy-backend.sh [version]
 
 It builds the image, starts it as `aee-staging` on `:18080` with its own cache volume,
 proves `/health` and the free MCP handshake answer there, and only then replaces
-`aee-live`. Secrets come from `/root/dsh-workspace/.aee-live.env` (mode 0600, outside
+`aee-live`. Secrets come from `/root/Agents Projects/.aee-live.env` (mode 0600, outside
 the repository) via `--env-file`, never from `-e` on a command line.
 
 The live secrets, and where they belong:
 
 | File | Contents | Mode |
 |---|---|---|
-| `/root/dsh-workspace/.aee-live.env` | The backend container's whole runtime environment. `docker run --env-file` reads it. | `0600` |
-| `/root/dsh-workspace/.cdp-credentials` | `CDP_API_KEY_ID` / `CDP_API_KEY_SECRET` alone, so they can be rotated and referenced without the rest. | `0600` |
-| `/root/dsh-workspace/.prod-secret` | `BACKEND_AUTH_SECRET`, shared with the Worker. | `0600` |
-| `/root/dsh-workspace/.x402-wallet.json`, `.x402-buyer-key` | Seller and operator-buyer wallets. | `0600` |
+| `/root/Agents Projects/.aee-live.env` | The backend container's whole runtime environment. `docker run --env-file` reads it. | `0600` |
+| `/root/Agents Projects/.cdp-credentials` | `CDP_API_KEY_ID` / `CDP_API_KEY_SECRET` alone, so they can be rotated and referenced without the rest. | `0600` |
+| `/root/Agents Projects/.prod-secret` | `BACKEND_AUTH_SECRET`, shared with the Worker. | `0600` |
+| `/root/Agents Projects/.x402-wallet.json`, `.x402-buyer-key` | Seller and operator-buyer wallets. | `0600` |
 
 None of these is inside the repository, and none may ever appear in a command line:
 the CDP keys were once recoverable only from shell history, which is an incident
@@ -527,7 +527,7 @@ These are read by the **backend**, which enforces payment for both `POST
 | `X402_PRICE_USD` | `0.01` | `$` prefix optional; decimals preserved to USDC's 6. An unusable value makes the paid routes refuse to serve rather than substituting a price. |
 | `X402_RESOURCE_URL` | *(empty)* | The **public** URL of the HTTP resource, advertised in the 402 challenge. Must be set in production; without it the challenge names the internal origin. |
 | `X402_MCP_RESOURCE_URL` | derived | The **public** URL of the MCP route. Derived from `X402_RESOURCE_URL` when that ends in `/v1/evidence` (replacing the tail with `/mcp`); set it explicitly if the shape is unusual. A wrong value sends catalogue browsers and buyers to an unreachable address. |
-| `CDP_API_KEY_ID` / `CDP_API_KEY_SECRET` | *(empty)* | Present, settlement goes through the **CDP Facilitator** — the only route into the CDP Bazaar, the Bazaar MCP server, Amazon Bedrock AgentCore and agentic.market. Absent, the `X402_FACILITATOR_URL` facilitator is used. Stored outside the repository at `/root/dsh-workspace/.cdp-credentials`. |
+| `CDP_API_KEY_ID` / `CDP_API_KEY_SECRET` | *(empty)* | Present, settlement goes through the **CDP Facilitator** — the only route into the CDP Bazaar, the Bazaar MCP server, Amazon Bedrock AgentCore and agentic.market. Absent, the `X402_FACILITATOR_URL` facilitator is used. Stored outside the repository at `/root/Agents Projects/.cdp-credentials`. |
 | `DEV_BYPASS_PAYMENT` | *(unset)* | Requires the explicit flag **and** a non-mainnet `X402_NETWORK`; without both, payment is enforced. Tests set it; production never should. |
 | `X402_TEST_PRIVATE_KEY` | *(empty)* | Base Sepolia only. Disposable. Never funded with mainnet assets. Never committed. |
 
@@ -708,9 +708,9 @@ Docker-managed backend stayed up while every session-started process died.
 ```bash
 docker build -t aee-watchdog:latest docker/watchdog
 docker run -d --name aee-watchdog --restart unless-stopped --network host \
-  --env-file /root/dsh-workspace/.cloudflare-credentials \
+  --env-file /root/Agents Projects/.cloudflare-credentials \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v /root/dsh-workspace:/root/dsh-workspace \
+  -v "/root/Agents Projects:/root/Agents Projects" \
   aee-watchdog:latest
 ```
 

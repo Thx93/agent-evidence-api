@@ -9,7 +9,7 @@
 # Why a custom image at all: the container's only real dependencies are the
 # docker CLI (for the mounted socket), curl (for the deep health probe) and
 # bash (scripts/watchdog.sh). It also needs a glibc userland, because the
-# wrappers the watchdog calls — /root/dsh-workspace/bin/{node,pnpm,wrangler} —
+# wrappers the watchdog calls — /root/Agents Projects/bin/{node,pnpm,wrangler} —
 # exec the workspace's glibc-linked Node 24 build. That rules out alpine/musl,
 # so this is Debian slim.
 #
@@ -27,7 +27,7 @@ RUN apt-get update \
 
 # The docker CLI (static Go binary) for the bind-mounted /var/run/docker.sock.
 # It lives at /usr/bin/docker as well because the workspace wrapper
-# /root/dsh-workspace/bin/docker execs exactly that path, and that wrapper is
+# /root/Agents Projects/bin/docker execs exactly that path, and that wrapper is
 # what PATH resolves inside this container.
 COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
 RUN ln -sf /usr/local/bin/docker /usr/bin/docker \
@@ -37,20 +37,20 @@ RUN ln -sf /usr/local/bin/docker /usr/bin/docker \
 # script is read from the mount rather than baked in: editing it and restarting
 # the container is enough, no rebuild. This WORKDIR is only a default for
 # `docker exec` sessions.
-WORKDIR /root/dsh-workspace/agent-evidence-api
+WORKDIR /root/Agents Projects/agent-evidence-api
 
 # PATH must lead with the workspace bin dir or wrangler/pnpm/node do not resolve
 # (they are wrappers around the workspace install, not system packages).
 # The ENV below covers the container's own processes; the profile.d snippet
 # covers `docker exec ... bash -l` sessions, where /etc/profile would otherwise
 # reset PATH to the image's own node and hide pnpm/wrangler entirely.
-RUN printf 'export PATH=/root/dsh-workspace/bin:$PATH\n' > /etc/profile.d/00-workspace-path.sh \
+RUN printf 'export PATH=/root/Agents Projects/bin:$PATH\n' > /etc/profile.d/00-workspace-path.sh \
  && chmod 644 /etc/profile.d/00-workspace-path.sh
-ENV PATH=/root/dsh-workspace/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+ENV PATH=/root/Agents Projects/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     HOME=/root \
-    XDG_CONFIG_HOME=/root/dsh-workspace/.config \
+    XDG_CONFIG_HOME=/root/Agents Projects/.config \
     WATCHDOG_INTERVAL=60
 
 # Long-running loop by default. It never exits on its own; `--once` is available
 # for a single cycle, and `docker logs aee-watchdog` shows the deploy output too.
-CMD ["bash", "/root/dsh-workspace/agent-evidence-api/scripts/watchdog.sh"]
+CMD ["bash", "/root/Agents Projects/agent-evidence-api/scripts/watchdog.sh"]

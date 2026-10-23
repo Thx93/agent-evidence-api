@@ -22,7 +22,7 @@ import { toClientEvmSigner } from "@x402/evm";
 const FACILITATOR = "https://facilitator.payai.network";
 const ORIGIN = "https://agent-evidence.thx93.dev";
 
-const keyFile = process.env.X402_PRIVATE_KEY_FILE ?? "/root/dsh-workspace/.x402-buyer-key";
+const keyFile = process.env.X402_PRIVATE_KEY_FILE ?? "/root/Agents Projects/.x402-buyer-key";
 const account = privateKeyToAccount(readFileSync(keyFile, "utf8").trim());
 const client = new x402Client();
 client.register("eip155:8453", new ExactEvmScheme(toClientEvmSigner(account)));

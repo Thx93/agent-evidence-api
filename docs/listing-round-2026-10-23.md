@@ -10,7 +10,7 @@ document a free, no-account submission path, or the project's own GitHub identit
 
 The deliverable was originally scoped to
 `agent-evidence-api/docs/listing-round-2026-10-23.md`; the repo is a symlink into
-`/root/dsh-workspace` which is outside this session's writable sandbox, so it lives
+`/root/Agents Projects` which is outside this session's writable sandbox, so it lives
 here instead (Lead's instruction).
 
 ## How to read the status column

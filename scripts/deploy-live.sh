@@ -22,7 +22,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT/apps/worker"
 
-export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-/root/dsh-workspace/.config}"
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-/root/Agents Projects/.config}"
 PUBLIC_URL="https://agent-evidence.thx93.dev"
 VERSION_FILE="$ROOT/data/last-worker-version"
 

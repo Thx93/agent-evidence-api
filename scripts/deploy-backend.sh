@@ -12,8 +12,8 @@
 #     from the public URL. A build that succeeded is not a deploy that took.
 #
 # Secrets live OUTSIDE the repository:
-#   /root/dsh-workspace/.aee-live.env     runtime environment (0600)
-#   /root/dsh-workspace/.cdp-credentials  the CDP keys alone, for rotation (0600)
+#   /root/Agents Projects/.aee-live.env     runtime environment (0600)
+#   /root/Agents Projects/.cdp-credentials  the CDP keys alone, for rotation (0600)
 #
 # Usage: bash scripts/deploy-backend.sh [version]
 set -uo pipefail

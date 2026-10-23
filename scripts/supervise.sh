@@ -3,7 +3,7 @@
 #
 #   docker run -d --name aee-watchdog --restart unless-stopped --network host \
 #     -v /var/run/docker.sock:/var/run/docker.sock \
-#     -v /root/dsh-workspace:/root/dsh-workspace aee-watchdog:latest
+#     -v "/root/Agents Projects:/root/Agents Projects" aee-watchdog:latest
 #
 # Why this file no longer supervises anything: it was the detached shell loop that
 # was supposed to keep the origin reachable, and it is precisely the thing that
@@ -43,7 +43,7 @@ else
   echo "      docker build -t aee-watchdog:latest docker/watchdog" >&2
   echo "      docker run -d --name $CONTAINER --restart unless-stopped --network host \\" >&2
   echo "        -v /var/run/docker.sock:/var/run/docker.sock \\" >&2
-  echo "        -v /root/dsh-workspace:/root/dsh-workspace aee-watchdog:latest" >&2
+  echo "        -v "/root/Agents Projects:/root/Agents Projects" aee-watchdog:latest" >&2
 fi
 
 # A single cycle is always safe: it can only heal, never race a loop.

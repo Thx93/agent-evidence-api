@@ -250,13 +250,13 @@ pnpm validate           # typecheck + tests (use before declaring anything done)
 ### Sandbox note
 
 This development environment only permits writes under
-`/root/dsh-workspace`. The project physically lives at
-`/root/dsh-workspace/agent-evidence-api` and is exposed at the spec-required path
+`/root/Agents Projects`. The project physically lives at
+`/root/Agents Projects/agent-evidence-api` and is exposed at the spec-required path
 `/srv/agent-evidence-api` via a symlink. All tooling must therefore run with the
 workspace wrappers on `PATH`:
 
 ```bash
-export PATH="/root/dsh-workspace/bin:$PATH"   # node, npm, pnpm, wrangler, cloudflared
+export PATH="/root/Agents Projects/bin:$PATH"   # node, npm, pnpm, wrangler, cloudflared
 ```
 
 ---

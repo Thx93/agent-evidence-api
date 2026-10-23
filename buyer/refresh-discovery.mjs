@@ -32,7 +32,7 @@
  *   node refresh-discovery.mjs --endpoint <url> --tool <name> --rpc-body <json>
  *
  * Requires a funded-but-unspent wallet only to sign: `X402_PRIVATE_KEY_FILE`
- * (default /root/dsh-workspace/.x402-buyer-key), read here and never printed.
+ * (default /root/Agents Projects/.x402-buyer-key), read here and never printed.
  */
 import { readFileSync } from "node:fs";
 import { privateKeyToAccount } from "viem/accounts";
@@ -66,7 +66,7 @@ const arg = (name) => {
   return i >= 0 ? argv[i + 1] : undefined;
 };
 
-const keyFile = process.env.X402_PRIVATE_KEY_FILE ?? "/root/dsh-workspace/.x402-buyer-key";
+const keyFile = process.env.X402_PRIVATE_KEY_FILE ?? "/root/Agents Projects/.x402-buyer-key";
 const account = privateKeyToAccount(readFileSync(keyFile, "utf8").trim());
 const client = new x402Client();
 client.register("eip155:8453", new ExactEvmScheme(toClientEvmSigner(account)));

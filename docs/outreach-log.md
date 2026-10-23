@@ -49,7 +49,7 @@ Gmail rejected while a Google Workspace address accepted. **A real domain with S
 and DKIM would fix this**, which is the single highest-value thing the operator
 could provide.
 
-Replies land in the mailbox recorded at `/root/dsh-workspace/.outreach-mailbox`
+Replies land in the mailbox recorded at `/root/Agents Projects/.outreach-mailbox`
 (mail.tm; read it with the API documented in that file). It is a receive-only
 mailbox on a disposable domain — fine for a first reply, not for a business.
 

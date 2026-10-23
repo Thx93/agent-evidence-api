@@ -18,8 +18,11 @@
 import { spawnSync } from "node:child_process";
 import { readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = new URL("..", import.meta.url).pathname;
+// fileURLToPath, not URL.pathname: a workspace path containing a space (this one
+// does) is percent-encoded in pathname and every readdir then fails with ENOENT.
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const SKIP_DIRS = new Set([
   "node_modules",
   ".git",

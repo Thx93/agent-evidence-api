@@ -49,7 +49,7 @@
 #   AEE_TUNNEL_CONTAINER        tunnel container name            (default aee-tunnel)
 #   AEE_BACKEND_CONTAINER       backend container name           (default aee-live)
 #   AEE_BACKEND_ORIGIN          local origin the tunnel exposes  (default http://127.0.0.1:8080)
-#   AEE_CLOUDFLARE_CREDENTIALS  file holding CLOUDFLARE_*       (default /root/dsh-workspace/.cloudflare-credentials)
+#   AEE_CLOUDFLARE_CREDENTIALS  file holding CLOUDFLARE_*       (default /root/Agents Projects/.cloudflare-credentials)
 #   AEE_DEPLOY_MIN_GAP          hard floor between deploys, secs (default 300)
 #   AEE_BACKOFF_CAP             back-off ceiling, secs           (default 1800)
 #   AEE_TUNNEL_RESTART_MIN_GAP  floor between tunnel restarts    (default 300)
@@ -82,8 +82,8 @@ cd "$ROOT" || exit 1
 # wrangler/pnpm/node are workspace wrappers, not system packages; deploy-live.sh
 # and the wrappers it calls resolve them from PATH, and the wrangler wrapper
 # resolves its stored OAuth config (a fallback only) from XDG_CONFIG_HOME.
-export PATH="/root/dsh-workspace/bin:${PATH}"
-export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-/root/dsh-workspace/.config}"
+export PATH="/root/Agents Projects/bin:${PATH}"
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-/root/Agents Projects/.config}"
 export HOME="${HOME:-/root}"
 
 PUBLIC_URL="${AEE_PUBLIC_URL:-https://agent-evidence.thx93.dev}"
@@ -147,7 +147,7 @@ log_line() {
 # already supplies them through its environment.
 load_credentials() {
   [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && return 0
-  local f="${AEE_CLOUDFLARE_CREDENTIALS:-/root/dsh-workspace/.cloudflare-credentials}"
+  local f="${AEE_CLOUDFLARE_CREDENTIALS:-/root/Agents Projects/.cloudflare-credentials}"
   [ -r "$f" ] || return 1
   local line k v
   while IFS= read -r line || [ -n "$line" ]; do

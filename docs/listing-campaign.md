@@ -107,7 +107,7 @@ that scan (the awesome-remote CI bot already proved the handshake, labelling our
 `endpoint-ok`). The **entire blocker is one interactive OAuth**:
 
 ```bash
-export PATH="/root/dsh-workspace/bin:$PATH"
+export PATH="/root/Agents Projects/bin:$PATH"
 npx -y @smithery/cli auth login                     # human opens the printed URL
 npx -y @smithery/cli mcp publish \
   "https://agent-evidence-api.thx93.workers.dev/mcp"        -n @Thx93/agent-evidence-api

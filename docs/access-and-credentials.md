@@ -2,7 +2,7 @@
 
 Recorded 2026-09-21 after an audit. Every claim here was verified live, not inferred.
 The pattern behind most of these: **the sandbox allows writes only under
-`/root/dsh-workspace`, so tool state lives there, and each tool has to be told where
+`/root/Agents Projects`, so tool state lives there, and each tool has to be told where
 to look.** A tool that "reports unauthenticated" usually has a perfectly good
 credential one environment variable away.
 
@@ -12,7 +12,7 @@ credential one environment variable away.
 
 | | |
 |---|---|
-| Credential | `/root/dsh-workspace/.config/gh/hosts.yml` (0600) |
+| Credential | `/root/Agents Projects/.config/gh/hosts.yml` (0600) |
 | Account | **Thx93** (GitHub user id 290134016) |
 | Token | classic OAuth `gho_…`, 40 chars, no expiry |
 | Scopes | `admin:repo_hook`, `gist`, `read:org`, `repo`, `workflow` |
@@ -25,9 +25,9 @@ neither env var is set, `HOME` is `/root`, and `/root/.config/gh` does not exist
 hosts".
 
 **The fix is now permanent:** `bin/gh` is a wrapper that exports
-`GH_CONFIG_DIR=/root/dsh-workspace/.config/gh` and execs the real binary. Same class
+`GH_CONFIG_DIR=/root/Agents Projects/.config/gh` and execs the real binary. Same class
 of fix as `bin/mcp-publisher` (HOME) and `bin/wrangler` (XDG_CONFIG_HOME). Put
-`/root/dsh-workspace/bin` on `PATH` per AGENTS.md §9 and a bare `gh` just works.
+`/root/Agents Projects/bin` on `PATH` per AGENTS.md §9 and a bare `gh` just works.
 
 For `git push`/`pull` over https, run `gh auth setup-git` once.
 
@@ -51,7 +51,7 @@ its git history. Operator's call.
 
 | | |
 |---|---|
-| Config | `/root/dsh-workspace/.npmrc` (0600), correctly used as `userconfig` |
+| Config | `/root/Agents Projects/.npmrc` (0600), correctly used as `userconfig` |
 | Account | **thx93** (verified — it appears as `owner` of the `@thx93` scope) |
 | Token | `npm_…`, 40 chars — **rejected**: `/-/whoami` and `/-/npm/v1/user` both 401 |
 | Published packages | **published 2026-10-19**: `@thx93/x402-evidence@0.1.0` (this repo) and `@thx93/mcp-weather-server@1.1.0` — both resolve on the registry |
@@ -67,7 +67,7 @@ misconfigured. It cannot be recovered from this host.
 2. Access Tokens → Generate New Token →
    *Granular Access Token* (Read + Write to publish; choose an expiry) or
    *Automation* (no expiry, for CI).
-3. Replace the single line in `/root/dsh-workspace/.npmrc`:
+3. Replace the single line in `/root/Agents Projects/.npmrc`:
    `//registry.npmjs.org/:_authToken=<NEW_TOKEN>` and keep it `0600`.
 4. Verify with `npm whoami` → `thx93`.
 
@@ -80,7 +80,7 @@ distribution surface (npm search and `npx`) rather than another directory listin
 
 | | |
 |---|---|
-| Credential | `/root/dsh-workspace/.agentmail-key` (76 bytes, prefix `am_`) |
+| Credential | `/root/Agents Projects/.agentmail-key` (76 bytes, prefix `am_`) |
 | Works | `GET /v0/threads` → 200 |
 | Blocked | `/v0/inboxes` (`inbox_read`), `POST /v0/inboxes` (`inbox_create`), `/v0/pods` (`pod_read`), `/v0/domains` (`domain_read`), `/v0/api-keys` (`api_key_read`) |
 
@@ -104,7 +104,7 @@ therefore cannot send or read replies.
    - `message_read` — read replies
    - `message_send` — send
 5. Copy the key once (it is shown only once) and replace
-   `/root/dsh-workspace/.agentmail-key` (`0600`).
+   `/root/Agents Projects/.agentmail-key` (`0600`).
 
 If the console offers no permission toggles, the key will be unrestricted
 org-scoped. It can then be narrowed with
@@ -131,7 +131,7 @@ Free tier is 3 inboxes / 3,000 emails a month, which is far more than this needs
 
 The 171 Arabic deals posts were deleted on the operator's instruction (171 of 171,
 **0 failures**, paced to X's ~50-deletes-per-15-minutes limit). A full archive was
-taken first: `/root/dsh-workspace/.x-archive/leq6ah-posts.json` (JSON) and
+taken first: `/root/Agents Projects/.x-archive/leq6ah-posts.json` (JSON) and
 `leq6ah-posts.md` (readable), plus `delete-results.tsv` as the per-post record.
 
 `twitter search` returns HTTP 404 (known upstream breakage). `user-posts`,

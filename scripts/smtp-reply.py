@@ -83,7 +83,7 @@ def build(to: str, subject: str, body: str, in_reply_to: str | None) -> EmailMes
 
 DKIM_SELECTOR = b"s1"
 DKIM_DOMAIN = b"thx93.dev"
-DKIM_KEY = "/root/dsh-workspace/.dkim-key.pem"
+DKIM_KEY = "/root/Agents Projects/.dkim-key.pem"
 
 
 def sign(message: EmailMessage) -> bytes:
