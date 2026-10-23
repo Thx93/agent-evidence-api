@@ -100,6 +100,29 @@ Verified against the live deployment: a request whose sources all fail returns
 502 `NO_SOURCES_RETRIEVED`, and a request with one good source plus one dead one
 returns 200.
 
+## Try it without paying
+
+Every paid route has a free preview that returns a real, unedited result — not a mock:
+
+```bash
+curl -s -X POST https://agent-evidence.thx93.dev/v1/evidence/preview \
+  -H 'content-type: application/json' \
+  -d '{"question":"What is a centrifugal pump used for?",
+       "url":"https://en.wikipedia.org/wiki/Centrifugal_pump"}'
+
+curl -s 'https://agent-evidence.thx93.dev/v1/weather/alerts/preview?state=TX'
+curl -s 'https://agent-evidence.thx93.dev/v1/weather/forecast/preview?latitude=37.7749&longitude=-122.4194'
+```
+
+The evidence preview returns one source and up to three excerpts with source URL,
+retrieval time and content hash, but no assessment. The paid call takes up to five
+sources and adds the supported / contradicted / mixed / inconclusive verdict.
+
+Twenty-five previews per caller address per day, no account, no wallet. The paid routes
+are deliberately separate: they must keep answering 402, because that is what every x402
+catalogue and validator checks, so previewing them in place would make the service
+unlistable.
+
 ## FAQ
 
 **What is Agent Evidence API?**

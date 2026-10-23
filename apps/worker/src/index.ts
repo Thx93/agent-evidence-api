@@ -153,6 +153,13 @@ async function proxyToBackend(
   };
   if (init.contentType) headers["content-type"] = init.contentType;
 
+  // The free preview tier is quota'd per caller address, and only the edge knows that
+  // address - the backend would otherwise see this Worker and count every preview
+  // against one quota. cf-connecting-ip is set by Cloudflare and cannot be forged by
+  // the client.
+  const clientIp = c.req.header("cf-connecting-ip");
+  if (clientIp) headers["x-forwarded-for"] = clientIp;
+
   // Forward MCP session/protocol headers, otherwise the backend cannot
   // correlate a streamable-HTTP session.
   for (const h of ["mcp-session-id", "mcp-protocol-version"]) {
@@ -753,6 +760,28 @@ for (const path of ["/v1/weather/alerts", "/v1/weather/forecast"]) {
   });
 }
 
+// ---------------------------------------------------------------- free preview
+//
+// Deliberately outside the paywall: these return a bounded, real result so a buyer
+// can judge the output before spending anything. They are NOT in the x402 manifest
+// and never answer a bare 402-less probe on the paid paths, because cataloguing
+// depends on the paid routes answering 402.
+app.post("/v1/evidence/preview", async (c) => {
+  const raw = await c.req.text();
+  return proxyToBackend(c, "/internal/v1/evidence/preview", {
+    method: "POST",
+    body: raw,
+    contentType: "application/json",
+  });
+});
+
+for (const path of ["/v1/weather/alerts/preview", "/v1/weather/forecast/preview"]) {
+  app.get(path, (c) => {
+    const search = new URL(c.req.url).search;
+    return proxyToBackend(c, `/internal${path}${search}`, { method: "GET" });
+  });
+}
+
 app.post("/v1/evidence", async (c) => {
   // The raw body is forwarded unparsed, deliberately.
   //
@@ -1081,6 +1110,10 @@ when nothing is retrieved: if a request cannot be served, settlement is cancelle
   by a real paid call, so the output can be judged before anything is bought.
 - \`GET /\` — a capability document listing every endpoint and price.
 - MCP \`initialize\`, \`tools/list\` and the \`sample\` tool are free on both MCP endpoints.
+- \`POST /v1/evidence/preview\` — free. One source, up to three excerpts with full
+  provenance, no assessment. Twenty-five previews per address per day.
+- \`GET /v1/weather/alerts/preview?state=TX\` and
+  \`GET /v1/weather/forecast/preview?latitude=..&longitude=..\` — free, same quota.
 
 ## Machine-readable
 

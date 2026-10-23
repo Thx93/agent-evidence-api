@@ -834,6 +834,167 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
   // using the constant here let the two interfaces disagree: with a stale
   // SERVICE_VERSION in the environment, /health said 0.1.1 while the MCP
   // handshake said 0.1.0. One runtime source removes that class of drift.
+  // ---------------------------------------------------------------- free preview
+  //
+  // A try-before-you-pay path, deliberately NOT the paid routes. Ungating the paid
+  // routes would break cataloguing: every x402 directory, and every validator, probes
+  // a resource and expects 402. If a probe got 200 the listing would be judged
+  // unpublishable, which is the failure mode that cost a whole round earlier.
+  //
+  // So preview is a separate namespace with its own quota. It returns real retrieved
+  // evidence with provenance - enough to judge the output - but capped to one source
+  // and three excerpts, and without the assessment, which is what the paid call adds.
+  const PREVIEW_PER_IP_DAY = 25;
+  const PREVIEW_GLOBAL_DAY = 2000;
+  const previewByIp = new Map<string, { day: string; count: number }>();
+  let previewGlobal = { day: "", count: 0 };
+
+  /**
+   * The caller's address, as the edge saw it.
+   *
+   * `trustProxy` is false on this server by design - it is reached only through the
+   * Worker, which authenticates with a shared secret - so `req.ip` is the Worker
+   * itself and cannot distinguish callers. The Worker sets `x-forwarded-for` from
+   * Cloudflare's `cf-connecting-ip`, which a client cannot forge. Reading it here
+   * keeps that trust decision local to the free tier instead of loosening it for
+   * the whole server.
+   */
+  function previewIp(req: FastifyRequest): string {
+    const forwarded = req.headers["x-forwarded-for"];
+    const first = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+    const candidate = first?.split(",")[0]?.trim();
+    return candidate || req.ip || "unknown";
+  }
+
+  function takePreview(ip: string): { ok: boolean; remaining: number; reason?: string } {
+    const day = new Date().toISOString().slice(0, 10);
+    if (previewGlobal.day !== day) {
+      previewGlobal = { day, count: 0 };
+      previewByIp.clear();
+    }
+    const entry = previewByIp.get(ip);
+    const used = entry && entry.day === day ? entry.count : 0;
+    if (used >= PREVIEW_PER_IP_DAY) {
+      return { ok: false, remaining: 0, reason: "This address has used its free previews for today." };
+    }
+    if (previewGlobal.count >= PREVIEW_GLOBAL_DAY) {
+      return { ok: false, remaining: 0, reason: "The free preview tier is exhausted for today." };
+    }
+    previewGlobal.count += 1;
+    previewByIp.set(ip, { day, count: used + 1 });
+    return { ok: true, remaining: PREVIEW_PER_IP_DAY - used - 1 };
+  }
+
+  function previewLimitReply(reply: FastifyReply, requestId: string, reason: string): FastifyReply {
+    return reply.code(429).send({
+      error: {
+        code: "PREVIEW_LIMIT",
+        message: reason + " The full service is 0.01 USDC per call and needs no account.",
+        request_id: requestId,
+      },
+    });
+  }
+
+  app.post("/internal/v1/evidence/preview", async (req: FastifyRequest, reply: FastifyReply) => {
+    const requestId = String(req.id);
+    const quota = takePreview(previewIp(req));
+    reply.header("x-preview-remaining", String(quota.remaining));
+    if (!quota.ok) return previewLimitReply(reply, requestId, quota.reason ?? "Limit reached.");
+
+    const body = (req.body ?? {}) as { question?: unknown; url?: unknown; urls?: unknown };
+    const question = typeof body.question === "string" ? body.question.trim() : "";
+    const rawUrl =
+      typeof body.url === "string" ? body.url : Array.isArray(body.urls) ? body.urls[0] : undefined;
+    if (question.length < 8) {
+      return reply.code(ERROR_HTTP_STATUS.INVALID_REQUEST).send(
+        errorResponse("INVALID_REQUEST", requestId, "question must be at least 8 characters."),
+      );
+    }
+    if (typeof rawUrl !== "string" || !/^https?:\/\//.test(rawUrl)) {
+      return reply.code(ERROR_HTTP_STATUS.INVALID_REQUEST).send(
+        errorResponse("INVALID_REQUEST", requestId, "url must be one absolute http(s) URL."),
+      );
+    }
+
+    try {
+      const result = await service.execute({ question, urls: [rawUrl] }, requestId);
+      const source = result.sources[0];
+      return reply.send({
+        preview: true,
+        question,
+        source: {
+          requested_url: source?.requested_url ?? rawUrl,
+          final_url: source?.final_url ?? null,
+          status: source?.status ?? null,
+          retrieved_at: source?.retrieved_at ?? null,
+          content_hash_sha256: source?.content_hash_sha256 ?? null,
+        },
+        excerpts: (source?.evidence ?? []).slice(0, 3).map((item) => ({
+          excerpt: item.excerpt,
+          relevance: item.relevance,
+          ...(item.context ? { context: item.context } : {}),
+        })),
+        excerpt_count_total: source?.evidence?.length ?? 0,
+        note:
+          "Preview: one source, three excerpts, no assessment. The paid call takes up to five sources and returns the supported/contradicted/mixed/inconclusive verdict with full provenance.",
+        previews_remaining_today: quota.remaining,
+      });
+    } catch (err) {
+      return reply.code(ERROR_HTTP_STATUS.UPSTREAM_HTTP_FAILURE).send(
+        errorResponse(
+          "UPSTREAM_HTTP_FAILURE",
+          requestId,
+          err instanceof Error ? err.message : "The source could not be retrieved.",
+        ),
+      );
+    }
+  });
+
+  app.get("/internal/v1/weather/alerts/preview", async (req: FastifyRequest, reply: FastifyReply) => {
+    const requestId = String(req.id);
+    const quota = takePreview(previewIp(req));
+    reply.header("x-preview-remaining", String(quota.remaining));
+    if (!quota.ok) return previewLimitReply(reply, requestId, quota.reason ?? "Limit reached.");
+
+    const state = String((req.query as Record<string, unknown>)?.state ?? "").trim();
+    if (!/^[A-Za-z]{2}$/.test(state)) {
+      return reply.code(ERROR_HTTP_STATUS.INVALID_REQUEST).send(
+        errorResponse("INVALID_REQUEST", requestId, "state must be a two-letter US state code, for example CA."),
+      );
+    }
+    const outcome = await runAlerts(state);
+    if (outcome.isError) {
+      return reply.code(ERROR_HTTP_STATUS.UPSTREAM_HTTP_FAILURE).send(
+        errorResponse("UPSTREAM_HTTP_FAILURE", requestId, outcome.content[0]?.text ?? "Upstream unavailable."),
+      );
+    }
+    return reply.send({ preview: true, previews_remaining_today: quota.remaining, ...(outcome.structuredContent ?? {}) });
+  });
+
+  app.get("/internal/v1/weather/forecast/preview", async (req: FastifyRequest, reply: FastifyReply) => {
+    const requestId = String(req.id);
+    const quota = takePreview(previewIp(req));
+    reply.header("x-preview-remaining", String(quota.remaining));
+    if (!quota.ok) return previewLimitReply(reply, requestId, quota.reason ?? "Limit reached.");
+
+    const q = (req.query as Record<string, unknown>) ?? {};
+    const latitude = Number(q.latitude ?? q.lat);
+    const longitude = Number(q.longitude ?? q.lon);
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+        !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+      return reply.code(ERROR_HTTP_STATUS.INVALID_REQUEST).send(
+        errorResponse("INVALID_REQUEST", requestId, "latitude and longitude must be finite and in range."),
+      );
+    }
+    const outcome = await runForecast(latitude, longitude);
+    if (outcome.isError) {
+      return reply.code(ERROR_HTTP_STATUS.UPSTREAM_HTTP_FAILURE).send(
+        errorResponse("UPSTREAM_HTTP_FAILURE", requestId, outcome.content[0]?.text ?? "Upstream unavailable."),
+      );
+    }
+    return reply.send({ preview: true, previews_remaining_today: quota.remaining, ...(outcome.structuredContent ?? {}) });
+  });
+
   app.get("/health", async (_req, reply) =>
     reply.send({ status: "ok" as const, service: SERVICE_NAME, version: config.serviceVersion }),
   );

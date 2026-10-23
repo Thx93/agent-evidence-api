@@ -708,6 +708,40 @@ the US) answers `502 UPSTREAM_HTTP_FAILURE`, without charge.
 
 ---
 
+## 7 Free preview — `POST /v1/evidence/preview`, `GET /v1/weather/alerts/preview`, `GET /v1/weather/forecast/preview`
+
+Not paywalled, and deliberately a different path from the paid routes. Those must keep
+answering `402`, because every x402 catalogue and validator probes them and judges a
+resource unpublishable if it answers anything else. Previewing in place would therefore
+cost the listings.
+
+**Evidence preview** takes a question and exactly one URL, and returns up to three
+excerpts with the source URL, retrieval time and content hash — no assessment.
+
+```json
+POST /v1/evidence/preview
+{"question": "What is a centrifugal pump used for?", "url": "https://en.wikipedia.org/wiki/Centrifugal_pump"}
+```
+
+```json
+{
+  "preview": true,
+  "question": "...",
+  "source": {"requested_url": "...", "status": 200, "retrieved_at": "...", "content_hash_sha256": "..."},
+  "excerpts": [{"excerpt": "...", "relevance": "direct"}],
+  "excerpt_count_total": 12,
+  "note": "Preview: one source, three excerpts, no assessment...",
+  "previews_remaining_today": 24
+}
+```
+
+**Weather preview** is the same data as the paid call, via query parameters:
+`?state=TX`, or `?latitude=..&longitude=..`.
+
+**Quota.** 25 per caller address per day, plus a global daily ceiling. The address comes
+from the edge (`cf-connecting-ip`), not from anything the caller sends. Over quota
+answers `429` with `PREVIEW_LIMIT` and names the paid price.
+
 ## 7. Error codes
 
 Every non-2xx JSON response from the Worker or the backend uses exactly one
