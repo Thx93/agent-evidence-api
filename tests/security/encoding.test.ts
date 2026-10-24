@@ -62,14 +62,32 @@ describe("single content-encoding", () => {
   });
 });
 
-describe("chained content-encoding (regression)", () => {
-  test("`content-encoding: gzip, br` is decoded, undoing br before gzip", async () => {
+describe("brotli is refused, not decoded (CVE-2026-111497)", () => {
+  // `br` is absent from CONTENT_DECODERS on purpose. CVE-2026-111497 is an
+  // out-of-bounds write in the Brotli decoder bundled in the Node runtime, and
+  // this fetcher decodes responses from caller-supplied URLs - exactly the
+  // attacker-controlled path that CVE needs. These two tests pin that decision
+  // down so a well-meaning "add brotli support" change cannot silently re-arm
+  // the bug.
+  test("a plain `content-encoding: br` response is left undecoded and warns", async () => {
+    const res = await get("/br");
+    assert.equal(res.status, 200);
+    assert.notEqual(res.body, ENCODED_FIXTURE_HTML, "brotli must not be decoded");
+    assert.ok(
+      res.warnings.some((w) => w.code === "UNSUPPORTED_CONTENT_ENCODING"),
+      "br must be reported as unsupported",
+    );
+  });
+
+  test("a chained `content-encoding: gzip, br` is refused whole, not partially undone", async () => {
     const res = await get("/gzip-br");
     assert.equal(res.status, 200);
-    assert.equal(res.body, ENCODED_FIXTURE_HTML);
+    // Undoing only gzip would yield brotli bytes presented as text - silently
+    // corrupt. The fetcher must leave the body untouched instead.
+    assert.notEqual(res.body, ENCODED_FIXTURE_HTML, "brotli must not be decoded");
     assert.ok(
-      !res.warnings.some((w) => w.code === "UNSUPPORTED_CONTENT_ENCODING"),
-      "supported encodings must not warn",
+      res.warnings.some((w) => w.code === "UNSUPPORTED_CONTENT_ENCODING"),
+      "br must be reported as unsupported",
     );
   });
 });

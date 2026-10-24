@@ -6,7 +6,7 @@
   "description": "Evidence infrastructure for AI agents: MCP-native, x402-paid web evidence and claim verification.",
   "license": "MIT",
   "engines": {
-    "node": ">=22.6"
+    "node": ">=24.22.1"
   },
   "scripts": {
     "build": "pnpm -r build",
