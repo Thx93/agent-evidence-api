@@ -1,7 +1,7 @@
 import { request as httpRequest, type IncomingMessage } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { lookup as dnsLookup } from "node:dns";
-import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
+import { createGunzip, createInflate } from "node:zlib";
 import type { Duplex, Readable } from "node:stream";
 import { DEFAULT_LIMITS, type ErrorCode, type ResourceLimits, type SourceWarning } from "@aee/schemas";
 import { classifyHostname, classifyIp, classifyPort } from "./ip.js";
@@ -346,12 +346,30 @@ export function makeGuardedLookup(
  *
  * A `Map` (not a plain object) so a hostile header token such as `constructor`
  * cannot accidentally resolve through the prototype chain.
+ *
+ * ### `br` is deliberately absent
+ *
+ * CVE-2026-111497 ("node2shell" / "HTTP2shell") is an out-of-bounds write
+ * (CWE-787) in the Brotli decoder bundled inside the Node runtime. This fetcher
+ * decodes responses from URLs supplied by the caller, which is exactly the
+ * attacker-controlled-input path that CVE needs: the caller picks the host, the
+ * host picks the bytes. The runtime is pinned to a patched release (see
+ * `docker/Dockerfile`), but relying on the runtime alone means one stale
+ * base-image layer silently re-arms the bug.
+ *
+ * Keeping Brotli out of this table is the defence that does not depend on the
+ * runtime at all: a `Content-Encoding: br` response is reported as
+ * UNSUPPORTED_CONTENT_ENCODING and left undecoded, so no attacker-influenced
+ * bytes reach a Brotli decoder. Servers fall back to gzip/deflate, which we do
+ * decode.
+ *
+ * Do NOT re-add `["br", createBrotliDecompress]` without pinning a patched
+ * runtime and re-opening this decision.
  */
 const CONTENT_DECODERS = new Map<string, () => Duplex>([
   ["gzip", createGunzip],
   ["x-gzip", createGunzip],
   ["deflate", createInflate],
-  ["br", createBrotliDecompress],
 ]);
 
 interface ParsedContentEncoding {
@@ -423,7 +441,13 @@ function requestOnce(
         headers: {
           "user-agent": opts.userAgent,
           accept: "text/html,application/xhtml+xml,application/xml,application/json,text/plain;q=0.9,*/*;q=0.1",
-          "accept-encoding": "gzip, deflate, br",
+          // `br` is deliberately NOT advertised, and CONTENT_DECODERS does not
+          // decode it either. CVE-2026-111497 is an out-of-bounds write in the
+          // Brotli decoder bundled in the Node runtime; this fetcher feeds it
+          // caller-supplied URLs, which is the exact path the CVE needs.
+          // Declining `br` and refusing to decode it keeps attacker-influenced
+          // bytes out of that decoder regardless of what runtime is deployed.
+          "accept-encoding": "gzip, deflate",
           // Deliberately NOT sending cookies or referer.
           connection: "close",
         },

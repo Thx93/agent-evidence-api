@@ -30,7 +30,19 @@
 # compile or ship. Node 24 is the recommended runtime (stable `node:sqlite`,
 # matching the project's engines field). Debian slim is used rather than Alpine
 # to keep glibc semantics identical to the VPS.
-ARG NODE_VERSION=24
+#
+# PINNED, do not float this again. CVE-2026-111497 / "node2shell" is an
+# out-of-bounds write in the Brotli decoder bundled in the Node runtime, fixed
+# in 22.23.4 / 24.22.1 / 26.12.1. A floating `24` tag silently resolves to
+# whatever the registry has that day, so a stale cache layer or a base-image
+# regression can put a vulnerable runtime back under the fetcher's brotli
+# decode path (packages/fetcher/src/fetch.ts) with no code change.
+# Further hardening: pin by digest too, e.g.
+#   node:24.22.1-slim@sha256:<digest>
+# NOTE: process.versions.brotli is NOT a usable detector - the vulnerable
+# 24.21.0 and the fixed 24.22.1 both report brotli=1.2.0. Gate on
+# process.version.
+ARG NODE_VERSION=24.22.1
 
 # -----------------------------------------------------------------------------
 # Stage 1 — build: install the workspace, compile TypeScript, prune to prod

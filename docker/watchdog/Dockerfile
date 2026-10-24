@@ -17,7 +17,9 @@
 # docker.io, which would drag the whole daemon in for one static binary.
 FROM docker:27-cli AS dockercli
 
-FROM node:24-slim
+# PINNED for CVE-2026-111497 (Brotli decoder OOB write). The previous floating
+# `node:24-slim` tag shipped 24.21.0, which is vulnerable. Fixed: 24.22.1.
+FROM node:24.22.1-slim
 
 # curl for the deep health probe and the origin probe; ca-certificates so those
 # HTTPS calls can verify the Worker's certificate.
@@ -46,9 +48,12 @@ WORKDIR /root/Agents Projects/agent-evidence-api
 # reset PATH to the image's own node and hide pnpm/wrangler entirely.
 RUN printf 'export PATH=/root/Agents Projects/bin:$PATH\n' > /etc/profile.d/00-workspace-path.sh \
  && chmod 644 /etc/profile.d/00-workspace-path.sh
-ENV PATH=/root/Agents Projects/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-    HOME=/root \
-    XDG_CONFIG_HOME=/root/Agents Projects/.config \
+# NOTE: every value containing a space MUST be double-quoted. Unquoted
+# `ENV PATH=/root/Agents Projects/bin:...` is a hard build failure
+# ("can't find = in ...") under buildx, because the parser splits on whitespace.
+ENV PATH="/root/Agents Projects/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    HOME="/root" \
+    XDG_CONFIG_HOME="/root/Agents Projects/.config" \
     WATCHDOG_INTERVAL=60
 
 # Long-running loop by default. It never exits on its own; `--once` is available

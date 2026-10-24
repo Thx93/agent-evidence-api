@@ -92,7 +92,16 @@ export const ENCODED_FIXTURE_HTML = `<!doctype html>
 /** gzip(HTML) — the wire payload for the single-encoding route. */
 export const GZIP_FIXTURE_BODY = gzipSync(Buffer.from(ENCODED_FIXTURE_HTML, "utf8"));
 
-/** gzip(HTML) then brotli — the wire payload for the chained `gzip, br` route. */
+/** brotli(HTML) — the wire payload for the plain `br` route. */
+export const BROTLI_FIXTURE_BODY = brotliCompressSync(Buffer.from(ENCODED_FIXTURE_HTML, "utf8"));
+
+/**
+ * gzip(HTML) then brotli — the wire payload for the chained `gzip, br` route.
+ *
+ * The fetcher REFUSES this by design (see CONTENT_DECODERS in fetch.ts): `br`
+ * is not in the decoder table, because CVE-2026-111497 is an out-of-bounds
+ * write in the Brotli decoder bundled in the Node runtime.
+ */
 export const GZIP_BR_FIXTURE_BODY = brotliCompressSync(GZIP_FIXTURE_BODY);
 
 /**
@@ -231,9 +240,20 @@ export async function startFixtureServer(port = 0): Promise<FixtureServer> {
       });
       return res.end(GZIP_FIXTURE_BODY);
     }
+    if (pathname === "/br") {
+      // Plain brotli. The fetcher must NOT decode this: `br` is absent from
+      // CONTENT_DECODERS by design (CVE-2026-111497).
+      res.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+        "content-encoding": "br",
+        "content-length": String(BROTLI_FIXTURE_BODY.length),
+      });
+      return res.end(BROTLI_FIXTURE_BODY);
+    }
     if (pathname === "/gzip-br") {
-      // Chained: the server applied gzip first, then brotli. The fetcher must
-      // undo them in reverse order (br, then gunzip).
+      // Chained: the server applied gzip first, then brotli. The fetcher cannot
+      // undo this because `br` is deliberately undecodable, so it must leave the
+      // body untouched and warn rather than applying a partial (wrong) chain.
       res.writeHead(200, {
         "content-type": "text/html; charset=utf-8",
         "content-encoding": "gzip, br",
@@ -304,6 +324,6 @@ if (invokedDirectly) {
   console.log("[fixtures] routes: /company /negating /irrelevant /malformed /plain /json /binary");
   console.log("[fixtures] adversarial: /redirect-once /redirect-chain /redirect-loop");
   console.log("[fixtures]             /redirect-to-private /redirect-to-metadata /slow /huge");
-  console.log("[fixtures] encoding:    /gzip /gzip-br /gzip-bomb /unknown-encoding");
+  console.log("[fixtures] encoding:    /gzip /br /gzip-br /gzip-bomb /unknown-encoding");
   console.log("[fixtures] status:      /404 /500");
 }

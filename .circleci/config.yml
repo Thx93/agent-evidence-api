@@ -27,7 +27,7 @@ version: 2.1
 jobs:
   test:
     docker:
-      - image: cimg/node:24.21
+      - image: cimg/node:24.22.1
     steps:
       - checkout
       - run:
@@ -57,7 +57,7 @@ jobs:
 
   worker:
     docker:
-      - image: cimg/node:24.21
+      - image: cimg/node:24.22.1
     steps:
       - checkout
       - run:
