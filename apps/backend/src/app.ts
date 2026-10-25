@@ -61,8 +61,19 @@ import {
 const HTTP_DISCOVERY = declareDiscoveryExtension({
   bodyType: "json",
   input: {
-    question: "Is Company X a manufacturer of centrifugal pumps?",
-    urls: ["https://company.example/about", "https://company.example/products"],
+    // Real, resolvable URLs on purpose. The previous example used company.example,
+    // which does not resolve, so anything that replayed this declaration - a
+    // catalogue crawler, a validator, an integrator copying the shape - got a 502
+    // NO_SOURCES_RETRIEVED and concluded the service was broken. It is the first
+    // request most callers will ever make: it has to succeed.
+    question: "Is the National Weather Service part of NOAA?",
+    // Both verified to retrieve through this service before being used here: a
+    // noaa.gov page was tried first and answered 502, so it would have reproduced
+    // the very failure this change exists to remove.
+    urls: [
+      "https://www.weather.gov/about",
+      "https://en.wikipedia.org/wiki/National_Weather_Service",
+    ],
     max_sources: 5,
     language: "auto",
     mode: "evidence",
@@ -71,29 +82,29 @@ const HTTP_DISCOVERY = declareDiscoveryExtension({
     example: {
       request_id: "req_1f2e3d4c5b6a7988",
       version: "1",
-      question: "Is Company X a manufacturer of centrifugal pumps?",
+      question: "Is the National Weather Service part of NOAA?",
       assessment: {
         status: "supported",
         basis:
-          "1 source(s) contained passages matching the question (company.example) with no contradicting passages found.",
+          "1 source(s) contained passages matching the question (www.weather.gov) with no contradicting passages found.",
       },
       sources: [
         {
-          requested_url: "https://company.example/about",
-          final_url: "https://company.example/about",
+          requested_url: "https://www.weather.gov/about",
+          final_url: "https://www.weather.gov/about",
           status: 200,
           content_type: "text/html; charset=utf-8",
-          title: "Company X - About",
-          canonical_url: "https://company.example/about",
-          publisher: "Company X",
+          title: "About the National Weather Service",
+          canonical_url: "https://www.weather.gov/about",
+          publisher: "National Weather Service",
           language: "en",
           retrieved_at: "2026-01-01T00:00:00.000Z",
           word_count: 412,
           content_hash_sha256: "9f2c…",
           evidence: [
             {
-              excerpt: "Company X manufactures centrifugal pumps at its facility.",
-              context: "h2:Products > p[1]",
+              excerpt: "The National Weather Service is a component of the National Oceanic and Atmospheric Administration.",
+              context: "main > p[1]",
               relevance: "direct",
             },
           ],
@@ -178,23 +189,23 @@ const MCP_DISCOVERY = declareDiscoveryExtension({
     additionalProperties: false,
   },
   example: {
-    question: "Is Company X a manufacturer of centrifugal pumps?",
-    urls: ["https://company.example/about"],
+    question: "Is the National Weather Service part of NOAA?",
+    urls: ["https://www.weather.gov/about"],
   },
   output: {
     example: {
       assessment: { status: "supported", basis: "1 source matched the question." },
       sources: [
         {
-          final_url: "https://company.example/about",
+          final_url: "https://www.weather.gov/about",
           status: 200,
-          title: "Company X - About",
+          title: "About the National Weather Service",
           retrieved_at: "2026-01-01T00:00:00.000Z",
           content_hash_sha256: "9f2c…",
           evidence: [
             {
               relevance: "direct",
-              excerpt: "Company X manufactures centrifugal pumps at its facility.",
+              excerpt: "The National Weather Service is a component of the National Oceanic and Atmospheric Administration.",
             },
           ],
         },
