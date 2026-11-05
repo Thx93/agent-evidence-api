@@ -82,6 +82,70 @@ const MAX_MCP_BODY_BYTES = 64 * 1024;
 
 const app = new Hono<{ Bindings: Env }>();
 
+/**
+ * One canonical address.
+ *
+ * The workers.dev host answers everything the domain answers, but it lives outside
+ * the thx93.dev zone: its requests are invisible to the zone's analytics, cache
+ * rules, WAF and rate limits, and every monitor that still calls it keeps a second
+ * entry point alive that looks like no traffic at all. Measured 2026-11-05, the
+ * backend saw ~4x the requests the zone reported for the same window, almost all
+ * of the difference on this alias.
+ *
+ * A 308 keeps the method and body, so an MCP POST that follows it still works: the
+ * caller lands on the address we can see, cache and limit.
+ */
+app.use("*", async (c, next) => {
+  if (!isAliasHost(c.req.url)) return next();
+  const url = new URL(c.req.url);
+  const target = new URL(url.pathname + url.search, publicOrigin(c.env));
+  return c.redirect(target.toString(), 308);
+});
+
+/**
+ * Cache the handful of responses that are identical for every caller.
+ *
+ * Workers do not use the edge cache implicitly, which is why the zone reported a
+ * 0.00% hit rate while /openapi.json alone was fetched ~8k times in 30 days.
+ * These six paths are the whole cacheable surface; everything else here is either
+ * per-caller or payment-sensitive and must never be served from a shared cache.
+ */
+const STATIC_CACHE_TTL: Record<string, number> = {
+  "/openapi.json": 300,
+  "/llms.txt": 3600,
+  "/robots.txt": 3600,
+  "/.well-known/x402": 300,
+  "/demo.json": 600,
+  "/": 60,
+};
+
+app.use("*", async (c, next) => {
+  const ttl = STATIC_CACHE_TTL[new URL(c.req.url).pathname];
+  if (!ttl || c.req.method !== "GET") return next();
+
+  // Declared locally: the root typecheck compiles this file without the Workers
+  // globals, and the cache API is the only piece of that environment used here.
+  const cache = (globalThis as unknown as {
+    caches?: {
+      default: { match(r: Request): Promise<Response | undefined>; put(r: Request, res: Response): Promise<void> };
+    };
+  }).caches?.default;
+  if (!cache) return next();
+
+  const key = new Request(c.req.url, { method: "GET" });
+  const hit = await cache.match(key);
+  if (hit) return hit;
+
+  await next();
+  const res = c.res;
+  if (!res || res.status !== 200) return;
+
+  const headers = new Headers(res.headers);
+  headers.set("cache-control", `public, max-age=${ttl}`);
+  c.res = new Response(res.body, { status: res.status, headers });
+  c.executionCtx.waitUntil(cache.put(key, c.res.clone()));
+});
+
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------

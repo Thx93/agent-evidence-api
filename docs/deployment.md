@@ -916,3 +916,21 @@ Clearing only what is disposable - `npm cache clean --force`, `/tmp/node-compile
 Note the script behaved correctly under the failure: it stopped before switching the
 live container, so production kept serving the previous version rather than going
 down.
+
+## One canonical address, and the cacheable six
+
+The Worker answers on two hostnames: the canonical `https://agent-evidence.thx93.dev`
+and the Workers alias `https://agent-evidence-api.thx93.workers.dev`. The alias is in
+Cloudflare's own zone, so its requests appear in none of our analytics, cache rules,
+WAF or rate limits — and monitors that were handed it by early registry versions keep
+calling it. Measured 2026-11-05, the backend saw ~4x the requests the thx93.dev zone
+reported for the same window. The Worker therefore answers the alias with a `308` to the
+canonical host (method and query preserved), so every caller lands where it can be seen.
+
+Six responses are identical for every caller and are cached by the Worker in the edge
+cache: `/openapi.json` (300 s), `/llms.txt` and `/robots.txt` (3600 s),
+`/.well-known/x402` (300 s), `/demo.json` (600 s), `/` (60 s). Everything per-caller or
+payment-sensitive is deliberately excluded — `/mcp`, `/weather/mcp`, `/v1/*`, deep
+`/health`. Workers do not use the edge cache implicitly, which is why the zone reported
+a 0.00% hit rate before this; after it, `/openapi.json` answers `cf-cache-status: HIT`
+and never reaches the origin.
