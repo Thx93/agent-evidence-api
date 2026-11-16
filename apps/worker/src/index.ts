@@ -223,14 +223,6 @@ const STATIC_CACHE_TTL: Record<string, number> = {
   "/health": 10,
 };
 
-app.get("/robots.txt", (c) =>
-  c.body(ROBOTS_TXT, 200, { "content-type": "text/plain; charset=utf-8" }),
-);
-
-app.get("/sitemap.xml", (c) =>
-  c.body(sitemapXml(), 200, { "content-type": "application/xml; charset=utf-8" }),
-);
-
 app.use("*", async (c, next) => {
   const ttl = STATIC_CACHE_TTL[new URL(c.req.url).pathname];
   if (!ttl || c.req.method !== "GET") return next();
@@ -270,6 +262,17 @@ app.use("*", async (c, next) => {
   c.res = new Response(res.body, { status: res.status, headers });
   c.executionCtx.waitUntil(cache.put(key, c.res.clone()));
 });
+
+// Registered after the cache middleware: a Hono middleware only wraps the handlers
+// that follow it, so declaring these first meant they were never cached at all.
+app.get("/robots.txt", (c) =>
+  c.body(ROBOTS_TXT, 200, { "content-type": "text/plain; charset=utf-8" }),
+);
+
+app.get("/sitemap.xml", (c) =>
+  c.body(sitemapXml(), 200, { "content-type": "application/xml; charset=utf-8" }),
+);
+
 
 // ---------------------------------------------------------------------------
 // helpers
