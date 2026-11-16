@@ -545,6 +545,11 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
       ...(CLIENT_TOKENS.has(String(req.headers["x-aee-client"] ?? ""))
         ? { client: String(req.headers["x-aee-client"]) }
         : {}),
+      // Present only for clients we could not name: the UA prefix, re-sanitised here
+      // because a header is client input, not a trusted field.
+      ...(typeof req.headers["x-aee-ua"] === "string"
+        ? { ua: String(req.headers["x-aee-ua"]).replace(/[\u0000-\u001f\u007f"]/g, "").slice(0, 60) }
+        : {}),
       // SPEC section 24: enough to diagnose a failure without logging secrets.
       // Absent on routes that do no fetching, which keeps the probe quiet.
       ...(summaryFor(req) ?? {}),

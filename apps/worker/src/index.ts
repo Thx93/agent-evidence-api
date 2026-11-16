@@ -351,7 +351,17 @@ async function proxyToBackend(
   if (clientIp) headers["x-forwarded-for"] = clientIp;
 
   // A coarse token for the request log, so "which crawlers reach us" is countable.
-  headers["x-aee-client"] = classifyClient(c.req.header("user-agent"));
+  const clientToken = classifyClient(c.req.header("user-agent"));
+  headers["x-aee-client"] = clientToken;
+
+  // For anything we could not name, carry the UA prefix so the next report can
+  // name it instead of reporting another large "other" bucket. Only the prefix,
+  // only for unknowns, and stripped of control characters - a client controls this
+  // header and it must not be able to shape a log line.
+  if (clientToken === "other" || clientToken === "none") {
+    const raw = (c.req.header("user-agent") ?? "").replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 60);
+    if (raw) headers["x-aee-ua"] = raw;
+  }
 
   // Forward MCP session/protocol headers, otherwise the backend cannot
   // correlate a streamable-HTTP session.
