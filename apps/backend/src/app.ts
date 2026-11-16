@@ -519,6 +519,18 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
       .send(errorResponse("RATE_LIMIT", req.id));
   });
 
+  /**
+   * The tokens the Worker may send in x-aee-client. Kept here as well as in the
+   * Worker so the backend validates rather than trusts: a header is client input.
+   */
+  const CLIENT_TOKENS = new Set([
+    "gptbot", "oai-search", "chatgpt-user", "claudebot", "perplexitybot",
+    "google-extended", "ccbot", "applebot", "googlebot", "bingbot",
+    "mcpbeat", "agentrankprobe", "x402station", "mcp-health-probe",
+    "carbonmonitor", "mcprush", "payai", "curl", "node", "python", "go",
+    "browser", "other", "none",
+  ]);
+
   // ------------------------------------------------------------ logging ----
   app.addHook("onResponse", async (req: FastifyRequest, reply: FastifyReply) => {
     logger.info("request", {
@@ -527,6 +539,12 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
       path: req.url.split("?")[0],
       status: reply.statusCode,
       duration_ms: Math.round(reply.elapsedTime),
+      // The Worker classifies the User-Agent into a closed set of tokens; anything
+      // else is refused here rather than written through, so a client cannot forge
+      // a token that looks like a crawler and cannot inject into the log.
+      ...(CLIENT_TOKENS.has(String(req.headers["x-aee-client"] ?? ""))
+        ? { client: String(req.headers["x-aee-client"]) }
+        : {}),
       // SPEC section 24: enough to diagnose a failure without logging secrets.
       // Absent on routes that do no fetching, which keeps the probe quiet.
       ...(summaryFor(req) ?? {}),

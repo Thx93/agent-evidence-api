@@ -83,6 +83,50 @@ const MAX_MCP_BODY_BYTES = 64 * 1024;
 const app = new Hono<{ Bindings: Env }>();
 
 /**
+ * A compact client identity for the request log.
+ *
+ * We had no idea who was calling: the backend log records method, path and status
+ * only, and Cloudflare's analytics are not readable with our token, so "who crawls
+ * us" — the one question SEO and generative-engine work depends on — had no
+ * measurement behind it at all. This classifies the User-Agent into a fixed token
+ * and forwards it, so the answer is a GROUP BY instead of a guess.
+ *
+ * Deliberately coarse and non-identifying: a token from a closed set, no version,
+ * no full UA string. Anything unrecognised is "other", which is all the precision
+ * that changes a decision.
+ */
+const CLIENT_TOKENS: Array<[string, RegExp]> = [
+  ["gptbot", /GPTBot/i],
+  ["oai-search", /OAI-SearchBot/i],
+  ["chatgpt-user", /ChatGPT-User/i],
+  ["claudebot", /ClaudeBot|Claude-Web|anthropic-ai/i],
+  ["perplexitybot", /PerplexityBot|Perplexity-User/i],
+  ["google-extended", /Google-Extended/i],
+  ["ccbot", /CCBot/i],
+  ["applebot", /Applebot/i],
+  ["googlebot", /Googlebot/i],
+  ["bingbot", /bingbot/i],
+  ["mcpbeat", /mcpbeat/i],
+  ["agentrankprobe", /AgentRankProbe/i],
+  ["x402station", /x402station/i],
+  ["mcp-health-probe", /mcp-health-probe/i],
+  ["carbonmonitor", /CarbonMonitor/i],
+  ["mcprush", /mcprush/i],
+  ["payai", /payai/i],
+  ["curl", /^curl\//i],
+  ["node", /^node|undici|axios|node-fetch/i],
+  ["python", /python-requests|python-urllib|aiohttp|httpx/i],
+  ["go", /^Go-http-client/i],
+  ["browser", /Mozilla\/5\.0.*(Chrome|Firefox|Safari|Edg)\//i],
+];
+
+function classifyClient(ua: string | undefined): string {
+  if (!ua) return "none";
+  for (const [token, pattern] of CLIENT_TOKENS) if (pattern.test(ua)) return token;
+  return "other";
+}
+
+/**
  * One canonical address.
  *
  * The workers.dev host answers everything the domain answers, but it lives outside
@@ -103,6 +147,58 @@ app.use("*", async (c, next) => {
 });
 
 /**
+ * robots.txt.
+ *
+ * The zone currently answers this path from the edge with a content-signals
+ * preamble and no directives at all — no `User-agent` line, no rules — so it tells
+ * a crawler nothing and the preamble has nothing to attach to. Serving our own is
+ * both correct and useful: agent-facing discovery files are the whole point, so
+ * search and AI crawlers are welcome to read them, while the paid POST routes and
+ * the internal API are not theirs to index.
+ */
+const ROBOTS_TXT = `# Agent Evidence API — paid, machine-first API for AI agents.
+# Discovery documents are free to read and to index. The paid endpoints are POST
+# routes that answer 402 without payment; indexing them is pointless, not harmful.
+
+User-agent: *
+Content-Signal: search=yes, ai-input=yes, ai-train=no
+Allow: /
+Disallow: /internal/
+Sitemap: https://agent-evidence.thx93.dev/sitemap.xml
+
+# Agent directories, monitors and AI assistants: read all the discovery documents.
+User-agent: GPTBot
+User-agent: ClaudeBot
+User-agent: Claude-Web
+User-agent: PerplexityBot
+User-agent: OAI-SearchBot
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: CCBot
+Allow: /
+Disallow: /internal/
+`;
+
+/**
+ * The indexable surface. This is an API, not a content site, so the sitemap is
+ * short on purpose: the pages a person or a crawler can actually read.
+ */
+function sitemapXml(): string {
+  const base = "https://agent-evidence.thx93.dev";
+  const urls: Array<{ loc: string; changefreq: string; priority: string }> = [
+    { loc: "/", changefreq: "weekly", priority: "1.0" },
+    { loc: "/demo", changefreq: "weekly", priority: "0.8" },
+    { loc: "/llms.txt", changefreq: "weekly", priority: "0.8" },
+    { loc: "/openapi.json", changefreq: "weekly", priority: "0.7" },
+    { loc: "/.well-known/x402", changefreq: "weekly", priority: "0.7" },
+  ];
+  const body = urls
+    .map((u) => `  <url><loc>${base}${u.loc}</loc><changefreq>${u.changefreq}</changefreq><priority>${u.priority}</priority></url>`)
+    .join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`;
+}
+
+/**
  * Cache the handful of responses that are identical for every caller.
  *
  * Workers do not use the edge cache implicitly, which is why the zone reported a
@@ -114,10 +210,19 @@ const STATIC_CACHE_TTL: Record<string, number> = {
   "/openapi.json": 300,
   "/llms.txt": 3600,
   "/robots.txt": 3600,
+  "/sitemap.xml": 3600,
   "/.well-known/x402": 300,
   "/demo.json": 600,
   "/": 60,
 };
+
+app.get("/robots.txt", (c) =>
+  c.body(ROBOTS_TXT, 200, { "content-type": "text/plain; charset=utf-8" }),
+);
+
+app.get("/sitemap.xml", (c) =>
+  c.body(sitemapXml(), 200, { "content-type": "application/xml; charset=utf-8" }),
+);
 
 app.use("*", async (c, next) => {
   const ttl = STATIC_CACHE_TTL[new URL(c.req.url).pathname];
@@ -132,7 +237,12 @@ app.use("*", async (c, next) => {
   }).caches?.default;
   if (!cache) return next();
 
-  const key = new Request(c.req.url, { method: "GET" });
+  // "/" negotiates on Accept: a browser gets the landing page, an agent gets the
+  // JSON contract. Keying the cache on the URL alone served the JSON variant to
+  // browsers, so the key carries the negotiated type.
+  const accept = c.req.header("accept") ?? "";
+  const variant = new URL(c.req.url).pathname === "/" ? (accept.includes("text/html") ? "html" : "json") : "";
+  const key = new Request(`${c.req.url}${variant ? `#${variant}` : ""}`, { method: "GET" });
   const hit = await cache.match(key);
   if (hit) return hit;
 
@@ -142,6 +252,7 @@ app.use("*", async (c, next) => {
 
   const headers = new Headers(res.headers);
   headers.set("cache-control", `public, max-age=${ttl}`);
+  if (variant) headers.set("vary", "accept");
   c.res = new Response(res.body, { status: res.status, headers });
   c.executionCtx.waitUntil(cache.put(key, c.res.clone()));
 });
@@ -224,6 +335,9 @@ async function proxyToBackend(
   // the client.
   const clientIp = c.req.header("cf-connecting-ip");
   if (clientIp) headers["x-forwarded-for"] = clientIp;
+
+  // A coarse token for the request log, so "which crawlers reach us" is countable.
+  headers["x-aee-client"] = classifyClient(c.req.header("user-agent"));
 
   // Forward MCP session/protocol headers, otherwise the backend cannot
   // correlate a streamable-HTTP session.
