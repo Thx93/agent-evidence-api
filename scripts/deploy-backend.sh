@@ -51,6 +51,7 @@ echo "=== validate the new image on a staging port, before touching the live one
 # corruption risk, not a smoke test.
 docker rm -f aee-staging >/dev/null 2>&1 || true
 if ! docker run -d --name aee-staging --env-file "$ENV_FILE" \
+      --log-opt max-size=50m --log-opt max-file=3 \
       -e BACKEND_PORT=18080 \
       -v aee-staging-data:/app/data \
       -p 127.0.0.1:18080:18080 \
@@ -93,7 +94,12 @@ echo "=== swap the live container ==="
 docker rm -f aee-live >/dev/null 2>&1 || true
 # --env-file rather than -e: the values include a wallet-adjacent secret and rot
 # regularly, and a command line is the wrong place for either.
+# Bounded logs. The json-file driver does not rotate by default: this container's
+# log reached 137 MB and `docker logs` then returned nothing at all, which silently
+# blinded every measurement for seventeen days. 50 MB x 3 files is weeks of traffic
+# and a `docker logs` that keeps working.
 if ! docker run -d --name aee-live --restart unless-stopped \
+      --log-opt max-size=50m --log-opt max-file=3 \
       --env-file "$ENV_FILE" \
       -v aee-data:/app/data \
       -p 127.0.0.1:8080:8080 \

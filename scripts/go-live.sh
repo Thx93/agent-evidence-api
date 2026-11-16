@@ -27,6 +27,7 @@ SECRET="$(cat "$SECRET_FILE")"
 echo "=== backend container ==="
 docker rm -f aee-live >/dev/null 2>&1 || true
 docker run -d --name aee-live --restart unless-stopped \
+  --log-opt max-size=50m --log-opt max-file=3 \
   -e NODE_ENV=production \
   -e BACKEND_AUTH_SECRET="$SECRET" \
   -e BACKEND_HOST=0.0.0.0 \

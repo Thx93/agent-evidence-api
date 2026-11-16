@@ -214,6 +214,13 @@ const STATIC_CACHE_TTL: Record<string, number> = {
   "/.well-known/x402": 300,
   "/demo.json": 600,
   "/": 60,
+  // Health is the single most-fetched path in the whole service (~51% of origin
+  // requests), almost all of it monitors. Ten seconds collapses a burst from ten
+  // probes into one origin call while a real outage is still visible within the
+  // half-minute of any sensible monitor. The query is part of the cache key, so
+  // the shallow answer and the deep (origin-checking) answer never mix, and a
+  // degraded 503 is not cached at all.
+  "/health": 10,
 };
 
 app.get("/robots.txt", (c) =>
@@ -251,7 +258,14 @@ app.use("*", async (c, next) => {
   if (!res || res.status !== 200) return;
 
   const headers = new Headers(res.headers);
-  headers.set("cache-control", `public, max-age=${ttl}`);
+  // Three headers, deliberately. The response was being served from Cloudflare's
+  // edge with `max-age=14400` — four hours — regardless of what we set here, which
+  // for /health means a monitor could read a four-hour-old status. `CDN-Cache-Control`
+  // and `Surrogate-Control` are the edge-TTL directives Cloudflare honours ahead of
+  // the browser-facing max-age, so the edge and the browser now both expire at ttl.
+  headers.set("cache-control", `public, max-age=${ttl}, s-maxage=${ttl}`);
+  headers.set("cdn-cache-control", `max-age=${ttl}`);
+  headers.set("surrogate-control", `max-age=${ttl}`);
   if (variant) headers.set("vary", "accept");
   c.res = new Response(res.body, { status: res.status, headers });
   c.executionCtx.waitUntil(cache.put(key, c.res.clone()));
